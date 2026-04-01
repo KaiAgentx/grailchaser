@@ -94,6 +94,20 @@ export default function Home() {
       if (data.success) {
         setCheckName([data.year, data.brand, data.set !== data.brand ? data.set : "", data.parallel !== "Base" ? data.parallel : "", data.player, data.card_number].filter(Boolean).join(" "));
         setScanResult(data);
+        try {
+          const priceRes = await fetch("/api/price", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ player: data.player, year: data.year, set: data.set, card_number: data.card_number, sport: data.sport }),
+          });
+          const priceData = await priceRes.json();
+          if (priceData.prices) {
+            if (priceData.prices.raw) setCheckRaw(priceData.prices.raw);
+            if (priceData.prices.psa10) setCheckPsa10(priceData.prices.psa10);
+            if (priceData.prices.psa9) setCheckPsa9(priceData.prices.psa9);
+            if (priceData.prices.psa8) setCheckPsa8(priceData.prices.psa8);
+          }
+        } catch(pe) { console.log("Price fetch failed"); }
         if (data.pricing?.raw) setCheckRaw(data.pricing.raw);
         if (data.pricing?.psa10) setCheckPsa10(data.pricing.psa10);
         if (data.pricing?.psa9) setCheckPsa9(data.pricing.psa9);
