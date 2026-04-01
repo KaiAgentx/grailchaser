@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useCards } from "@/hooks/useCards";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 
@@ -42,6 +42,10 @@ export default function Home() {
   const [checkPsa9, setCheckPsa9] = useState(0);
   const [checkPsa8, setCheckPsa8] = useState(0);
   const [askingPrice, setAskingPrice] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const [scanPreview, setScanPreview] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({ player: "", sport: "Baseball" as any, team: "", year: 2024, brand: "Topps", set: "Base", parallel: "Base", card_number: "#1", is_rc: false, is_auto: false, is_numbered: false, numbered_to: null as number | null, condition: "NM" as any, raw_value: 0, cost_basis: 0, storage_box: "BOX A", notes: "", purchase_source: null as string | null, purchase_intent: null as any });
   const [filterSport, setFilterSport] = useState("All");
   const totalValue = cards.reduce((s, c) => s + (c.raw_value || 0), 0);
@@ -50,6 +54,30 @@ export default function Home() {
   const grading = cards.filter(c => c.status === "grading");
   const filteredCards = unsold.filter(c => filterSport === "All" || c.sport === filterSport).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase()));
   const sports = ["All", ...Array.from(new Set(cards.map(c => c.sport)))];
+
+  const handleScan = async (file: File) => {
+    setScanning(true);
+    setScanPreview(URL.createObjectURL(file));
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch("/api/scan", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.success) {
+        setCheckName(data.year + " " + data.brand + " " + data.set + " " + (data.parallel !== "Base" ? data.parallel + " " : "") + data.player + (data.card_number ? " " + data.card_number : ""));
+        setScanResult(data);
+        if (data.pricing?.raw) setCheckRaw(data.pricing.raw);
+        if (data.pricing?.psa10) setCheckPsa10(data.pricing.psa10);
+        if (data.pricing?.psa9) setCheckPsa9(data.pricing.psa9);
+        if (data.pricing?.psa8) setCheckPsa8(data.pricing.psa8);
+      } else {
+        setScanResult({ error: data.error || "Could not identify card. Try manual entry." });
+      }
+    } catch (err) {
+      setScanResult({ error: "Scan failed. Check your connection." });
+    }
+    setScanning(false);
+  };
 
   if (screen === "home") return (
     <Shell title="GrailChaser">
@@ -64,9 +92,9 @@ export default function Home() {
             <div key={s.label} style={{ background: surface, borderRadius: 12, padding: "12px", textAlign: "center" }}><div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{s.label}</div></div>
           ))}
         </div>
-        <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScreen("cardCheck"); }} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + green + "15, " + green + "08)", border: "1px solid " + green + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
+        <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setScreen("cardCheck"); }} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + green + "15, " + green + "08)", border: "1px solid " + green + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
-          <div style={{ fontSize: 12, color: muted }}>Enter any card and price — get flip ROI, grade ROI, verdict</div>
+          <div style={{ fontSize: 12, color: muted }}>Snap a photo or enter manually — get value and verdict</div>
         </button>
         <button onClick={() => setScreen("addCard")} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + accent + "15, " + accent + "08)", border: "1px solid " + accent + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 4 }}>Add a Card</div>
@@ -186,6 +214,18 @@ export default function Home() {
   if (screen === "cardCheck") return (
     <Shell title="Check a Card" back={() => setScreen("home")}>
       <div style={{ paddingTop: 20 }}>
+        <input type="file" accept="image/*" capture="environment" ref={fileInputRef} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); }} />
+        <button onClick={() => fileInputRef.current?.click()} style={{ width: "100%", height: scanning ? 60 : 140, background: scanPreview ? "url(" + scanPreview + ") center/cover" : surface, border: "2px dashed " + (scanning ? accent : border), borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 16, position: "relative", overflow: "hidden" }}>
+          {!scanPreview && !scanning && <><span style={{ fontSize: 36, marginBottom: 8 }}>📸</span><span style={{ fontSize: 14, fontWeight: 600, color: text }}>Snap a photo</span><span style={{ fontSize: 11, color: muted, marginTop: 4 }}>AI identifies the card automatically</span></>}
+          {scanning && <><span style={{ fontSize: 14, color: accent }}>Identifying card...</span></>}
+          {scanPreview && !scanning && <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.7)", borderRadius: 8, padding: "4px 8px", fontSize: 11, color: green }}>✓ Scanned — tap to rescan</div>}
+        </button>
+
+        {scanResult?.error && <div style={{ background: red + "10", border: "1px solid " + red + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: red }}>{scanResult.error}</div>}
+        {scanResult?.success && <div style={{ background: green + "10", border: "1px solid " + green + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: green }}>Card identified! Confidence: {(scanResult.confidence * 100).toFixed(0)}% — adjust fields below if needed</div>}
+
+        <div style={{ textAlign: "center", fontSize: 12, color: muted, marginBottom: 12 }}>— or enter manually —</div>
+
         <div style={{ marginBottom: 14 }}>
           <label style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Card Name</label>
           <input value={checkName} onChange={e => setCheckName(e.target.value)} placeholder="2020 Prizm Silver Justin Herbert RC" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
@@ -229,30 +269,18 @@ export default function Home() {
     const maxPayRaw = +flipNet.toFixed(2);
     const belowMarket = askingPrice > 0 && rawVal > 0 ? +(((rawVal - askingPrice) / rawVal) * 100).toFixed(0) : 0;
     const verdict = flipROI > 20 ? "buy" : flipROI > 0 ? "maybe" : "pass";
-
-    const gradeBreakdown = [
-      { grade: "PSA 10", prob: "15%", val: psa10, color: green },
-      { grade: "PSA 9", prob: "35%", val: psa9, color: cyan },
-      { grade: "PSA 8", prob: "30%", val: psa8, color: text },
-      { grade: "PSA 7", prob: "20%", val: psa7, color: muted },
-    ];
-
+    const gradeBreakdown = [{ grade: "PSA 10", prob: "15%", val: psa10, color: green }, { grade: "PSA 9", prob: "35%", val: psa9, color: cyan }, { grade: "PSA 8", prob: "30%", val: psa8, color: text }, { grade: "PSA 7", prob: "20%", val: psa7, color: muted }];
     return (
       <Shell title={checkName || "Card Check"} back={() => setScreen("cardCheck")}>
         <div style={{ paddingTop: 16 }}>
           {checkName && <div style={{ textAlign: "center", fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{checkName}</div>}
-
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, color: muted }}>Asking price</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <span style={{ color: muted, fontSize: 18 }}>$</span>
-                <input type="number" value={askingPrice} onChange={e => setAskingPrice(+e.target.value)} style={{ width: 80, background: surface2, border: "1px solid " + border, borderRadius: 8, padding: "8px 10px", color: text, fontFamily: mono, fontSize: 22, fontWeight: 700, outline: "none", textAlign: "right" }} />
-              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: muted, fontSize: 18 }}>$</span><input type="number" value={askingPrice} onChange={e => setAskingPrice(+e.target.value)} style={{ width: 80, background: surface2, border: "1px solid " + border, borderRadius: 8, padding: "8px 10px", color: text, fontFamily: mono, fontSize: 22, fontWeight: 700, outline: "none", textAlign: "right" }} /></div>
             </div>
             {belowMarket > 0 && <div style={{ fontSize: 12, color: green, marginTop: 6, textAlign: "right" }}>{belowMarket}% below market</div>}
           </div>
-
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Market values</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, textAlign: "center" }}>
@@ -261,7 +289,6 @@ export default function Home() {
               ))}
             </div>
           </div>
-
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>If you buy at ${askingPrice}</div>
             <div style={{ marginBottom: 14 }}>
@@ -276,38 +303,23 @@ export default function Home() {
             </div>
             <div style={{ borderTop: "1px solid " + border, paddingTop: 12 }}>
               <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Per-grade breakdown</div>
-              {gradeBreakdown.map(g => {
-                const gFees = +(g.val * 0.1325 + 0.30).toFixed(2);
-                const gShip = g.val >= 20 ? 4.50 : 1.05;
-                const gProfit = +(g.val - gFees - gShip - 25 - askingPrice).toFixed(2);
-                return (
-                  <div key={g.grade} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + border }}>
-                    <div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.grade}</span>
-                      <span style={{ fontSize: 11, color: muted, marginLeft: 6 }}>({g.prob})</span>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <span style={{ fontSize: 11, color: muted, marginRight: 8 }}>${g.val}</span>
-                      <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: gProfit > 0 ? green : red }}>{gProfit > 0 ? "+" : ""}${gProfit}</span>
-                    </div>
-                  </div>
-                );
-              })}
+              {gradeBreakdown.map(g => { const gFees = +(g.val * 0.1325 + 0.30).toFixed(2); const gShip = g.val >= 20 ? 4.50 : 1.05; const gProfit = +(g.val - gFees - gShip - 25 - askingPrice).toFixed(2); return (
+                <div key={g.grade} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + border }}>
+                  <div><span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.grade}</span><span style={{ fontSize: 11, color: muted, marginLeft: 6 }}>({g.prob})</span></div>
+                  <div style={{ textAlign: "right" }}><span style={{ fontSize: 11, color: muted, marginRight: 8 }}>${g.val}</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: gProfit > 0 ? green : red }}>{gProfit > 0 ? "+" : ""}${gProfit}</span></div>
+                </div>); })}
             </div>
           </div>
-
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Max pay</div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ fontSize: 12, color: muted }}>Break even (raw flip)</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600 }}>${maxPayRaw}</span></div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ fontSize: 12, color: muted }}>For 20% profit</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600 }}>${+(maxPayRaw / 1.2).toFixed(2)}</span></div>
             <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 12, color: muted }}>Grade break even</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600 }}>${expectedNet}</span></div>
           </div>
-
           <div style={{ background: verdict === "buy" ? green + "10" : verdict === "maybe" ? accent + "10" : red + "10", border: "1px solid " + (verdict === "buy" ? green + "30" : verdict === "maybe" ? accent + "30" : red + "30"), borderRadius: 14, padding: 16, marginBottom: 16, textAlign: "center" }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: verdict === "buy" ? green : verdict === "maybe" ? accent : red, marginBottom: 4 }}>{verdict === "buy" ? "BUY" : verdict === "maybe" ? "NEGOTIATE" : "PASS"}</div>
             <div style={{ fontSize: 12, color: muted }}>{verdict === "buy" ? "Good at $" + askingPrice + " — " + belowMarket + "% below market" : verdict === "maybe" ? "Tight margin — try $" + +(maxPayRaw / 1.2).toFixed(0) : "Overpaying — max $" + maxPayRaw}</div>
           </div>
-
           <div style={{ display: "flex", gap: 12 }}>
             <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: green, border: "none", borderRadius: 14, color: "#000", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>BUY</button>
             <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: surface2, border: "1px solid " + border, borderRadius: 14, color: muted, fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>PASS</button>

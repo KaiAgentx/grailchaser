@@ -2,23 +2,49 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageUrl } = await request.json();
-    const apiKey = process.env.XIMILAR_API_KEY;
+    const formData = await request.formData();
+    const image = formData.get("image") as File;
+    
+    const apiKey = process.env.CARDSIGHT_API_KEY;
     if (!apiKey) {
+      return NextResponse.json({ error: "No CardSight API key configured" }, { status: 400 });
+    }
+
+    // Send image to CardSight AI for identification
+    const csFormData = new FormData();
+    csFormData.append("image", image);
+
+    const res = await fetch("https://api.cardsight.ai/v1/identify", {
+      method: "POST",
+      headers: { "X-API-Key": apiKey },
+      body: csFormData,
+    });
+
+    const data = await res.json();
+
+    if (data.success && data.detections && data.detections.length > 0) {
+      const card = data.detections[0].card;
       return NextResponse.json({
-        player: "Unknown Card", sport: "Baseball", year: 2023, brand: "Topps",
-        set: "Series 1", parallel: "Base", card_number: "#1", confidence: 0,
-        message: "No scanner API key configured — using manual entry mode",
+        success: true,
+        player: card.player || card.name || "Unknown",
+        year: card.year || card.releaseYear || 0,
+        brand: card.manufacturer || card.brand || "",
+        set: card.releaseName || card.setName || "",
+        parallel: card.parallel || card.variation || "Base",
+        card_number: card.cardNumber || card.number || "",
+        sport: card.sport || "Baseball",
+        confidence: data.detections[0].confidence || 0,
+        pricing: card.pricing || null,
+        raw_data: card,
       });
     }
-    const res = await fetch("https://api.ximilar.com/recognition/v2/classify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Token " + apiKey },
-      body: JSON.stringify({ records: [{ _url: imageUrl }] }),
+
+    return NextResponse.json({ 
+      success: false, 
+      error: "Could not identify card",
+      raw_data: data,
     });
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    return NextResponse.json({ error: "Scan failed" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json({ error: "Scan failed: " + error.message }, { status: 500 });
   }
 }
