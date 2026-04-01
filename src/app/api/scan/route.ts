@@ -2,28 +2,37 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const image = formData.get("image") as File;
+    const body = await request.json();
+    const base64Image = body.image;
     
     const apiKey = process.env.CARDSIGHT_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "No CardSight API key configured" }, { status: 400 });
+      return NextResponse.json({ error: "No CARDSIGHT_API_KEY in environment" }, { status: 400 });
     }
 
-    // Send image to CardSight AI for identification
-    const csFormData = new FormData();
-    csFormData.append("image", image);
+    // Convert base64 back to binary for multipart upload
+    const imageBuffer = Buffer.from(base64Image, "base64");
+    const blob = new Blob([imageBuffer], { type: "image/jpeg" });
 
-    const res = await fetch("https://api.cardsight.ai/v1/identify", {
+    const formData = new FormData();
+    formData.append("image", blob, "card.jpg");
+
+    console.log("=== CALLING CARDSIGHT ===");
+    console.log("Image size:", imageBuffer.length, "bytes");
+
+    const res = await fetch("https://api.cardsight.ai/v1/identify/card", {
       method: "POST",
       headers: { "X-API-Key": apiKey },
-      body: csFormData,
+      body: formData,
     });
 
     const data = await res.json();
+    console.log("CardSight status:", res.status);
+    console.log("CardSight response:", JSON.stringify(data).substring(0, 500));
 
     if (data.success && data.detections && data.detections.length > 0) {
-      const card = data.detections[0].card;
+      const detection = data.detections[0];
+      const card = detection.card || detection;
       return NextResponse.json({
         success: true,
         player: card.player || card.name || "Unknown",
@@ -33,7 +42,7 @@ export async function POST(request: NextRequest) {
         parallel: card.parallel || card.variation || "Base",
         card_number: card.cardNumber || card.number || "",
         sport: card.sport || "Baseball",
-        confidence: data.detections[0].confidence || 0,
+        confidence: detection.confidence || 0,
         pricing: card.pricing || null,
         raw_data: card,
       });
@@ -42,9 +51,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ 
       success: false, 
       error: "Could not identify card",
-      raw_data: data,
+      debug: data,
     });
   } catch (error: any) {
+    console.log("ERROR:", error.message);
     return NextResponse.json({ error: "Scan failed: " + error.message }, { status: 500 });
   }
 }

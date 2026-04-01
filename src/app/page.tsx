@@ -19,6 +19,30 @@ const text = "#e8e8ef";
 const font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const mono = "'SF Mono', 'Menlo', monospace";
 
+function compressImage(file: File, maxWidth = 800): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject("No canvas");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.7).split(",")[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function Shell({ children, title, back }: { children: React.ReactNode; title: string; back?: () => void }) {
   return (
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto" }}>
@@ -58,23 +82,27 @@ export default function Home() {
   const handleScan = async (file: File) => {
     setScanning(true);
     setScanPreview(URL.createObjectURL(file));
+    setScanResult(null);
     try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const res = await fetch("/api/scan", { method: "POST", body: formData });
+      const base64 = await compressImage(file, 800);
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 }),
+      });
       const data = await res.json();
       if (data.success) {
-        setCheckName(data.year + " " + data.brand + " " + data.set + " " + (data.parallel !== "Base" ? data.parallel + " " : "") + data.player + (data.card_number ? " " + data.card_number : ""));
+        setCheckName([data.year, data.brand, data.set, data.parallel !== "Base" ? data.parallel : "", data.player, data.card_number].filter(Boolean).join(" "));
         setScanResult(data);
         if (data.pricing?.raw) setCheckRaw(data.pricing.raw);
         if (data.pricing?.psa10) setCheckPsa10(data.pricing.psa10);
         if (data.pricing?.psa9) setCheckPsa9(data.pricing.psa9);
         if (data.pricing?.psa8) setCheckPsa8(data.pricing.psa8);
       } else {
-        setScanResult({ error: data.error || "Could not identify card. Try manual entry." });
+        setScanResult({ error: data.error || data.debug?.error || "Could not identify card. Try manual entry." });
       }
-    } catch (err) {
-      setScanResult({ error: "Scan failed. Check your connection." });
+    } catch (err: any) {
+      setScanResult({ error: "Scan failed: " + err.message });
     }
     setScanning(false);
   };
@@ -215,14 +243,15 @@ export default function Home() {
     <Shell title="Check a Card" back={() => setScreen("home")}>
       <div style={{ paddingTop: 20 }}>
         <input type="file" accept="image/*" capture="environment" ref={fileInputRef} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); }} />
-        <button onClick={() => fileInputRef.current?.click()} style={{ width: "100%", height: scanning ? 60 : 140, background: scanPreview ? "url(" + scanPreview + ") center/cover" : surface, border: "2px dashed " + (scanning ? accent : border), borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 16, position: "relative", overflow: "hidden" }}>
-          {!scanPreview && !scanning && <><span style={{ fontSize: 36, marginBottom: 8 }}>📸</span><span style={{ fontSize: 14, fontWeight: 600, color: text }}>Snap a photo</span><span style={{ fontSize: 11, color: muted, marginTop: 4 }}>AI identifies the card automatically</span></>}
-          {scanning && <><span style={{ fontSize: 14, color: accent }}>Identifying card...</span></>}
-          {scanPreview && !scanning && <div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.7)", borderRadius: 8, padding: "4px 8px", fontSize: 11, color: green }}>✓ Scanned — tap to rescan</div>}
+
+        <button onClick={() => fileInputRef.current?.click()} style={{ width: "100%", height: scanPreview ? 200 : 120, background: scanPreview ? "url(" + scanPreview + ") center/cover" : "linear-gradient(135deg, " + surface + ", " + surface2 + ")", border: scanning ? "2px solid " + accent : "2px dashed " + border, borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", marginBottom: 16, position: "relative", overflow: "hidden" }}>
+          {!scanPreview && !scanning && (<><div style={{ fontSize: 32, marginBottom: 6 }}>📸</div><div style={{ fontSize: 15, fontWeight: 700, color: text }}>Snap a Photo</div><div style={{ fontSize: 12, color: muted, marginTop: 4 }}>AI identifies the card for you</div></>)}
+          {scanning && (<div style={{ background: "rgba(0,0,0,0.6)", position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: accent, fontSize: 14, fontWeight: 600 }}>Identifying card...</div></div>)}
+          {scanPreview && !scanning && (<div style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.7)", borderRadius: 8, padding: "4px 10px", fontSize: 11, color: green, fontWeight: 600 }}>Tap to rescan</div>)}
         </button>
 
         {scanResult?.error && <div style={{ background: red + "10", border: "1px solid " + red + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: red }}>{scanResult.error}</div>}
-        {scanResult?.success && <div style={{ background: green + "10", border: "1px solid " + green + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: green }}>Card identified! Confidence: {(scanResult.confidence * 100).toFixed(0)}% — adjust fields below if needed</div>}
+        {scanResult?.success && <div style={{ background: green + "10", border: "1px solid " + green + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: green }}>Identified: {checkName} (Confidence: {(scanResult.confidence * 100).toFixed(0)}%)</div>}
 
         <div style={{ textAlign: "center", fontSize: 12, color: muted, marginBottom: 12 }}>— or enter manually —</div>
 
