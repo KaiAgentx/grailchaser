@@ -19,13 +19,12 @@ const text = "#e8e8ef";
 const font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const mono = "'SF Mono', 'Menlo', monospace";
 
-function Shell({ children, title, back, right }: { children: React.ReactNode; title: string; back?: () => void; right?: React.ReactNode }) {
+function Shell({ children, title, back }: { children: React.ReactNode; title: string; back?: () => void }) {
   return (
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 50, background: bg, borderBottom: "1px solid " + border, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
         {back && <button onClick={back} style={{ background: "none", border: "none", color: muted, fontSize: 20, cursor: "pointer", padding: 0 }}>←</button>}
         <span style={{ flex: 1, fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>{title}</span>
-        {right}
       </div>
       <div style={{ padding: "0 20px 100px" }}>{children}</div>
     </div>
@@ -33,33 +32,23 @@ function Shell({ children, title, back, right }: { children: React.ReactNode; ti
 }
 
 export default function Home() {
-  const { cards, loading, addCard, updateCard, deleteCard } = useCards();
+  const { cards, loading, addCard, deleteCard } = useCards();
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [search, setSearch] = useState("");
-  const [checkSearch, setCheckSearch] = useState("");
-  const [askingPrice, setAskingPrice] = useState(30);
-  const [showComps, setShowComps] = useState(false);
-  const [formData, setFormData] = useState({
-    player: "", sport: "Baseball" as any, team: "", year: 2024, brand: "Topps",
-    set: "Base", parallel: "Base", card_number: "#1", is_rc: false, is_auto: false,
-    is_numbered: false, numbered_to: null as number | null, condition: "NM" as any,
-    raw_value: 0, cost_basis: 0, storage_box: "BOX A", notes: "",
-    purchase_source: null as string | null, purchase_intent: null as any,
-  });
+  const [checkName, setCheckName] = useState("");
+  const [checkRaw, setCheckRaw] = useState(0);
+  const [checkPsa10, setCheckPsa10] = useState(0);
+  const [checkPsa9, setCheckPsa9] = useState(0);
+  const [checkPsa8, setCheckPsa8] = useState(0);
+  const [askingPrice, setAskingPrice] = useState(0);
+  const [formData, setFormData] = useState({ player: "", sport: "Baseball" as any, team: "", year: 2024, brand: "Topps", set: "Base", parallel: "Base", card_number: "#1", is_rc: false, is_auto: false, is_numbered: false, numbered_to: null as number | null, condition: "NM" as any, raw_value: 0, cost_basis: 0, storage_box: "BOX A", notes: "", purchase_source: null as string | null, purchase_intent: null as any });
   const [filterSport, setFilterSport] = useState("All");
-
   const totalValue = cards.reduce((s, c) => s + (c.raw_value || 0), 0);
   const unsold = cards.filter(c => !c.sold);
   const listed = cards.filter(c => c.status === "listed");
   const grading = cards.filter(c => c.status === "grading");
-
-  const filteredCards = unsold
-    .filter(c => filterSport === "All" || c.sport === filterSport)
-    .filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) ||
-      c.brand.toLowerCase().includes(search.toLowerCase()) ||
-      c.set.toLowerCase().includes(search.toLowerCase()));
-
+  const filteredCards = unsold.filter(c => filterSport === "All" || c.sport === filterSport).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase()));
   const sports = ["All", ...Array.from(new Set(cards.map(c => c.sport)))];
 
   if (screen === "home") return (
@@ -67,20 +56,17 @@ export default function Home() {
       <div style={{ paddingTop: 24 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>Collection Value</div>
-          <div style={{ fontSize: 42, fontFamily: mono, fontWeight: 700, color: accent, letterSpacing: "-0.03em" }}>${totalValue.toFixed(2)}</div>
+          <div style={{ fontSize: 42, fontFamily: mono, fontWeight: 700, color: accent }}>${totalValue.toFixed(2)}</div>
           <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{unsold.length} cards</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
           {[{ label: "Listed", count: listed.length, color: cyan }, { label: "Grading", count: grading.length, color: purple }, { label: "Sold", count: cards.filter(c => c.sold).length, color: green }].map(s => (
-            <div key={s.label} style={{ background: surface, borderRadius: 12, padding: "12px", textAlign: "center" }}>
-              <div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div>
-              <div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{s.label}</div>
-            </div>
+            <div key={s.label} style={{ background: surface, borderRadius: 12, padding: "12px", textAlign: "center" }}><div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{s.label}</div></div>
           ))}
         </div>
-        <button onClick={() => { setCheckSearch(""); setAskingPrice(30); setShowComps(false); setScreen("cardCheck"); }} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + green + "15, " + green + "08)", border: "1px solid " + green + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
+        <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScreen("cardCheck"); }} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + green + "15, " + green + "08)", border: "1px solid " + green + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
-          <div style={{ fontSize: 12, color: muted }}>Search any card — see value, comps, buy/pass verdict</div>
+          <div style={{ fontSize: 12, color: muted }}>Enter any card and price — get flip ROI, grade ROI, verdict</div>
         </button>
         <button onClick={() => setScreen("addCard")} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + accent + "15, " + accent + "08)", border: "1px solid " + accent + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 4 }}>Add a Card</div>
@@ -146,18 +132,10 @@ export default function Home() {
       <div style={{ paddingTop: 12 }}>
         <input placeholder="Search player, brand, set..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
         <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
-          {sports.map(s => (
-            <button key={s} onClick={() => setFilterSport(s)} style={{ padding: "6px 14px", background: filterSport === s ? accent + "20" : surface2, border: "1px solid " + (filterSport === s ? accent + "50" : border), borderRadius: 20, color: filterSport === s ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{s}</button>
-          ))}
+          {sports.map(s => (<button key={s} onClick={() => setFilterSport(s)} style={{ padding: "6px 14px", background: filterSport === s ? accent + "20" : surface2, border: "1px solid " + (filterSport === s ? accent + "50" : border), borderRadius: 20, color: filterSport === s ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{s}</button>))}
         </div>
         {loading && <div style={{ textAlign: "center", color: muted, padding: 40 }}>Loading...</div>}
-        {!loading && filteredCards.length === 0 && (
-          <div style={{ textAlign: "center", color: muted, padding: 40 }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
-            <div style={{ fontSize: 14 }}>No cards yet</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>Add your first card to get started</div>
-          </div>
-        )}
+        {!loading && filteredCards.length === 0 && (<div style={{ textAlign: "center", color: muted, padding: 40 }}><div style={{ fontSize: 36, marginBottom: 12 }}>📦</div><div style={{ fontSize: 14 }}>No cards yet</div></div>)}
         {filteredCards.map(card => (
           <button key={card.id} onClick={() => { setSelectedCard(card); setScreen("cardDetail"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
@@ -167,13 +145,9 @@ export default function Home() {
                 {card.is_rc && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: green + "15", border: "1px solid " + green + "30", color: green, fontWeight: 600 }}>RC</span>}
                 {card.is_auto && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: purple + "15", border: "1px solid " + purple + "30", color: purple, fontWeight: 600 }}>AUTO</span>}
                 <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: surface2, color: muted }}>{card.sport}</span>
-                <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: surface2, color: muted }}>{card.storage_box}</span>
               </div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: card.raw_value >= 25 ? green : card.raw_value >= 5 ? text : muted }}>${card.raw_value}</div>
-              <div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{card.status}</div>
-            </div>
+            <div style={{ textAlign: "right" }}><div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: card.raw_value >= 25 ? green : card.raw_value >= 5 ? text : muted }}>${card.raw_value}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{card.status}</div></div>
           </button>
         ))}
       </div>
@@ -187,11 +161,9 @@ export default function Home() {
           <div style={{ fontSize: 22, fontWeight: 700 }}>{selectedCard.player}</div>
           <div style={{ fontSize: 14, color: muted, marginTop: 4 }}>{selectedCard.year} {selectedCard.brand} {selectedCard.set}</div>
           {selectedCard.parallel !== "Base" && <div style={{ fontSize: 13, color: cyan, marginTop: 2 }}>{selectedCard.parallel}</div>}
-          <div style={{ fontSize: 13, color: muted }}>{selectedCard.card_number}</div>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 8 }}>
             {selectedCard.is_rc && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 12, background: green + "15", border: "1px solid " + green + "30", color: green, fontWeight: 600 }}>ROOKIE</span>}
             {selectedCard.is_auto && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 12, background: purple + "15", border: "1px solid " + purple + "30", color: purple, fontWeight: 600 }}>AUTO</span>}
-            {selectedCard.is_numbered && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 12, background: cyan + "15", border: "1px solid " + cyan + "30", color: cyan, fontWeight: 600 }}>/{selectedCard.numbered_to}</span>}
           </div>
         </div>
         <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
@@ -203,24 +175,8 @@ export default function Home() {
           </div>
         </div>
         <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Graded Values</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
-            {(["10", "9", "8", "7"] as const).map(g => (
-              <div key={g}><div style={{ fontSize: 9, color: muted }}>PSA {g}</div><div style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: g === "10" ? green : text }}>${selectedCard.graded_values?.[g] || 0}</div></div>
-            ))}
-          </div>
-        </div>
-        <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Storage</div>
-          <div style={{ fontSize: 14 }}>{selectedCard.storage_box} · Row {selectedCard.storage_row} · Position {selectedCard.storage_position}</div>
-        </div>
-        <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Sell Optimizer</div>
-          {PLATFORMS.slice(0, 6).map(p => {
-            const net = calcNet(selectedCard.raw_value, p);
-            const ship = calcShipping(selectedCard.raw_value);
-            return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>);
-          })}
+          {PLATFORMS.slice(0, 6).map(p => { const net = calcNet(selectedCard.raw_value, p); const ship = calcShipping(selectedCard.raw_value); return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>); })}
         </div>
         <button onClick={async () => { await deleteCard(selectedCard.id); setScreen("myCards"); }} style={{ width: "100%", padding: "14px", background: red + "15", border: "1px solid " + red + "30", borderRadius: 12, color: red, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Delete Card</button>
       </div>
@@ -230,51 +186,62 @@ export default function Home() {
   if (screen === "cardCheck") return (
     <Shell title="Check a Card" back={() => setScreen("home")}>
       <div style={{ paddingTop: 20 }}>
-        <input value={checkSearch} onChange={e => setCheckSearch(e.target.value)} placeholder="Herbert Prizm Silver 2020" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: 16 }} />
-        {checkSearch.length > 3 && (
-          <div>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Results</div>
-            {[{ name: "2020 Prizm Silver #315 Justin Herbert RC", val: 45 }, { name: "2020 Prizm Base #315 Justin Herbert RC", val: 4 }, { name: "2021 Prizm Silver #315 Justin Herbert", val: 12 }].map((r, i) => (
-              <button key={i} onClick={() => { setAskingPrice(30); setScreen("cardResult"); }} style={{ width: "100%", padding: "14px 16px", background: surface, border: "1px solid " + border, borderRadius: 10, marginBottom: 8, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: text }}>{r.name}</span>
-                <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: green }}>${r.val}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Card Name</label>
+          <input value={checkName} onChange={e => setCheckName(e.target.value)} placeholder="2020 Prizm Silver Justin Herbert RC" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Asking Price ($)</label>
+          <input type="number" value={askingPrice || ""} onChange={e => setAskingPrice(+e.target.value)} placeholder="What they want" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Raw Value ($) <span style={{ fontWeight: 400, textTransform: "none" }}>— eBay sold price</span></label>
+          <input type="number" value={checkRaw || ""} onChange={e => setCheckRaw(+e.target.value)} placeholder="What it sells for raw" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
+          <div><label style={{ fontSize: 10, color: muted, display: "block", marginBottom: 4 }}>PSA 10 ($)</label><input type="number" value={checkPsa10 || ""} onChange={e => setCheckPsa10(+e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 8, padding: "10px", color: text, fontFamily: mono, fontSize: 14, outline: "none", boxSizing: "border-box" }} /></div>
+          <div><label style={{ fontSize: 10, color: muted, display: "block", marginBottom: 4 }}>PSA 9 ($)</label><input type="number" value={checkPsa9 || ""} onChange={e => setCheckPsa9(+e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 8, padding: "10px", color: text, fontFamily: mono, fontSize: 14, outline: "none", boxSizing: "border-box" }} /></div>
+          <div><label style={{ fontSize: 10, color: muted, display: "block", marginBottom: 4 }}>PSA 8 ($)</label><input type="number" value={checkPsa8 || ""} onChange={e => setCheckPsa8(+e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 8, padding: "10px", color: text, fontFamily: mono, fontSize: 14, outline: "none", boxSizing: "border-box" }} /></div>
+        </div>
+        <button onClick={() => { if (checkRaw > 0) setScreen("cardResult"); }} style={{ width: "100%", padding: "16px", background: green, border: "none", borderRadius: 12, color: "#000", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer", opacity: checkRaw > 0 ? 1 : 0.4 }}>Evaluate Card</button>
       </div>
     </Shell>
   );
 
   if (screen === "cardResult") {
-    const rawVal = 45;
-    const psa10 = 180, psa9 = 85, psa8 = 50;
-    const gemRate = 14.4;
+    const rawVal = checkRaw;
+    const psa10 = +(checkPsa10 || rawVal * 3).toFixed(2);
+    const psa9 = +(checkPsa9 || rawVal * 1.8).toFixed(2);
+    const psa8 = +(checkPsa8 || rawVal * 1.2).toFixed(2);
+    const psa7 = +(rawVal * 0.8).toFixed(2);
+    const gemRate = 15;
     const ebayFee = +(rawVal * 0.1325 + 0.30).toFixed(2);
-    const ship = 4.50;
+    const ship = rawVal >= 20 ? 4.50 : 1.05;
     const flipNet = +(rawVal - ebayFee - ship).toFixed(2);
     const flipProfit = +(flipNet - askingPrice).toFixed(2);
     const flipROI = askingPrice > 0 ? +((flipProfit / askingPrice) * 100).toFixed(0) : 0;
     const gradeCost = 25;
-    const expectedGrade = +(psa10 * 0.144 + psa9 * 0.35 + psa8 * 0.35 + 30 * 0.156).toFixed(2);
-    const expectedNet = +(expectedGrade - (expectedGrade * 0.1325) - ship - gradeCost).toFixed(2);
+    const expectedGrade = +(psa10 * 0.15 + psa9 * 0.35 + psa8 * 0.30 + psa7 * 0.20).toFixed(2);
+    const expectedFees = +(expectedGrade * 0.1325 + 0.30).toFixed(2);
+    const expectedNet = +(expectedGrade - expectedFees - ship - gradeCost).toFixed(2);
     const expectedProfit = +(expectedNet - askingPrice).toFixed(2);
     const expectedROI = askingPrice > 0 ? +((expectedProfit / askingPrice) * 100).toFixed(0) : 0;
     const maxPayRaw = +flipNet.toFixed(2);
-    const belowMarket = askingPrice > 0 ? +(((rawVal - askingPrice) / rawVal) * 100).toFixed(0) : 0;
+    const belowMarket = askingPrice > 0 && rawVal > 0 ? +(((rawVal - askingPrice) / rawVal) * 100).toFixed(0) : 0;
     const verdict = flipROI > 20 ? "buy" : flipROI > 0 ? "maybe" : "pass";
+
+    const gradeBreakdown = [
+      { grade: "PSA 10", prob: "15%", val: psa10, color: green },
+      { grade: "PSA 9", prob: "35%", val: psa9, color: cyan },
+      { grade: "PSA 8", prob: "30%", val: psa8, color: text },
+      { grade: "PSA 7", prob: "20%", val: psa7, color: muted },
+    ];
+
     return (
-      <Shell title="Card Check" back={() => setScreen("cardCheck")}>
+      <Shell title={checkName || "Card Check"} back={() => setScreen("cardCheck")}>
         <div style={{ paddingTop: 16 }}>
-          <div style={{ textAlign: "center", marginBottom: 16 }}>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>Justin Herbert</div>
-            <div style={{ fontSize: 13, color: muted }}>2020 Prizm Silver #315 RC</div>
-            <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 6 }}>
-              <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 10, background: green + "15", border: "1px solid " + green + "30", color: green, fontWeight: 600 }}>RC</span>
-              <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 10, background: cyan + "15", border: "1px solid " + cyan + "30", color: cyan, fontWeight: 600 }}>POP 5,892</span>
-              <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 10, background: purple + "15", border: "1px solid " + purple + "30", color: purple, fontWeight: 600 }}>{gemRate}% GEM</span>
-            </div>
-          </div>
+          {checkName && <div style={{ textAlign: "center", fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{checkName}</div>}
+
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, color: muted }}>Asking price</span>
@@ -285,6 +252,7 @@ export default function Home() {
             </div>
             {belowMarket > 0 && <div style={{ fontSize: 12, color: green, marginTop: 6, textAlign: "right" }}>{belowMarket}% below market</div>}
           </div>
+
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Market values</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, textAlign: "center" }}>
@@ -292,44 +260,54 @@ export default function Home() {
                 <div key={g.l}><div style={{ fontSize: 9, color: muted, marginBottom: 2 }}>{g.l}</div><div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: g.c }}>${g.v}</div></div>
               ))}
             </div>
-            <button onClick={() => setShowComps(!showComps)} style={{ width: "100%", marginTop: 10, padding: "8px", background: cyan + "10", border: "1px solid " + cyan + "20", borderRadius: 8, color: cyan, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{showComps ? "Hide" : "View"} recent comps</button>
-            {showComps && (
-              <div style={{ marginTop: 10 }}>
-                {[{ p: "$48", d: "3/28", s: "eBay BIN" }, { p: "$42", d: "3/25", s: "eBay Auction" }, { p: "$46", d: "3/22", s: "eBay BIN" }, { p: "$39", d: "3/20", s: "eBay BOA" }, { p: "$51", d: "3/18", s: "Whatnot" }].map((c, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: i < 4 ? "1px solid " + border : "none", fontSize: 12 }}>
-                    <span style={{ fontFamily: mono, color: green, fontWeight: 600 }}>{c.p}</span><span style={{ color: muted }}>{c.d}</span><span style={{ color: muted }}>{c.s}</span>
-                  </div>
-                ))}
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11 }}>
-                  <span style={{ color: muted }}>Median: <span style={{ color: text, fontWeight: 600 }}>$45</span></span>
-                  <span style={{ color: green }}>Trending: +6% (30d)</span>
-                </div>
-              </div>
-            )}
           </div>
+
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>If you buy at ${askingPrice}</div>
             <div style={{ marginBottom: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><span style={{ fontSize: 13, fontWeight: 600 }}>Flip raw on eBay</span><span style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: flipProfit > 0 ? green : red }}>{flipProfit > 0 ? "+" : ""}${flipProfit}</span></div>
               <div style={{ height: 6, background: surface2, borderRadius: 3, marginBottom: 4 }}><div style={{ height: 6, background: flipROI > 20 ? green : flipROI > 0 ? accent : red, borderRadius: 3, width: Math.min(Math.max(flipROI, 0), 100) + "%" }} /></div>
-              <div style={{ fontSize: 11, color: muted }}>{flipROI}% ROI</div>
+              <div style={{ fontSize: 11, color: muted }}>{flipROI}% ROI · Fees ${ebayFee} · Ship ${ship}</div>
             </div>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><span style={{ fontSize: 13, fontWeight: 600 }}>Grade & sell (expected)</span><span style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: expectedProfit > 0 ? green : red }}>{expectedProfit > 0 ? "+" : ""}${expectedProfit}</span></div>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><span style={{ fontSize: 13, fontWeight: 600 }}>Grade & sell (expected avg)</span><span style={{ fontFamily: mono, fontSize: 15, fontWeight: 700, color: expectedProfit > 0 ? green : red }}>{expectedProfit > 0 ? "+" : ""}${expectedProfit}</span></div>
               <div style={{ height: 6, background: surface2, borderRadius: 3, marginBottom: 4 }}><div style={{ height: 6, background: expectedROI > 20 ? purple : expectedROI > 0 ? accent : red, borderRadius: 3, width: Math.min(Math.max(expectedROI, 0), 100) + "%" }} /></div>
-              <div style={{ fontSize: 11, color: muted }}>{expectedROI}% ROI · Gem rate {gemRate}%</div>
+              <div style={{ fontSize: 11, color: muted }}>{expectedROI}% ROI · Grade cost $25 · Gem rate {gemRate}%</div>
+            </div>
+            <div style={{ borderTop: "1px solid " + border, paddingTop: 12 }}>
+              <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Per-grade breakdown</div>
+              {gradeBreakdown.map(g => {
+                const gFees = +(g.val * 0.1325 + 0.30).toFixed(2);
+                const gShip = g.val >= 20 ? 4.50 : 1.05;
+                const gProfit = +(g.val - gFees - gShip - 25 - askingPrice).toFixed(2);
+                return (
+                  <div key={g.grade} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid " + border }}>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: g.color }}>{g.grade}</span>
+                      <span style={{ fontSize: 11, color: muted, marginLeft: 6 }}>({g.prob})</span>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontSize: 11, color: muted, marginRight: 8 }}>${g.val}</span>
+                      <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: gProfit > 0 ? green : red }}>{gProfit > 0 ? "+" : ""}${gProfit}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
+
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Max pay</div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ fontSize: 12, color: muted }}>Break even (raw flip)</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600 }}>${maxPayRaw}</span></div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ fontSize: 12, color: muted }}>For 20% profit</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600 }}>${+(maxPayRaw / 1.2).toFixed(2)}</span></div>
             <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ fontSize: 12, color: muted }}>Grade break even</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600 }}>${expectedNet}</span></div>
           </div>
+
           <div style={{ background: verdict === "buy" ? green + "10" : verdict === "maybe" ? accent + "10" : red + "10", border: "1px solid " + (verdict === "buy" ? green + "30" : verdict === "maybe" ? accent + "30" : red + "30"), borderRadius: 14, padding: 16, marginBottom: 16, textAlign: "center" }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: verdict === "buy" ? green : verdict === "maybe" ? accent : red, marginBottom: 4 }}>{verdict === "buy" ? "BUY" : verdict === "maybe" ? "NEGOTIATE" : "PASS"}</div>
             <div style={{ fontSize: 12, color: muted }}>{verdict === "buy" ? "Good at $" + askingPrice + " — " + belowMarket + "% below market" : verdict === "maybe" ? "Tight margin — try $" + +(maxPayRaw / 1.2).toFixed(0) : "Overpaying — max $" + maxPayRaw}</div>
           </div>
+
           <div style={{ display: "flex", gap: 12 }}>
             <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: green, border: "none", borderRadius: 14, color: "#000", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>BUY</button>
             <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: surface2, border: "1px solid " + border, borderRadius: 14, color: muted, fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>PASS</button>
