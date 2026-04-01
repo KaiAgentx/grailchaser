@@ -82,7 +82,7 @@ export default function Home() {
   const handleScan = async (file: File) => {
     setScanning(true);
     setScanPreview(URL.createObjectURL(file));
-    setScanResult(null);
+    setScanResult(null); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setCheckRaw(0);
     try {
       const base64 = await compressImage(file, 800);
       const res = await fetch("/api/scan", {
@@ -94,20 +94,6 @@ export default function Home() {
       if (data.success) {
         setCheckName([data.year, data.brand, data.set !== data.brand ? data.set : "", data.parallel !== "Base" ? data.parallel : "", data.player, data.card_number].filter(Boolean).join(" "));
         setScanResult(data);
-        try {
-          const priceRes = await fetch("/api/price", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ player: data.player, year: data.year, set: data.set, card_number: data.card_number, sport: data.sport }),
-          });
-          const priceData = await priceRes.json();
-          if (priceData.prices) {
-            if (priceData.prices.raw) setCheckRaw(priceData.prices.raw);
-            if (priceData.prices.psa10) setCheckPsa10(priceData.prices.psa10);
-            if (priceData.prices.psa9) setCheckPsa9(priceData.prices.psa9);
-            if (priceData.prices.psa8) setCheckPsa8(priceData.prices.psa8);
-          }
-        } catch(pe) { console.log("Price fetch failed"); }
         if (data.pricing?.raw) setCheckRaw(data.pricing.raw);
         if (data.pricing?.psa10) setCheckPsa10(data.pricing.psa10);
         if (data.pricing?.psa9) setCheckPsa9(data.pricing.psa9);
@@ -134,7 +120,7 @@ export default function Home() {
             <div key={s.label} style={{ background: surface, borderRadius: 12, padding: "12px", textAlign: "center" }}><div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{s.label}</div></div>
           ))}
         </div>
-        <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setScreen("cardCheck"); }} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + green + "15, " + green + "08)", border: "1px solid " + green + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
+        <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setCheckRaw(0); setScreen("cardCheck"); }} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + green + "15, " + green + "08)", border: "1px solid " + green + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
           <div style={{ fontSize: 12, color: muted }}>Snap a photo or enter manually — get value and verdict</div>
         </button>
@@ -278,7 +264,7 @@ export default function Home() {
           <input type="number" value={askingPrice || ""} onChange={e => setAskingPrice(+e.target.value)} placeholder="What they want" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
         </div>
         <div style={{ marginBottom: 14 }}>
-        <button onClick={async () => { if (checkName.length > 3) { try { const priceRes = await fetch("/api/price", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ player: checkName, year: 0, set: "", card_number: "", sport: "" }) }); const priceData = await priceRes.json(); if (priceData.prices) { if (priceData.prices.raw) setCheckRaw(priceData.prices.raw); if (priceData.prices.psa10) setCheckPsa10(priceData.prices.psa10); if (priceData.prices.psa9) setCheckPsa9(priceData.prices.psa9); if (priceData.prices.psa8) setCheckPsa8(priceData.prices.psa8); } } catch(e) {} } }} style={{ width: "100%", padding: "12px", background: cyan + "15", border: "1px solid " + cyan + "30", borderRadius: 10, color: cyan, fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 14, opacity: checkName.length > 3 ? 1 : 0.4 }}>Look Up Prices</button>
+        <button onClick={async () => { if (checkName.length > 3) { try { const priceRes = await fetch("/api/price", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ player: checkName, year: 0, set: "", card_number: "", sport: "" }) }); const priceData = await priceRes.json(); if (priceData.prices) { const raw = priceData.prices.raw || (priceData.prices.psa10 ? +(priceData.prices.psa10 * 0.2).toFixed(2) : 0) || (priceData.prices.psa9 ? +(priceData.prices.psa9 * 0.5).toFixed(2) : 0); if (raw) setCheckRaw(raw); if (priceData.prices.raw) setCheckRaw(priceData.prices.raw); if (priceData.prices.psa10) setCheckPsa10(priceData.prices.psa10); if (priceData.prices.psa9) setCheckPsa9(priceData.prices.psa9); if (priceData.prices.psa8) setCheckPsa8(priceData.prices.psa8); } } catch(e) {} } }} style={{ width: "100%", padding: "12px", background: cyan + "15", border: "1px solid " + cyan + "30", borderRadius: 10, color: cyan, fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer", marginBottom: 14, opacity: checkName.length > 3 ? 1 : 0.4 }}>Look Up Prices</button>
           <label style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Raw Value ($) <span style={{ fontWeight: 400, textTransform: "none" }}>— eBay sold price</span></label>
           <input type="number" value={checkRaw || ""} onChange={e => setCheckRaw(+e.target.value)} placeholder="What it sells for raw" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" }} />
         </div>
