@@ -193,11 +193,80 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
           </div>
         )}
 
-        {/* Sell Optimizer */}
-        <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Sell Optimizer</div>
-          {PLATFORMS.slice(0, 6).map(p => { const net = calcNet(card.raw_value, p); const ship = calcShipping(card.raw_value); return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>); })}
-        </div>
+        {/* Sale Breakdown (sold/shipped) or Sell Optimizer (raw/listed/graded) */}
+        {card.status === "sold" || card.status === "shipped" ? (() => {
+          const soldPrice = card.sold_price || 0;
+          const costBasis = card.cost_basis || 0;
+          const platform = PLATFORMS.find(p => p.name === card.sold_platform) || PLATFORMS.find(p => card.sold_platform && p.name.toLowerCase().includes(card.sold_platform.toLowerCase()));
+          const platformFee = platform ? +(soldPrice * platform.feeRate + platform.fixedFee).toFixed(2) : 0;
+          const paymentFee = platform ? +(soldPrice * platform.paymentFee + platform.paymentFixed).toFixed(2) : 0;
+          const totalFees = +(platformFee + paymentFee).toFixed(2);
+          const shipCost = soldPrice >= 500 ? 12.00 : soldPrice >= 100 ? 7.00 : soldPrice >= 20 ? 4.50 : 1.05;
+          const shipLabel = soldPrice >= 500 ? "Box + Insurance" : soldPrice >= 100 ? "BMWT + Insurance" : soldPrice >= 20 ? "BMWT" : "PWE";
+          const netProfit = +(soldPrice - costBasis - totalFees - shipCost).toFixed(2);
+          const roi = costBasis > 0 ? +((netProfit / costBasis) * 100).toFixed(0) : 0;
+          const daysHeld = card.date_added && card.sold_date ? Math.max(0, Math.floor((new Date(card.sold_date).getTime() - new Date(card.date_added).getTime()) / 86400000)) : null;
+          const feeLabel = platform ? `${platform.name} fees` : "Platform fees";
+
+          return (
+            <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>Sale Breakdown</div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+                <span style={{ fontSize: 13, color: muted }}>Purchased</span>
+                <span style={{ fontFamily: mono, fontSize: 13, color: text }}>${costBasis.toFixed(2)}{card.purchase_source ? ` (${card.purchase_source})` : ""}</span>
+              </div>
+              {card.date_added && <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span style={{ fontSize: 11, color: muted }}>Added</span><span style={{ fontSize: 11, color: muted }}>{card.date_added}</span></div>}
+
+              <div style={{ borderTop: "1px solid " + border, marginTop: 8, paddingTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+                  <span style={{ fontSize: 13, color: muted }}>Sold</span>
+                  <span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${soldPrice.toFixed(2)} ({card.sold_platform || "?"})</span>
+                </div>
+                {card.sold_date && <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span style={{ fontSize: 11, color: muted }}>Date</span><span style={{ fontSize: 11, color: muted }}>{card.sold_date}{daysHeld !== null ? ` (${daysHeld}d held)` : ""}</span></div>}
+              </div>
+
+              <div style={{ borderTop: "1px solid " + border, marginTop: 8, paddingTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+                  <span style={{ fontSize: 12, color: muted }}>{feeLabel}</span>
+                  <span style={{ fontFamily: mono, fontSize: 12, color: red }}>-${platformFee.toFixed(2)}</span>
+                </div>
+                {paymentFee > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span style={{ fontSize: 12, color: muted }}>Payment processing</span><span style={{ fontFamily: mono, fontSize: 12, color: red }}>-${paymentFee.toFixed(2)}</span></div>}
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
+                  <span style={{ fontSize: 12, color: muted }}>Shipping ({shipLabel})</span>
+                  <span style={{ fontFamily: mono, fontSize: 12, color: red }}>-${shipCost.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: "2px solid " + (netProfit >= 0 ? green : red) + "40", marginTop: 10, paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: text }}>NET PROFIT</span>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 800, color: netProfit >= 0 ? green : red }}>{netProfit >= 0 ? "+" : ""}${netProfit.toFixed(2)}</div>
+                  {costBasis > 0 && <div style={{ fontSize: 11, color: netProfit >= 0 ? green : red, fontWeight: 600 }}>{roi}% ROI</div>}
+                </div>
+              </div>
+            </div>
+          );
+        })() : (
+          <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Sell Optimizer</div>
+            {PLATFORMS.slice(0, 6).map(p => { const net = calcNet(card.raw_value, p); const ship = calcShipping(card.raw_value); return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>); })}
+          </div>
+        )}
+
+        {/* Tracking info for shipped cards */}
+        {card.status === "shipped" && (
+          <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Shipping</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                {card.tracking_number ? <div style={{ fontSize: 13, fontFamily: mono, color: cyan, wordBreak: "break-all" }}>{card.tracking_number}</div> : <div style={{ fontSize: 12, color: muted }}>No tracking (PWE)</div>}
+                {card.shipped_date && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Shipped {card.shipped_date}</div>}
+              </div>
+              <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 8, background: green + "15", border: "1px solid " + green + "30", color: green, fontWeight: 600 }}>Shipped ✓</span>
+            </div>
+          </div>
+        )}
 
         {/* Active Listings Display */}
         {card.status === "listed" && getActivePlatforms(card).length > 0 && (
@@ -336,7 +405,8 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
           )}
         </div>
 
-        <button onClick={async () => { await deleteCard(card.id); onBack(); }} style={{ width: "100%", padding: "14px", background: red + "15", border: "1px solid " + red + "30", borderRadius: 12, color: red, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Delete Card</button>
+        {(card.sold || card.status === "sold" || card.status === "shipped") && <div style={{ fontSize: 11, color: red, textAlign: "center", marginTop: 12, marginBottom: 4 }}>This card has sale history. Deleting will remove all records.</div>}
+        <button onClick={async () => { await deleteCard(card.id); onBack(); }} style={{ width: "100%", padding: "14px", background: red + "15", border: "1px solid " + red + "30", borderRadius: 12, color: red, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: card.sold ? 0 : 8 }}>Delete Card</button>
       </div>
     </Shell>
   );
