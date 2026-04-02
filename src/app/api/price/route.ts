@@ -89,26 +89,41 @@ function extractMarketplacePrices(data: any) {
 function extractAiPrices(data: any) {
   const prices: any = { raw: null, psa10: null, psa9: null, psa8: null };
 
-  // Try to parse structured pricing from AI response
   const answer = data.answer || data.response || data.result || data.text || data.message || "";
-  console.log(`  AI answer: ${String(answer).substring(0, 500)}`);
+  console.log(`  AI full answer:\n${String(answer)}`);
 
   // Check for structured data fields
   if (data.prices) return { ...prices, ...data.prices };
   if (data.pricing) return { ...prices, ...data.pricing };
   if (data.values) return { ...prices, ...data.values };
 
-  // Try to parse dollar amounts from text — handles "Raw | $243" and "PSA 10: $737" formats
-  if (typeof answer === "string") {
-    const rawMatch = answer.match(/\*?\*?raw\*?\*?[^$\d]*\$?([\d,]+\.?\d*)/i);
-    const psa10Match = answer.match(/\*?\*?psa\s*10\*?\*?[^$\d]*\$?([\d,]+\.?\d*)/i);
-    const psa9Match = answer.match(/\*?\*?psa\s*9\*?\*?[^$\d]*\$?([\d,]+\.?\d*)/i);
-    const psa8Match = answer.match(/\*?\*?psa\s*8\*?\*?[^$\d]*\$?([\d,]+\.?\d*)/i);
-    if (rawMatch) { prices.raw = +rawMatch[1].replace(/,/g, ""); console.log(`  Parsed raw: $${prices.raw}`); }
-    if (psa10Match) { prices.psa10 = +psa10Match[1].replace(/,/g, ""); console.log(`  Parsed PSA 10: $${prices.psa10}`); }
-    if (psa9Match) { prices.psa9 = +psa9Match[1].replace(/,/g, ""); console.log(`  Parsed PSA 9: $${prices.psa9}`); }
-    if (psa8Match) { prices.psa8 = +psa8Match[1].replace(/,/g, ""); console.log(`  Parsed PSA 8: $${prices.psa8}`); }
-  }
+  if (typeof answer !== "string") return prices;
+
+  // Only match dollar signs: "$149.95" or "$1,200"  — never bare numbers
+  // Search near the label within a short window (same line / table row) to avoid cross-contamination
+  const parseDollar = (label: string): number | null => {
+    // Escape for regex
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Match label followed by up to 40 chars then a $ amount — stays on same line/row
+    const re = new RegExp(escaped + "[^\\n|$]{0,40}\\$(\\d[\\d,]*\\.?\\d*)", "i");
+    const m = answer.match(re);
+    if (!m) return null;
+    const val = +m[1].replace(/,/g, "");
+    // Reject years (1980-2030) and nonsense values
+    if (val >= 1980 && val <= 2030) { console.log(`  Rejected year-like value $${val} for ${label}`); return null; }
+    if (val <= 0) return null;
+    return val;
+  };
+
+  prices.raw = parseDollar("Raw");
+  prices.psa10 = parseDollar("PSA 10") || parseDollar("PSA10");
+  prices.psa9 = parseDollar("PSA 9") || parseDollar("PSA9");
+  prices.psa8 = parseDollar("PSA 8") || parseDollar("PSA8");
+
+  if (prices.raw) console.log(`  Parsed raw: $${prices.raw}`);
+  if (prices.psa10) console.log(`  Parsed PSA 10: $${prices.psa10}`);
+  if (prices.psa9) console.log(`  Parsed PSA 9: $${prices.psa9}`);
+  if (prices.psa8) console.log(`  Parsed PSA 8: $${prices.psa8}`);
 
   return prices;
 }
