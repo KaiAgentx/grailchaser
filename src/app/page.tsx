@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCards } from "@/hooks/useCards";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 import { LoginScreen } from "@/components/LoginScreen";
+import { Dashboard } from "@/components/Dashboard";
 import { CardDetail } from "@/components/CardDetail";
 import { StorageView } from "@/components/StorageView";
 import { CsvImport } from "@/components/CsvImport";
@@ -44,6 +45,7 @@ export default function Home() {
   const { boxes, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
   const [buyConfirm, setBuyConfirm] = useState("");
   const [showBuyFlow, setShowBuyFlow] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("");
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [search, setSearch] = useState("");
@@ -66,7 +68,7 @@ export default function Home() {
   const unsold = cards.filter(c => !c.sold);
   const listed = cards.filter(c => c.status === "listed");
   const grading = cards.filter(c => c.status === "grading");
-  const filteredCards = unsold.filter(c => filterSport === "All" || c.sport === filterSport).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase()));
+  const filteredCards = (statusFilter === "pending" ? cards.filter(c => !c.storage_box || c.storage_box === "PENDING") : statusFilter === "stale" ? listed.filter(c => c.listed_date && (Date.now() - new Date(c.listed_date).getTime()) / 86400000 > 14) : statusFilter ? cards.filter(c => c.status === statusFilter) : unsold).filter(c => filterSport === "All" || c.sport === filterSport).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase()));
   const sports = ["All", ...Array.from(new Set(cards.map(c => c.sport)))];
 
   const handleScan = async (file: File) => {
@@ -113,41 +115,18 @@ export default function Home() {
   if (!user) return <LoginScreen signIn={signIn} signUp={signUp} />;
 
   if (screen === "home") return (
-    <Shell title="GrailChaser" brandTitle>
-      <div style={{ paddingTop: 24 }}>
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>Collection Value</div>
-          <div style={{ fontSize: 42, fontFamily: mono, fontWeight: 700, color: accent }}>${totalValue.toFixed(2)}</div>
-          <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{unsold.length} cards</div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
-          {[{ label: "Listed", count: listed.length, color: cyan }, { label: "Grading", count: grading.length, color: purple }, { label: "Sold", count: cards.filter(c => c.sold).length, color: green }].map(s => (
-            <div key={s.label} style={{ background: surface, borderRadius: 12, padding: "12px", textAlign: "center" }}><div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: s.color }}>{s.count}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{s.label}</div></div>
-          ))}
-        </div>
-        <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setLookupError(""); setNameEdited(false); setScreen("cardCheck"); }} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + green + "15, " + green + "08)", border: "1px solid " + green + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
-          <div style={{ fontSize: 12, color: muted }}>Snap a photo or enter manually — get value and verdict</div>
-        </button>
-        <button onClick={() => setScreen("addCard")} style={{ width: "100%", padding: "20px", background: "linear-gradient(135deg, " + accent + "15, " + accent + "08)", border: "1px solid " + accent + "30", borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 4 }}>Add a Card</div>
-          <div style={{ fontSize: 12, color: muted }}>Manually add a card to your collection</div>
-        </button>
-        <button onClick={() => setScreen("myCards")} style={{ width: "100%", padding: "20px", background: surface, border: "1px solid " + border, borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 4 }}>My Cards ({unsold.length})</div>
-          <div style={{ fontSize: 12, color: muted }}>Browse, search, and manage your collection</div>
-        </button>
-        <button onClick={() => setScreen("storage")} style={{ width: "100%", padding: "20px", background: surface, border: "1px solid " + border, borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 4 }}>My Boxes ({boxes.length})</div>
-          <div style={{ fontSize: 12, color: muted }}>Card storage · {cards.filter(c => !c.storage_box || c.storage_box === "PENDING").length} unassigned</div>
-        </button>
-        <button onClick={() => setScreen("csvImport")} style={{ width: "100%", padding: "20px", background: surface, border: "1px solid " + border, borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 4 }}>Import CSV</div>
-          <div style={{ fontSize: 12, color: muted }}>Bulk-load cards from a spreadsheet</div>
-        </button>
-        <button onClick={() => signOut()} style={{ width: "100%", padding: "12px", background: "none", border: "1px solid " + border, borderRadius: 12, color: muted, fontFamily: font, fontSize: 13, cursor: "pointer", marginTop: 8 }}>Sign Out ({user.email})</button>
-      </div>
-    </Shell>
+    <Dashboard
+      cards={cards}
+      boxes={boxes}
+      userEmail={user.email || ""}
+      onNavigate={(t) => {
+        if (t.screen === "cardCheck") { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setLookupError(""); setNameEdited(false); }
+        if (t.card) setSelectedCard(t.card);
+        if (t.filter) setStatusFilter(t.filter);
+        setScreen(t.screen as Screen);
+      }}
+      onSignOut={() => signOut()}
+    />
   );
 
   if (screen === "addCard") return (
@@ -198,7 +177,7 @@ export default function Home() {
   );
 
   if (screen === "myCards") return (
-    <Shell title={"My Cards (" + unsold.length + ")"} back={() => setScreen("home")}>
+    <Shell title={"My Cards (" + filteredCards.length + ")"} back={() => { setStatusFilter(""); setScreen("home"); }}>
       <div style={{ paddingTop: 12 }}>
         <input placeholder="Search player, brand, set..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
         <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
