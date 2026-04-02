@@ -32,6 +32,7 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
   const [editRows, setEditRows] = useState(1);
   const [editDivider, setEditDivider] = useState(50);
   const [saving, setSaving] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   const unassigned = cards.filter(c => !c.storage_box || c.storage_box === "PENDING");
   const cardsInBox = (boxName: string) => cards.filter(c => c.storage_box === boxName);
@@ -94,7 +95,8 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
             ))}
           </div>
         </div>
-        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); await addBox(newName.trim(), newRows, newDivider); setSaving(false); setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
+        {saving === false && createError && <div style={{ fontSize: 12, color: red, textAlign: "center", marginBottom: 8 }}>{createError}</div>}
+        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider); setSaving(false); if (error) { setCreateError(error.message || "Failed to create box — have you run the SQL migration?"); } else { setScreen("list"); } }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
       </div>
     </Shell>
   );

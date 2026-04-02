@@ -24,6 +24,7 @@ export function useBoxes(userId?: string) {
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: true });
+    if (error) console.error("fetchBoxes error:", error);
     if (!error && data) setBoxes(data);
     setLoading(false);
   }, [userId]);
@@ -31,12 +32,15 @@ export function useBoxes(userId?: string) {
   useEffect(() => { fetchBoxes(); }, [fetchBoxes]);
 
   const addBox = async (name: string, num_rows: number, divider_size: number) => {
-    if (!userId) return { error: { message: "Not logged in" } };
+    if (!userId) { console.error("addBox: no userId"); return { error: { message: "Not logged in" } }; }
+    console.log("addBox:", { user_id: userId, name, num_rows, divider_size });
     const { data, error } = await supabase
       .from("boxes")
       .insert({ user_id: userId, name, num_rows, divider_size })
       .select()
       .single();
+    if (error) console.error("addBox error:", error);
+    else console.log("addBox success:", data);
     if (!error && data) setBoxes(prev => [...prev, data]);
     return { data, error };
   };
