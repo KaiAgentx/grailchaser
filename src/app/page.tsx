@@ -3,22 +3,12 @@ import { useState, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCards } from "@/hooks/useCards";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
+import { LoginScreen } from "@/components/LoginScreen";
+import { CardDetail } from "@/components/CardDetail";
+import { Shell } from "@/components/Shell";
+import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
 
 type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult";
-
-const bg = "#0a0a0f";
-const surface = "#13131a";
-const surface2 = "#1a1a24";
-const border = "#2a2a38";
-const accent = "#f0c040";
-const green = "#22c55e";
-const red = "#ef4444";
-const cyan = "#06b6d4";
-const purple = "#a855f7";
-const muted = "#6b6b80";
-const text = "#e8e8ef";
-const font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-const mono = "'SF Mono', 'Menlo', monospace";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -44,27 +34,11 @@ function compressImage(file: File, maxWidth = 800): Promise<string> {
   });
 }
 
-function Shell({ children, title, back, brandTitle }: { children: React.ReactNode; title: string; back?: () => void; brandTitle?: boolean }) {
-  return (
-    <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto" }}>
-      <div style={{ position: "sticky", top: 0, zIndex: 50, background: bg, borderBottom: "1px solid " + border, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-        {back && <button onClick={back} style={{ background: "none", border: "none", color: muted, fontSize: 20, cursor: "pointer", padding: 0 }}>←</button>}
-        {brandTitle ? <span style={{ flex: 1, fontSize: 20, fontWeight: 800, fontStyle: "italic", letterSpacing: "-0.01em", background: "linear-gradient(135deg, #c9a227, #f6e27a, #c9a227)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{title}</span> : <span style={{ flex: 1, fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>{title}</span>}
-      </div>
-      <div style={{ padding: "0 20px 100px" }}>{children}</div>
-    </div>
-  );
-}
-
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
-  const { cards, loading, addCard, deleteCard } = useCards(user?.id);
+  const { cards, loading, addCard, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading } = useCards(user?.id);
+  const [buyConfirm, setBuyConfirm] = useState("");
   const [screen, setScreen] = useState<Screen>("home");
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [checkName, setCheckName] = useState("");
@@ -130,46 +104,7 @@ export default function Home() {
     </div>
   );
 
-  // Login / Signup screen
-  if (!user) {
-    const handleAuth = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setAuthError("");
-      setAuthSubmitting(true);
-      const { error } = authMode === "login" ? await signIn(authEmail, authPassword) : await signUp(authEmail, authPassword);
-      if (error) setAuthError(error.message);
-      else if (authMode === "signup") setAuthError("Check your email to confirm your account");
-      setAuthSubmitting(false);
-    };
-
-    return (
-      <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px" }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ background: "linear-gradient(160deg, #b8860b, #f0c040 40%, #daa520 60%, #b8860b)", borderRadius: 16, padding: "28px 20px 22px", marginBottom: 0, position: "relative", overflow: "hidden", boxShadow: "0 4px 24px rgba(184,134,11,0.25), inset 0 1px 0 rgba(255,255,255,0.15)" }}>
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)" }} />
-            <div style={{ position: "relative", fontSize: 38, fontWeight: 900, color: "#0a0a0f", letterSpacing: 2, textTransform: "uppercase", textShadow: "0 1px 0 rgba(255,255,255,0.3)" }}>GRAILCHASER</div>
-            <div style={{ position: "relative", fontSize: 10, color: "#0a0a0f", marginTop: 6, textTransform: "uppercase", letterSpacing: 5, fontWeight: 600, opacity: 0.7 }}>Sports Card Optimizer</div>
-            <div style={{ position: "relative", width: 80, height: 1, background: "linear-gradient(90deg, transparent, rgba(10,10,15,0.3), transparent)", margin: "8px auto 0" }} />
-          </div>
-        </div>
-        <form onSubmit={handleAuth}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 11, color: "#f0c040", textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Email</label>
-            <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required placeholder="you@example.com" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", minHeight: 48, color: text, fontFamily: font, fontSize: 16, outline: "none", boxSizing: "border-box" }} />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, color: "#f0c040", textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Password</label>
-            <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required minLength={6} placeholder="Min 6 characters" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", minHeight: 48, color: text, fontFamily: font, fontSize: 16, outline: "none", boxSizing: "border-box" }} />
-          </div>
-          {authError && <div style={{ fontSize: 13, color: authError.includes("Check your email") ? green : red, textAlign: "center", marginBottom: 16 }}>{authError}</div>}
-          <button type="submit" disabled={authSubmitting} style={{ width: "100%", padding: "16px", minHeight: 52, background: green, border: "none", borderRadius: 12, color: "#ffffff", fontFamily: font, fontSize: 17, fontWeight: 700, cursor: authSubmitting ? "wait" : "pointer", opacity: authSubmitting ? 0.6 : 1 }}>{authSubmitting ? "Please wait..." : authMode === "login" ? "Sign In" : "Create Account"}</button>
-        </form>
-        <div style={{ textAlign: "center", marginTop: 20 }}>
-          <button onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }} style={{ background: "none", border: "none", color: cyan, fontFamily: font, fontSize: 14, cursor: "pointer" }}>{authMode === "login" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}</button>
-        </div>
-      </div>
-    );
-  }
+  if (!user) return <LoginScreen signIn={signIn} signUp={signUp} />;
 
   if (screen === "home") return (
     <Shell title="GrailChaser" brandTitle>
@@ -275,34 +210,10 @@ export default function Home() {
     </Shell>
   );
 
-  if (screen === "cardDetail" && selectedCard) return (
-    <Shell title="Card Detail" back={() => setScreen("myCards")}>
-      <div style={{ paddingTop: 16 }}>
-        <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{selectedCard.player}</div>
-          <div style={{ fontSize: 14, color: muted, marginTop: 4 }}>{selectedCard.year} {selectedCard.brand} {selectedCard.set}</div>
-          {selectedCard.parallel !== "Base" && <div style={{ fontSize: 13, color: cyan, marginTop: 2 }}>{selectedCard.parallel}</div>}
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 8 }}>
-            {selectedCard.is_rc && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 12, background: green + "15", border: "1px solid " + green + "30", color: green, fontWeight: 600 }}>ROOKIE</span>}
-            {selectedCard.is_auto && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 12, background: purple + "15", border: "1px solid " + purple + "30", color: purple, fontWeight: 600 }}>AUTO</span>}
-          </div>
-        </div>
-        <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div><div style={{ fontSize: 10, color: muted, marginBottom: 2 }}>RAW VALUE</div><div style={{ fontFamily: mono, fontSize: 22, fontWeight: 700, color: green }}>${selectedCard.raw_value}</div></div>
-            <div><div style={{ fontSize: 10, color: muted, marginBottom: 2 }}>COST BASIS</div><div style={{ fontFamily: mono, fontSize: 22, fontWeight: 700 }}>${selectedCard.cost_basis}</div></div>
-            <div><div style={{ fontSize: 10, color: muted, marginBottom: 2 }}>TIER</div><div style={{ fontSize: 14, fontWeight: 600, color: selectedCard.tier === "Gem" ? accent : selectedCard.tier === "Star" ? green : text }}>{selectedCard.tier}</div></div>
-            <div><div style={{ fontSize: 10, color: muted, marginBottom: 2 }}>STATUS</div><div style={{ fontSize: 14, fontWeight: 600 }}>{selectedCard.status}</div></div>
-          </div>
-        </div>
-        <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Sell Optimizer</div>
-          {PLATFORMS.slice(0, 6).map(p => { const net = calcNet(selectedCard.raw_value, p); const ship = calcShipping(selectedCard.raw_value); return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>); })}
-        </div>
-        <button onClick={async () => { await deleteCard(selectedCard.id); setScreen("myCards"); }} style={{ width: "100%", padding: "14px", background: red + "15", border: "1px solid " + red + "30", borderRadius: 12, color: red, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Delete Card</button>
-      </div>
-    </Shell>
-  );
+  if (screen === "cardDetail" && selectedCard) {
+    const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
+    return <CardDetail card={liveCard} onBack={() => setScreen("myCards")} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); setScreen("myCards"); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} />;
+  }
 
   if (screen === "cardCheck") return (
     <Shell title="Check a Card" back={() => setScreen("home")}>
@@ -420,8 +331,28 @@ export default function Home() {
             <div style={{ fontSize: 18, fontWeight: 700, color: verdict === "buy" ? green : verdict === "maybe" ? accent : red, marginBottom: 4 }}>{verdict === "buy" ? "BUY" : verdict === "maybe" ? "NEGOTIATE" : "PASS"}</div>
             <div style={{ fontSize: 12, color: muted }}>{verdict === "buy" ? "Good at $" + askingPrice + " — " + belowMarket + "% below market" : verdict === "maybe" ? "Tight margin — try $" + +(maxPayRaw / 1.2).toFixed(0) : "Overpaying — max $" + maxPayRaw}</div>
           </div>
+          {buyConfirm && <div style={{ background: green + "15", border: "1px solid " + green + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: green, textAlign: "center", fontWeight: 600 }}>{buyConfirm}</div>}
           <div style={{ display: "flex", gap: 12 }}>
-            <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: green, border: "none", borderRadius: 14, color: "#000", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>BUY</button>
+            <button onClick={async () => {
+              const sr = scanResult;
+              const yearMatch = checkName.match(/\b(19|20)\d{2}\b/);
+              const cardData: any = {
+                player: sr?.player || checkName.replace(/^\d{4}\s+/, "").replace(/#\S+/g, "").replace(/\b(Prizm|Topps|Panini|Bowman|Donruss|Select|Optic|Chrome|Silver|Gold|Holo|Refractor|Base|RC)\b/gi, "").replace(/\s+/g, " ").trim() || checkName,
+                year: sr?.year || (yearMatch ? +yearMatch[0] : new Date().getFullYear()),
+                brand: sr?.brand || "",
+                set: sr?.set || "",
+                parallel: sr?.parallel || "Base",
+                card_number: sr?.card_number || "",
+                sport: sr?.sport || "Baseball",
+                raw_value: checkRaw,
+                cost_basis: askingPrice,
+                graded_values: { "10": checkPsa10 || rawVal * 3, "9": checkPsa9 || rawVal * 1.8, "8": checkPsa8 || rawVal * 1.2, "7": psa7 },
+                notes: "Added from Card Check",
+              };
+              const { error } = await addCard(cardData);
+              if (!error) { setBuyConfirm("Added to collection!"); setTimeout(() => { setBuyConfirm(""); setScreen("home"); }, 1500); }
+              else { setBuyConfirm("Error: " + error.message); }
+            }} style={{ flex: 1, padding: "18px", background: green, border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>BUY</button>
             <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: surface2, border: "1px solid " + border, borderRadius: 14, color: muted, fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>PASS</button>
           </div>
         </div>

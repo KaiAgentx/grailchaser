@@ -1,0 +1,13 @@
+export const bg = "#0a0a0f";
+export const surface = "#13131a";
+export const surface2 = "#1a1a24";
+export const border = "#2a2a38";
+export const accent = "#f0c040";
+export const green = "#22c55e";
+export const red = "#ef4444";
+export const cyan = "#06b6d4";
+export const purple = "#a855f7";
+export const muted = "#6b6b80";
+export const text = "#e8e8ef";
+export const font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+export const mono = "'SF Mono', 'Menlo', monospace";
