@@ -181,7 +181,8 @@ export default function Home() {
       <div style={{ paddingTop: 12 }}>
         <input placeholder="Search player, brand, set..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
         <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
-          {sports.map(s => (<button key={s} onClick={() => setFilterSport(s)} style={{ padding: "6px 14px", background: filterSport === s ? accent + "20" : surface2, border: "1px solid " + (filterSport === s ? accent + "50" : border), borderRadius: 20, color: filterSport === s ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{s}</button>))}
+          {sports.map(s => (<button key={s} onClick={() => { setFilterSport(s); if (statusFilter === "pending") setStatusFilter(""); }} style={{ padding: "6px 14px", background: filterSport === s ? accent + "20" : surface2, border: "1px solid " + (filterSport === s ? accent + "50" : border), borderRadius: 20, color: filterSport === s ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{s}</button>))}
+          <button onClick={() => setStatusFilter(statusFilter === "pending" ? "" : "pending")} style={{ padding: "6px 14px", background: statusFilter === "pending" ? red + "20" : surface2, border: "1px solid " + (statusFilter === "pending" ? red + "50" : border), borderRadius: 20, color: statusFilter === "pending" ? red : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Unassigned</button>
         </div>
         {loading && <div style={{ textAlign: "center", color: muted, padding: 40 }}>Loading...</div>}
         {!loading && filteredCards.length === 0 && (<div style={{ textAlign: "center", color: muted, padding: 40 }}><div style={{ fontSize: 36, marginBottom: 12 }}>📦</div><div style={{ fontSize: 14 }}>No cards yet</div></div>)}
@@ -190,10 +191,11 @@ export default function Home() {
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: text }}>{card.player}</div>
               <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{card.year} {card.brand} {card.parallel !== "Base" ? card.parallel : ""} {card.card_number}</div>
-              <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
                 {card.is_rc && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: green + "15", border: "1px solid " + green + "30", color: green, fontWeight: 600 }}>RC</span>}
                 {card.is_auto && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: purple + "15", border: "1px solid " + purple + "30", color: purple, fontWeight: 600 }}>AUTO</span>}
                 <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: surface2, color: muted }}>{card.sport}</span>
+                {card.storage_box && card.storage_box !== "PENDING" ? <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: surface2, color: muted }}>{card.storage_box} #{card.storage_position}</span> : <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: red + "15", border: "1px solid " + red + "30", color: red, fontWeight: 600 }}>No Box</span>}
               </div>
             </div>
             <div style={{ textAlign: "right" }}><div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: card.raw_value >= 25 ? green : card.raw_value >= 5 ? text : muted }}>${card.raw_value}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{card.status}</div></div>
