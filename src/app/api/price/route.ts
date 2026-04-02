@@ -153,11 +153,15 @@ export async function POST(request: NextRequest) {
     const debugLog: any[] = [];
 
     // ─── RESOLVE CARD ID ───
-    let cardId = inputCardId;
+    let cardId = inputCardId || "";
     let selectedMatch: any = null;
     const normalize = (s: string) => s.replace(/[.,]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
-    if (!cardId && player) {
+    console.log("Input card_id:", JSON.stringify(cardId), "| truthy:", !!cardId);
+
+    // Always search catalog if we have a player name — the inputCardId from identify
+    // may not match catalog IDs, and search gives us a better match
+    if (player) {
       const query = [player, set].filter(Boolean).join(" ");
       const searchParams = new URLSearchParams({ q: query });
       if (year) searchParams.set("year", String(year));
@@ -174,6 +178,10 @@ export async function POST(request: NextRequest) {
         selectedMatch = cards.find((c: any) => normalize(c.name || "") === playerNorm) || cards[0];
         cardId = selectedMatch.id;
         console.log(`    Selected: ${selectedMatch.name} | ${selectedMatch.setName} | ${selectedMatch.releaseName} ${selectedMatch.year} | ID: ${cardId}`);
+      } else if (!cardId) {
+        // Search returned nothing, fallback to input card_id
+        console.log("    No catalog results, using input card_id:", inputCardId);
+        cardId = inputCardId || "";
       }
     }
 
@@ -190,6 +198,8 @@ export async function POST(request: NextRequest) {
 
     let prices: any = { raw: null, psa10: null, psa9: null, psa8: null };
     let priceSource = "none";
+
+    console.log("Using card_id for pricing:", cardId);
 
     // ─── TIER 1: SOLD PRICING ───
     const soldResult = await csFetch(

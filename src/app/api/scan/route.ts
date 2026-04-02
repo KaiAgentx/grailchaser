@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No CARDSIGHT_API_KEY in environment" }, { status: 400 });
     }
 
-    // Convert base64 back to binary for multipart upload
     const imageBuffer = Buffer.from(base64Image, "base64");
     const blob = new Blob([imageBuffer], { type: "image/jpeg" });
 
@@ -27,51 +26,102 @@ export async function POST(request: NextRequest) {
     });
 
     const data = await res.json();
-    console.log("CardSight status:", res.status);
-    console.log("CardSight response:", JSON.stringify(data).substring(0, 800));
+    console.log("CardSight identify status:", res.status);
+    console.log("CardSight identify response:", JSON.stringify(data).substring(0, 1200));
 
     if (data.success && data.detections && data.detections.length > 0) {
       const detection = data.detections[0];
       const card = detection.card || detection;
-      console.log("Card keys:", Object.keys(card));
-      console.log("Full card data:", JSON.stringify(card).substring(0, 600));
 
-      const cardId = card.id || card.card_id || card.cardId;
+      // Log every field in the card object to find the ID
+      console.log("=== CARD OBJECT FROM IDENTIFY ===");
+      console.log("All keys:", Object.keys(card));
+      console.log("Full card:", JSON.stringify(card));
+      console.log("card.id:", card.id);
+      console.log("card.card_id:", card.card_id);
+      console.log("card.cardId:", card.cardId);
+      console.log("card.catalogId:", card.catalogId);
+      console.log("card.catalog_id:", card.catalog_id);
+      console.log("card.referenceId:", card.referenceId);
+      console.log("card.reference_id:", card.reference_id);
 
-      // Fetch pricing via /api/price which handles the full CardSight flow
-      let pricing: any = null;
-      if (cardId || card.player || card.name) {
+      const identifyCardId = card.id || card.card_id || card.cardId || card.catalogId || card.catalog_id || card.referenceId || card.reference_id;
+      console.log("Resolved identify card_id:", identifyCardId);
+
+      // Also resolve via catalog search to get the canonical catalog card ID
+      const player = card.player || card.name || "";
+      const year = card.year || card.releaseYear || 0;
+      const setName = card.releaseName || card.setName || "";
+      let catalogCardId: string | null = null;
+
+      if (player) {
+        const searchQuery = [player, setName].filter(Boolean).join(" ");
+        const searchParams = new URLSearchParams({ q: searchQuery });
+        if (year) searchParams.set("year", String(year));
+        console.log("=== CATALOG SEARCH for card_id ===");
+        console.log("Search query:", searchQuery, "year:", year);
+
         try {
-          const priceRes = await fetch((process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000") + "/api/price", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              player: card.player || card.name || "",
-              year: card.year || card.releaseYear || 0,
-              set: card.releaseName || card.setName || "",
-              card_id: cardId,
-            }),
+          const searchRes = await fetch("https://api.cardsight.ai/v1/catalog/search?" + searchParams.toString(), {
+            headers: { "X-API-Key": apiKey },
           });
-          const priceData = await priceRes.json();
-          console.log("Price API response:", JSON.stringify(priceData).substring(0, 500));
-          if (priceData.prices) pricing = priceData.prices;
+          const searchData = await searchRes.json();
+          const results = searchData.results || [];
+          console.log("Catalog search results:", results.length);
+          for (const r of results.slice(0, 5)) {
+            console.log(`  ${r.id} | ${r.name} | ${r.setName} | ${r.releaseName} ${r.year}`);
+          }
+
+          if (results.length > 0) {
+            const normalize = (s: string) => s.replace(/[.,]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+            const playerNorm = normalize(player);
+            const match = results.find((c: any) => normalize(c.name || "") === playerNorm) || results[0];
+            catalogCardId = match.id;
+            console.log("Catalog card_id:", catalogCardId, "| name:", match.name, "| release:", match.releaseName);
+          }
         } catch (e: any) {
-          console.log("Price lookup failed:", e.message);
+          console.log("Catalog search failed:", e.message);
         }
+      }
+
+      // Prefer catalog ID, fall back to identify ID
+      const finalCardId = catalogCardId || identifyCardId;
+      console.log("=== FINAL CARD ID:", finalCardId, "(from:", catalogCardId ? "catalog" : "identify", ") ===");
+
+      // Fetch pricing via /api/price
+      let pricing: any = null;
+      try {
+        const priceRes = await fetch((process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000") + "/api/price", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            player,
+            year,
+            set: setName,
+            card_id: finalCardId,
+          }),
+        });
+        const priceData = await priceRes.json();
+        console.log("Price API result:", JSON.stringify(priceData).substring(0, 500));
+        if (priceData.prices) pricing = priceData.prices;
+      } catch (e: any) {
+        console.log("Price lookup failed:", e.message);
       }
 
       return NextResponse.json({
         success: true,
-        player: card.player || card.name || "Unknown",
-        year: card.year || card.releaseYear || 0,
+        player,
+        year,
         brand: card.manufacturer || card.brand || card.manufacturerName || "",
-        set: card.releaseName || card.setName || "",
+        set: setName,
         parallel: card.parallel || card.variation || card.parallelName || "Base",
         card_number: card.cardNumber || card.number || "",
         sport: card.sport || card.category || "Baseball",
         confidence: detection.confidence || 0,
         pricing,
-        card_id: cardId,
+        card_id: finalCardId,
+        identify_card_id: identifyCardId,
+        catalog_card_id: catalogCardId,
         raw_data: card,
       });
     }
