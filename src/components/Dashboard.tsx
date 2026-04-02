@@ -95,7 +95,7 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
         {hasActions ? (
           <div style={{ marginBottom: 20 }}>
             {needShipping.length > 0 && (
-              <button onClick={() => onNavigate({ screen: "myCards", filter: "sold" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + red, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
+              <button onClick={() => onNavigate({ screen: "pickList" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + red, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: red }}>{needShipping.length} card{needShipping.length > 1 ? "s" : ""} need shipping</div>
                 <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>{needShipping.slice(0, 3).map(c => `${c.player} $${c.sold_price}`).join(" · ")}</div>
               </button>
