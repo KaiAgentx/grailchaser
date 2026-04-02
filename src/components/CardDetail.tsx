@@ -29,16 +29,32 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
   const [edits, setEdits] = useState<Partial<Card>>({});
   const [saving, setSaving] = useState(false);
   const [actionForm, setActionForm] = useState<string | null>(null);
-  const [actionPlatform, setActionPlatform] = useState("eBay");
+  const [listPlatforms, setListPlatforms] = useState<Set<string>>(new Set());
+  const [actionPlatform, setActionPlatform] = useState("");
   const [actionPrice, setActionPrice] = useState(0);
   const [actionTracking, setActionTracking] = useState("");
   const [actionGrade, setActionGrade] = useState("");
   const [actionCompany, setActionCompany] = useState("PSA");
+  const [delistPlatforms, setDelistPlatforms] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [showMoveBox, setShowMoveBox] = useState(false);
   const [moveConfirm, setMoveConfirm] = useState("");
 
   const val = (field: keyof Card) => (edits as any)[field] ?? (card as any)[field];
+
+  const platformColors: Record<string, string> = { eBay: "#e53238", Shopify: "#96bf48", Mercari: "#4dc1e8", Whatnot: "#7b61ff", Facebook: "#1877f2", TCGPlayer: "#f4a100" };
+
+  const getActivePlatforms = (c: Card): { name: string; price?: number }[] => {
+    const active: { name: string; price?: number }[] = [];
+    if (c.ebay_listing_id || c.ebay_listed_date) active.push({ name: "eBay", price: c.ebay_price || c.listed_price || undefined });
+    if (c.shopify_product_id) active.push({ name: "Shopify", price: c.shopify_price || c.listed_price || undefined });
+    if (c.mercari_listed) active.push({ name: "Mercari", price: c.listed_price || undefined });
+    if (c.whatnot_listing_id) active.push({ name: "Whatnot", price: c.listed_price || undefined });
+    if (c.facebook_listed) active.push({ name: "Facebook", price: c.listed_price || undefined });
+    if (c.tcgplayer_listed) active.push({ name: "TCGPlayer", price: c.listed_price || undefined });
+    if (active.length === 0 && c.listed_platform) active.push({ name: c.listed_platform, price: c.listed_price || undefined });
+    return active;
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -183,22 +199,70 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
           {PLATFORMS.slice(0, 6).map(p => { const net = calcNet(card.raw_value, p); const ship = calcShipping(card.raw_value); return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>); })}
         </div>
 
+        {/* Active Listings Display */}
+        {card.status === "listed" && getActivePlatforms(card).length > 0 && (
+          <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Listed On</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {getActivePlatforms(card).map(p => (
+                <span key={p.name} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 8, background: (platformColors[p.name] || muted) + "15", border: "1px solid " + (platformColors[p.name] || muted) + "30", color: platformColors[p.name] || muted, fontWeight: 600 }}>{p.name}{p.price ? ` $${p.price}` : ""}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Delist Reminders */}
+        {delistPlatforms.length > 0 && (
+          <div style={{ background: "#f59e0b" + "10", border: "1px solid #f59e0b30", borderRadius: 14, padding: 16, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#f59e0b", marginBottom: 8 }}>Delist from other platforms</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              {delistPlatforms.map(p => (
+                <a key={p} href={p === "Mercari" ? "https://mercari.com" : p === "Facebook" ? "https://facebook.com/marketplace" : p === "TCGPlayer" ? "https://tcgplayer.com" : "#"} target="_blank" rel="noopener noreferrer" style={{ ...btnSmall, padding: "8px 12px", background: (platformColors[p] || muted) + "20", border: "1px solid " + (platformColors[p] || muted) + "40", color: platformColors[p] || muted, fontSize: 11, textDecoration: "none" }}>Open {p}</a>
+              ))}
+            </div>
+            <button onClick={async () => {
+              const updates: Partial<Card> = {};
+              for (const p of delistPlatforms) {
+                if (p === "eBay") { updates.ebay_listing_id = null; updates.ebay_listed_date = null; }
+                if (p === "Shopify") { updates.shopify_product_id = null; }
+                if (p === "Mercari") { updates.mercari_listed = false; }
+                if (p === "Facebook") { updates.facebook_listed = false; }
+                if (p === "TCGPlayer") { updates.tcgplayer_listed = false; }
+              }
+              await updateCard(card.id, updates);
+              setDelistPlatforms([]);
+              setSaved(true); setTimeout(() => setSaved(false), 2000);
+            }} style={{ width: "100%", ...btnSmall, background: "#f59e0b15", border: "1px solid #f59e0b30", color: "#f59e0b", fontSize: 12 }}>Mark All Delisted</button>
+          </div>
+        )}
+
         {/* Status Action Buttons */}
         <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Actions</div>
 
           {card.status === "raw" && (
             <>
-              <button onClick={() => setActionForm(actionForm === "list" ? null : "list")} style={{ width: "100%", ...btnSmall, background: green + "15", border: "1px solid " + green + "30", color: green, marginBottom: 8 }}>Mark Listed</button>
+              <button onClick={() => { setActionForm(actionForm === "list" ? null : "list"); setListPlatforms(new Set()); setActionPrice(0); }} style={{ width: "100%", ...btnSmall, background: green + "15", border: "1px solid " + green + "30", color: green, marginBottom: 8 }}>Mark Listed</button>
               {actionForm === "list" && (
                 <div style={{ background: surface2, borderRadius: 10, padding: 14, marginBottom: 8 }}>
-                  <div style={labelStyle}>Platform</div>
+                  <div style={labelStyle}>Platforms (select all that apply)</div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
-                    {platforms.map(p => <button key={p} onClick={() => setActionPlatform(p)} style={{ ...btnSmall, padding: "8px 12px", background: actionPlatform === p ? green + "20" : surface, border: "1px solid " + (actionPlatform === p ? green + "50" : border), color: actionPlatform === p ? green : muted, fontSize: 11 }}>{p}</button>)}
+                    {platforms.map(p => { const sel = listPlatforms.has(p); return (
+                      <button key={p} onClick={() => setListPlatforms(prev => { const n = new Set(prev); n.has(p) ? n.delete(p) : n.add(p); return n; })} style={{ ...btnSmall, padding: "8px 12px", background: sel ? (platformColors[p] || green) + "20" : surface, border: "1px solid " + (sel ? (platformColors[p] || green) + "50" : border), color: sel ? (platformColors[p] || green) : muted, fontSize: 11 }}>{sel ? "✓ " : ""}{p}</button>
+                    ); })}
                   </div>
                   <div style={labelStyle}>List Price ($)</div>
                   <input type="text" inputMode="decimal" value={actionPrice || ""} onChange={e => setActionPrice(+e.target.value || 0)} style={{ ...inputStyle, marginBottom: 10 }} />
-                  <button onClick={async () => { await markListed(card.id, actionPlatform, actionPrice); setActionForm(null); setSaved(true); setTimeout(() => setSaved(false), 2000); }} style={{ width: "100%", ...btnSmall, background: green, color: "#fff" }}>Confirm Listed</button>
+                  <button disabled={listPlatforms.size === 0 || !actionPrice} onClick={async () => {
+                    const updates: Partial<Card> = { status: "listed" as any, listed_date: new Date().toISOString().slice(0, 10), listed_price: actionPrice, listed_platform: Array.from(listPlatforms).join(", ") };
+                    if (listPlatforms.has("eBay")) { updates.ebay_listed_date = new Date().toISOString().slice(0, 10); updates.ebay_price = actionPrice; }
+                    if (listPlatforms.has("Shopify")) { updates.shopify_price = actionPrice; }
+                    if (listPlatforms.has("Mercari")) updates.mercari_listed = true;
+                    if (listPlatforms.has("Facebook")) updates.facebook_listed = true;
+                    if (listPlatforms.has("TCGPlayer")) updates.tcgplayer_listed = true;
+                    await updateCard(card.id, updates);
+                    setActionForm(null); setSaved(true); setTimeout(() => setSaved(false), 2000);
+                  }} style={{ width: "100%", ...btnSmall, background: green, color: "#fff", opacity: listPlatforms.size > 0 && actionPrice ? 1 : 0.4 }}>List on {listPlatforms.size} Platform{listPlatforms.size !== 1 ? "s" : ""}</button>
                 </div>
               )}
 
@@ -217,18 +281,29 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
 
           {card.status === "listed" && (
             <>
-              <button onClick={() => setActionForm(actionForm === "sold" ? null : "sold")} style={{ width: "100%", ...btnSmall, background: green + "15", border: "1px solid " + green + "30", color: green }}>Mark Sold</button>
-              {actionForm === "sold" && (
-                <div style={{ background: surface2, borderRadius: 10, padding: 14, marginTop: 8 }}>
-                  <div style={labelStyle}>Sold Price ($)</div>
-                  <input type="text" inputMode="decimal" value={actionPrice || ""} onChange={e => setActionPrice(+e.target.value || 0)} style={{ ...inputStyle, marginBottom: 10 }} />
-                  <div style={labelStyle}>Platform</div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
-                    {platforms.map(p => <button key={p} onClick={() => setActionPlatform(p)} style={{ ...btnSmall, padding: "8px 12px", background: actionPlatform === p ? green + "20" : surface, border: "1px solid " + (actionPlatform === p ? green + "50" : border), color: actionPlatform === p ? green : muted, fontSize: 11 }}>{p}</button>)}
+              <button onClick={() => { setActionForm(actionForm === "sold" ? null : "sold"); setActionPlatform(""); setActionPrice(0); }} style={{ width: "100%", ...btnSmall, background: green + "15", border: "1px solid " + green + "30", color: green }}>Mark Sold</button>
+              {actionForm === "sold" && (() => {
+                const activePlats = getActivePlatforms(card).map(p => p.name);
+                const soldPlats = activePlats.length > 0 ? activePlats : platforms;
+                return (
+                  <div style={{ background: surface2, borderRadius: 10, padding: 14, marginTop: 8 }}>
+                    <div style={labelStyle}>Sold On</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+                      {soldPlats.map(p => <button key={p} onClick={() => setActionPlatform(p)} style={{ ...btnSmall, padding: "8px 12px", background: actionPlatform === p ? green + "20" : surface, border: "1px solid " + (actionPlatform === p ? green + "50" : border), color: actionPlatform === p ? green : muted, fontSize: 11 }}>{p}</button>)}
+                    </div>
+                    <div style={labelStyle}>Sold Price ($)</div>
+                    <input type="text" inputMode="decimal" value={actionPrice || ""} onChange={e => setActionPrice(+e.target.value || 0)} style={{ ...inputStyle, marginBottom: 10 }} />
+                    <button disabled={!actionPlatform || !actionPrice} onClick={async () => {
+                      await markSold(card.id, actionPrice, actionPlatform);
+                      // Find platforms to delist (all active except the one it sold on)
+                      const toDelistList = activePlats.filter(p => p !== actionPlatform);
+                      setActionForm(null);
+                      if (toDelistList.length > 0) { setDelistPlatforms(toDelistList); }
+                      else { setSaved(true); setTimeout(() => setSaved(false), 2000); }
+                    }} style={{ width: "100%", ...btnSmall, background: green, color: "#fff", opacity: actionPlatform && actionPrice ? 1 : 0.4 }}>Confirm Sold</button>
                   </div>
-                  <button onClick={async () => { await markSold(card.id, actionPrice, actionPlatform); setActionForm(null); setSaved(true); setTimeout(() => setSaved(false), 2000); }} style={{ width: "100%", ...btnSmall, background: green, color: "#fff" }}>Confirm Sold</button>
-                </div>
-              )}
+                );
+              })()}
             </>
           )}
 
