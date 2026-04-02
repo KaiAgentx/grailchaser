@@ -161,16 +161,20 @@ export async function POST(request: NextRequest) {
 
     if (isManualSearch) {
       // PATH 2: User typed/corrected card name — search catalog with cleaned text, ignore any stored card_id
-      // Strip card numbers (e.g. "#220", "220", "#US175") and common noise words that break search
+      // Extract year from query for better filtering, then clean the query
+      const yearMatch = search_query.match(/\b(19|20)\d{2}\b/);
+      const searchYear = yearMatch ? yearMatch[0] : "";
       const cleanedQuery = search_query
         .replace(/#\S+/g, "")
         .replace(/\b\d{1,3}\b/g, "")
         .replace(/\b(RC|Base|Card)\b/gi, "")
         .replace(/\s+/g, " ")
         .trim();
-      console.log("PATH 2: Searching catalog with user text:", search_query, "→ cleaned:", cleanedQuery);
+      console.log("PATH 2: user text:", search_query, "→ cleaned:", cleanedQuery, "| year:", searchYear);
+      const searchParams = new URLSearchParams({ q: cleanedQuery });
+      if (searchYear) searchParams.set("year", searchYear);
       const searchResult = await csFetch(
-        `${BASE}/catalog/search?q=${encodeURIComponent(cleanedQuery)}`,
+        `${BASE}/catalog/search?${searchParams.toString()}`,
         apiKey, "1. CATALOG SEARCH (manual text)"
       );
       debugLog.push({ step: "catalog/search (manual)", status: searchResult.status, hasData: searchResult.ok && searchResult.body?.results?.length > 0 });
@@ -181,7 +185,9 @@ export async function POST(request: NextRequest) {
         console.log(`      ${c.id} | ${c.name} | ${c.setName} | ${c.releaseName} ${c.year} | relevance=${c.relevance}`);
       }
       if (cards.length > 0) {
-        selectedMatch = cards[0]; // highest relevance
+        // Prefer "Base Set" if available, otherwise highest relevance
+        const baseMatch = cards.find((c: any) => c.setName === "Base Set" && !c.name.includes("/"));
+        selectedMatch = baseMatch || cards.find((c: any) => !c.name.includes("/")) || cards[0];
         cardId = selectedMatch.id;
         console.log(`    Best match: ${selectedMatch.name} | ${selectedMatch.setName} | ${selectedMatch.releaseName} ${selectedMatch.year} | ID: ${cardId}`);
       }
