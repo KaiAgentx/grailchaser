@@ -38,47 +38,25 @@ export async function POST(request: NextRequest) {
 
       const cardId = card.id || card.card_id || card.cardId;
 
-      // Fetch pricing from CardSight pricing endpoint if we got a card ID
+      // Fetch pricing via /api/price which handles the full CardSight flow
       let pricing: any = null;
-      if (cardId) {
+      if (cardId || card.player || card.name) {
         try {
-          console.log("Fetching pricing for card ID:", cardId);
-          const priceRes = await fetch("https://api.cardsight.ai/v1/pricing/" + cardId + "?period=90d", {
-            headers: { "X-API-Key": apiKey },
+          const priceRes = await fetch((process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000") + "/api/price", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              player: card.player || card.name || "",
+              year: card.year || card.releaseYear || 0,
+              set: card.releaseName || card.setName || "",
+              card_id: cardId,
+            }),
           });
           const priceData = await priceRes.json();
-          console.log("Pricing response:", JSON.stringify(priceData).substring(0, 500));
-
-          pricing = { raw: null, psa10: null, psa9: null, psa8: null };
-
-          // Raw prices
-          if (priceData.raw && priceData.raw.count > 0) {
-            const rawPrices = priceData.raw.records.map((r: any) => r.price);
-            pricing.raw = +(rawPrices.reduce((s: number, p: number) => s + p, 0) / rawPrices.length).toFixed(2);
-            console.log(`[Raw] Avg: $${pricing.raw} from ${rawPrices.length} sales`);
-          }
-
-          // PSA graded prices
-          const psa = (priceData.graded || []).find((co: any) => co.company_name === "PSA");
-          if (psa) {
-            for (const grade of psa.grades || []) {
-              const gv = String(grade.grade_value);
-              const key = gv === "10" ? "psa10" : gv === "9" ? "psa9" : gv === "8" ? "psa8" : null;
-              if (key && grade.count > 0) {
-                const gradePrices = grade.records.map((r: any) => r.price);
-                pricing[key] = +(gradePrices.reduce((s: number, p: number) => s + p, 0) / gradePrices.length).toFixed(2);
-                console.log(`[PSA ${gv}] Avg: $${pricing[key]} from ${gradePrices.length} sales`);
-              }
-            }
-          }
-
-          // Estimate raw from graded if missing
-          if (!pricing.raw && pricing.psa9) pricing.raw = +(pricing.psa9 * 0.6).toFixed(2);
-          else if (!pricing.raw && pricing.psa10) pricing.raw = +(pricing.psa10 * 0.35).toFixed(2);
-
-          console.log("Final scan pricing:", JSON.stringify(pricing));
+          console.log("Price API response:", JSON.stringify(priceData).substring(0, 500));
+          if (priceData.prices) pricing = priceData.prices;
         } catch (e: any) {
-          console.log("Pricing fetch failed:", e.message);
+          console.log("Price lookup failed:", e.message);
         }
       }
 
