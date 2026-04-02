@@ -7,7 +7,7 @@ import { LoginScreen } from "@/components/LoginScreen";
 import { CardDetail } from "@/components/CardDetail";
 import { StorageView } from "@/components/StorageView";
 import { CsvImport } from "@/components/CsvImport";
-import { BuyFlow } from "@/components/BuyFlow";
+import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
@@ -351,14 +351,20 @@ export default function Home() {
           </div>
           {showBuyFlow ? (
             <BuyFlow
-              cardData={{
-                player: scanResult?.player || checkName.replace(/^\d{4}\s+/, "").replace(/#\S+/g, "").replace(/\b(Prizm|Topps|Panini|Bowman|Donruss|Select|Optic|Chrome|Silver|Gold|Holo|Refractor|Base|RC)\b/gi, "").replace(/\s+/g, " ").trim() || checkName,
-                year: scanResult?.year || +(checkName.match(/\b(19|20)\d{2}\b/)?.[0] || new Date().getFullYear()),
-                brand: scanResult?.brand || "",
-                set: scanResult?.set || "",
-                parallel: scanResult?.parallel || "Base",
-                card_number: scanResult?.card_number || "",
-                sport: scanResult?.sport || "Baseball",
+              isManual={!scanResult?.success}
+              cardData={scanResult?.success ? {
+                player: scanResult.player,
+                year: scanResult.year,
+                brand: scanResult.brand,
+                set: scanResult.set,
+                parallel: scanResult.parallel || "Base",
+                card_number: scanResult.card_number || "",
+                sport: scanResult.sport || "Baseball",
+                raw_value: checkRaw,
+                cost_basis: askingPrice,
+                graded_values: { "10": checkPsa10 || rawVal * 3, "9": checkPsa9 || rawVal * 1.8, "8": checkPsa8 || rawVal * 1.2, "7": psa7 },
+              } : {
+                ...parseCardName(checkName),
                 raw_value: checkRaw,
                 cost_basis: askingPrice,
                 graded_values: { "10": checkPsa10 || rawVal * 3, "9": checkPsa9 || rawVal * 1.8, "8": checkPsa8 || rawVal * 1.2, "7": psa7 },
