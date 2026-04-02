@@ -5,10 +5,12 @@ import { useCards } from "@/hooks/useCards";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 import { LoginScreen } from "@/components/LoginScreen";
 import { CardDetail } from "@/components/CardDetail";
+import { StorageView } from "@/components/StorageView";
 import { Shell } from "@/components/Shell";
+import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -36,7 +38,8 @@ function compressImage(file: File, maxWidth = 800): Promise<string> {
 
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
-  const { cards, loading, addCard, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading } = useCards(user?.id);
+  const { cards, loading, addCard, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition } = useCards(user?.id);
+  const { boxes, addBox, updateBox, deleteBox } = useBoxes(user?.id);
   const [buyConfirm, setBuyConfirm] = useState("");
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedCard, setSelectedCard] = useState<any>(null);
@@ -131,6 +134,10 @@ export default function Home() {
           <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 4 }}>My Cards ({unsold.length})</div>
           <div style={{ fontSize: 12, color: muted }}>Browse, search, and manage your collection</div>
         </button>
+        <button onClick={() => setScreen("storage")} style={{ width: "100%", padding: "20px", background: surface, border: "1px solid " + border, borderRadius: 16, cursor: "pointer", textAlign: "left", marginBottom: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 4 }}>My Boxes ({boxes.length})</div>
+          <div style={{ fontSize: 12, color: muted }}>Card storage · {cards.filter(c => !c.storage_box || c.storage_box === "PENDING").length} unassigned</div>
+        </button>
         <button onClick={() => signOut()} style={{ width: "100%", padding: "12px", background: "none", border: "1px solid " + border, borderRadius: 12, color: muted, fontFamily: font, fontSize: 13, cursor: "pointer", marginTop: 8 }}>Sign Out ({user.email})</button>
       </div>
     </Shell>
@@ -210,9 +217,11 @@ export default function Home() {
     </Shell>
   );
 
+  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} />;
+
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <CardDetail card={liveCard} onBack={() => setScreen("myCards")} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); setScreen("myCards"); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} />;
+    return <CardDetail card={liveCard} boxes={boxes} onBack={() => setScreen("myCards")} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); setScreen("myCards"); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getNextPosition} />;
   }
 
   if (screen === "cardCheck") return (

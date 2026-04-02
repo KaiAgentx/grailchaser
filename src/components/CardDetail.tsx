@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Card } from "@/lib/types";
+import { Box } from "@/hooks/useBoxes";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "./styles";
@@ -11,6 +12,7 @@ const btnSmall = { padding: "10px 14px", minHeight: 44, border: "none", borderRa
 
 interface Props {
   card: Card;
+  boxes: Box[];
   onBack: () => void;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
   deleteCard: (id: string) => Promise<any>;
@@ -19,9 +21,10 @@ interface Props {
   markShipped: (id: string, tracking?: string) => Promise<any>;
   submitForGrading: (id: string, company: string) => Promise<any>;
   returnFromGrading: (id: string, grade: string) => Promise<any>;
+  getNextPosition: (box: string) => { row: number; position: number };
 }
 
-export function CardDetail({ card, onBack, updateCard, deleteCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading }: Props) {
+export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition }: Props) {
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Partial<Card>>({});
   const [saving, setSaving] = useState(false);
@@ -118,7 +121,12 @@ export function CardDetail({ card, onBack, updateCard, deleteCard, markListed, m
             </div>
             <div style={{ marginBottom: 12 }}>
               <div style={labelStyle}>Storage Box</div>
-              <input value={val("storage_box") || ""} onChange={e => setEdits({ ...edits, storage_box: e.target.value })} style={inputStyle} />
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {["PENDING", ...boxes.map(b => b.name)].map(b => <button key={b} onClick={() => {
+                  if (b === "PENDING") { setEdits({ ...edits, storage_box: "PENDING", storage_row: 1, storage_position: 1 }); }
+                  else { const pos = getNextPosition(b); setEdits({ ...edits, storage_box: b, storage_row: pos.row, storage_position: pos.position }); }
+                }} style={{ ...btnSmall, padding: "8px 12px", background: val("storage_box") === b ? cyan + "20" : surface2, border: "1px solid " + (val("storage_box") === b ? cyan + "50" : border), color: val("storage_box") === b ? cyan : muted, fontSize: 11 }}>{b}</button>)}
+              </div>
             </div>
             <div>
               <div style={labelStyle}>Notes</div>
