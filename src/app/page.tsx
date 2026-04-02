@@ -9,12 +9,13 @@ import { CardDetail } from "@/components/CardDetail";
 import { StorageView } from "@/components/StorageView";
 import { CsvImport } from "@/components/CsvImport";
 import { PickList } from "@/components/PickList";
+import { ScanToCollection } from "@/components/ScanToCollection";
 import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -209,6 +210,8 @@ export default function Home() {
   if (screen === "csvImport") return <CsvImport onBack={() => setScreen("home")} addCards={addCards} />;
 
   if (screen === "pickList") return <PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />;
+
+  if (screen === "scanToCollection") return <ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t) => setScreen(t.screen as Screen)} />;
 
   if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
 

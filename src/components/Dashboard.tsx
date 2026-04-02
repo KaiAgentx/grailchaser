@@ -62,10 +62,10 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
   ];
 
   const quickActions = [
-    { icon: "📸", label: "Scan", screen: "cardCheck" },
+    { icon: "📸", label: "Scan to Box", screen: "scanToCollection" },
+    { icon: "🔍", label: "Check Card", screen: "cardCheck" },
     { icon: "➕", label: "Add", screen: "addCard" },
     { icon: "📦", label: "Import", screen: "csvImport" },
-    { icon: "🔍", label: "Check", screen: "cardCheck" },
     { icon: "📊", label: "Boxes", screen: "storage" },
     { icon: "📋", label: "Cards", screen: "myCards" },
   ];
