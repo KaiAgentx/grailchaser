@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Card } from "@/lib/types";
+import { Box } from "@/hooks/useBoxes";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "./styles";
 
@@ -19,12 +20,13 @@ type Screen = "list" | "picking" | "pack" | "done";
 
 interface Props {
   cards: Card[];
+  boxes: Box[];
   markShipped: (id: string, tracking?: string) => Promise<any>;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
   onBack: () => void;
 }
 
-export function PickList({ cards, markShipped, updateCard, onBack }: Props) {
+export function PickList({ cards, boxes, markShipped, updateCard, onBack }: Props) {
   const needShipping = cards
     .filter(c => c.status === "sold" && !c.shipped_date)
     .sort((a, b) => (a.storage_box || "ZZZ").localeCompare(b.storage_box || "ZZZ") || (a.storage_row || 1) - (b.storage_row || 1) || (a.storage_position || 0) - (b.storage_position || 0));
@@ -36,6 +38,9 @@ export function PickList({ cards, markShipped, updateCard, onBack }: Props) {
   const [tracking, setTracking] = useState<Record<string, string>>({});
   const [noPwe, setNoPwe] = useState<Set<string>>(new Set());
   const [shippedIds, setShippedIds] = useState<Set<string>>(new Set());
+
+  const getDivider = (boxName: string) => boxes.find(b => b.name === boxName)?.divider_size || 50;
+  const getSection = (pos: number, divider: number) => { const s = Math.floor((pos - 1) / divider) * divider + 1; return `${s}–${s + divider - 1}`; };
 
   const totalRevenue = needShipping.reduce((s, c) => s + (c.sold_price || 0), 0);
   const totalShipCost = needShipping.reduce((s, c) => s + shippingMethod(c.sold_price || 0).cost, 0);
@@ -76,26 +81,33 @@ export function PickList({ cards, markShipped, updateCard, onBack }: Props) {
         <button onClick={() => { setPickIndex(0); setPickedIds(new Set()); setSkippedIds(new Set()); setScreen("picking"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", marginBottom: 16, fontSize: 16 }}>Start Picking</button>
 
         {/* Grouped by box */}
-        {boxGroups.map(group => (
-          <div key={group.box} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: accent, textTransform: "uppercase", letterSpacing: 2, fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-              <span>📦</span> {group.box}
-            </div>
-            {group.cards.map(card => {
-              const ship = shippingMethod(card.sold_price || 0);
-              return (
-                <div key={card.id} style={{ background: surface, borderRadius: 10, padding: "12px 14px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: cyan, width: 36, textAlign: "center" }}>{card.storage_position || "?"}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.player}</div>
-                    <div style={{ fontSize: 11, color: muted }}>Sold: ${card.sold_price} on {card.sold_platform || "?"} · {card.sold_date}</div>
-                    <div style={{ fontSize: 10, color: cyan, marginTop: 2 }}>{ship.label} (${ship.cost.toFixed(2)})</div>
+        {boxGroups.map(group => {
+          const divider = getDivider(group.box);
+          return (
+            <div key={group.box} style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 16, color: accent, fontWeight: 800, letterSpacing: 1, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 20 }}>📦</span> {group.box}
+              </div>
+              {group.cards.map(card => {
+                const ship = shippingMethod(card.sold_price || 0);
+                const pos = card.storage_position || 0;
+                return (
+                  <div key={card.id} style={{ background: surface, borderRadius: 12, padding: "14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ textAlign: "center", minWidth: 56 }}>
+                      <div style={{ fontFamily: mono, fontSize: 36, fontWeight: 800, color: accent, lineHeight: 1 }}>#{pos || "?"}</div>
+                      <div style={{ fontSize: 9, color: cyan, marginTop: 4, fontWeight: 600 }}>Section {getSection(pos, divider)}</div>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.player}</div>
+                      <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Sold: ${card.sold_price} on {card.sold_platform || "?"}</div>
+                      <div style={{ fontSize: 11, color: cyan, marginTop: 2 }}>{ship.label} (${ship.cost.toFixed(2)})</div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </Shell>
   );
@@ -105,8 +117,9 @@ export function PickList({ cards, markShipped, updateCard, onBack }: Props) {
     const current = needShipping[pickIndex];
     const prevBox = pickIndex > 0 ? needShipping[pickIndex - 1]?.storage_box : null;
     const boxChanged = current && prevBox && current.storage_box !== prevBox;
-    const section = current ? Math.floor(((current.storage_position || 1) - 1) / 50) * 50 + 1 : 0;
-    const sectionEnd = section + 49;
+    const divider = current ? getDivider(current.storage_box || "") : 50;
+    const pos = current?.storage_position || 0;
+    const sectionLabel = current ? getSection(pos, divider) : "";
 
     if (!current) {
       // Done picking
@@ -125,13 +138,15 @@ export function PickList({ cards, markShipped, updateCard, onBack }: Props) {
             </div>
           )}
 
-          <div style={{ background: surface, borderRadius: 16, padding: "28px 20px", marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: cyan, textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>{current.storage_box || "UNASSIGNED"}</div>
-            <div style={{ fontSize: 10, color: muted, marginBottom: 12 }}>Section {section}–{sectionEnd}</div>
-            <div style={{ fontFamily: mono, fontSize: 64, fontWeight: 700, color: accent, lineHeight: 1 }}>#{current.storage_position || "?"}</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: text, marginTop: 12 }}>{current.player}</div>
-            <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{current.year} {current.brand} {current.set}</div>
-            <div style={{ fontSize: 14, color: green, fontWeight: 600, marginTop: 8 }}>Sold: ${current.sold_price} on {current.sold_platform || "?"}</div>
+          <div style={{ background: surface, borderRadius: 16, padding: "32px 20px", marginBottom: 16 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: accent, letterSpacing: 1, marginBottom: 16 }}>📦 {current.storage_box || "UNASSIGNED"}</div>
+            <div style={{ fontFamily: mono, fontSize: 72, fontWeight: 900, color: accent, lineHeight: 1 }}>#{pos || "?"}</div>
+            <div style={{ fontSize: 14, color: cyan, fontWeight: 600, marginTop: 8, letterSpacing: 1 }}>Section {sectionLabel}</div>
+            <div style={{ borderTop: "1px solid " + border, marginTop: 20, paddingTop: 16 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: text }}>{current.player}</div>
+              <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{current.year} {current.brand} {current.set}</div>
+              <div style={{ fontSize: 15, color: green, fontWeight: 600, marginTop: 8 }}>Sold: ${current.sold_price} on {current.sold_platform || "?"}</div>
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 12 }}>

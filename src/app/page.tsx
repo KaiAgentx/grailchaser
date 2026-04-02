@@ -208,7 +208,7 @@ export default function Home() {
 
   if (screen === "csvImport") return <CsvImport onBack={() => setScreen("home")} addCards={addCards} />;
 
-  if (screen === "pickList") return <PickList cards={cards} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />;
+  if (screen === "pickList") return <PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />;
 
   if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
 
