@@ -104,8 +104,8 @@ function extractAiPrices(data: any) {
   const parseDollar = (label: string): number | null => {
     // Escape for regex
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // Match label followed by up to 40 chars then a $ amount — stays on same line/row
-    const re = new RegExp(escaped + "[^\\n|$]{0,40}\\$(\\d[\\d,]*\\.?\\d*)", "i");
+    // Match label followed by up to 40 non-newline chars then a $ amount
+    const re = new RegExp(escaped + "[^\\n]{0,40}\\$(\\d[\\d,]*\\.?\\d*)", "i");
     const m = answer.match(re);
     if (!m) return null;
     const val = +m[1].replace(/,/g, "");
@@ -134,43 +134,69 @@ function hasPricing(prices: any) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { player, year, set, card_number, sport, card_id: inputCardId } = await request.json();
+    const reqBody = await request.json();
+    const { player, year, set, card_number, sport, card_id: inputCardId, search_query } = reqBody;
     const apiKey = process.env.CARDSIGHT_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json({ error: "No CARDSIGHT_API_KEY in environment" }, { status: 400 });
     }
 
-    if (!player && !inputCardId) {
-      return NextResponse.json({ error: "Player name or card_id required" }, { status: 400 });
+    if (!player && !inputCardId && !search_query) {
+      return NextResponse.json({ error: "Player name, card_id, or search_query required" }, { status: 400 });
     }
 
+    const isManualSearch = !!search_query;
     console.log("\n" + "=".repeat(60));
-    console.log("CARDSIGHT PRICING FLOW");
+    console.log("CARDSIGHT PRICING FLOW —", isManualSearch ? "PATH 2 (manual/corrected)" : "PATH 1 (scan)");
     console.log("=".repeat(60));
-    console.log("Input:", JSON.stringify({ player, year, set, card_id: inputCardId }));
+    console.log("Input:", JSON.stringify({ player, year, set, card_id: inputCardId, search_query }));
 
     const debugLog: any[] = [];
 
     // ─── RESOLVE CARD ID ───
-    let cardId = inputCardId || "";
+    let cardId = "";
     let selectedMatch: any = null;
     const normalize = (s: string) => s.replace(/[.,]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 
-    console.log("Input card_id:", JSON.stringify(cardId), "| truthy:", !!cardId);
+    if (isManualSearch) {
+      // PATH 2: User typed/corrected card name — search catalog with cleaned text, ignore any stored card_id
+      // Strip card numbers (e.g. "#220", "220", "#US175") and common noise words that break search
+      const cleanedQuery = search_query
+        .replace(/#\S+/g, "")
+        .replace(/\b\d{1,3}\b/g, "")
+        .replace(/\b(RC|Base|Card)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      console.log("PATH 2: Searching catalog with user text:", search_query, "→ cleaned:", cleanedQuery);
+      const searchResult = await csFetch(
+        `${BASE}/catalog/search?q=${encodeURIComponent(cleanedQuery)}`,
+        apiKey, "1. CATALOG SEARCH (manual text)"
+      );
+      debugLog.push({ step: "catalog/search (manual)", status: searchResult.status, hasData: searchResult.ok && searchResult.body?.results?.length > 0 });
 
-    // Always search catalog if we have a player name — the inputCardId from identify
-    // may not match catalog IDs, and search gives us a better match
-    if (player) {
+      const cards = searchResult.body?.results || [];
+      console.log(`    Found ${cards.length} results:`);
+      for (const c of cards.slice(0, 8)) {
+        console.log(`      ${c.id} | ${c.name} | ${c.setName} | ${c.releaseName} ${c.year} | relevance=${c.relevance}`);
+      }
+      if (cards.length > 0) {
+        selectedMatch = cards[0]; // highest relevance
+        cardId = selectedMatch.id;
+        console.log(`    Best match: ${selectedMatch.name} | ${selectedMatch.setName} | ${selectedMatch.releaseName} ${selectedMatch.year} | ID: ${cardId}`);
+      }
+    } else if (player) {
+      // PATH 1: From scan — search catalog with structured player/set/year
+      console.log("PATH 1: Searching catalog with scan data");
       const query = [player, set].filter(Boolean).join(" ");
       const searchParams = new URLSearchParams({ q: query });
       if (year) searchParams.set("year", String(year));
 
       const searchResult = await csFetch(
         `${BASE}/catalog/search?${searchParams.toString()}`,
-        apiKey, "1. CATALOG SEARCH"
+        apiKey, "1. CATALOG SEARCH (scan)"
       );
-      debugLog.push({ step: "catalog/search", status: searchResult.status, hasData: searchResult.ok && searchResult.body?.results?.length > 0 });
+      debugLog.push({ step: "catalog/search (scan)", status: searchResult.status, hasData: searchResult.ok && searchResult.body?.results?.length > 0 });
 
       const cards = searchResult.body?.results || [];
       if (cards.length > 0) {
@@ -178,11 +204,15 @@ export async function POST(request: NextRequest) {
         selectedMatch = cards.find((c: any) => normalize(c.name || "") === playerNorm) || cards[0];
         cardId = selectedMatch.id;
         console.log(`    Selected: ${selectedMatch.name} | ${selectedMatch.setName} | ${selectedMatch.releaseName} ${selectedMatch.year} | ID: ${cardId}`);
-      } else if (!cardId) {
-        // Search returned nothing, fallback to input card_id
-        console.log("    No catalog results, using input card_id:", inputCardId);
-        cardId = inputCardId || "";
       }
+      // Fall back to input card_id from scan identify
+      if (!cardId && inputCardId) {
+        console.log("    No catalog results, using scan card_id:", inputCardId);
+        cardId = inputCardId;
+      }
+    } else if (inputCardId) {
+      cardId = inputCardId;
+      console.log("    Using input card_id directly:", cardId);
     }
 
     if (!cardId) {
@@ -229,9 +259,8 @@ export async function POST(request: NextRequest) {
 
     // ─── TIER 3: AI QUERY FALLBACK ───
     if (!hasPricing(prices)) {
-      const cardDesc = selectedMatch
-        ? `${selectedMatch.year || year || ""} ${selectedMatch.releaseName || set || ""} ${selectedMatch.name || player} #${selectedMatch.number || card_number || ""}`.trim()
-        : `${year || ""} ${set || ""} ${player} ${card_number || ""}`.trim();
+      const cardDesc = search_query
+        || (selectedMatch ? `${selectedMatch.year || year || ""} ${selectedMatch.releaseName || set || ""} ${selectedMatch.name || player}`.trim() : `${year || ""} ${set || ""} ${player}`.trim());
 
       const aiResult = await csFetch(
         `${BASE}/ai/query`,
@@ -253,9 +282,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── BROAD SEARCH FALLBACK ───
-    if (!hasPricing(prices) && set && player) {
-      console.log("\n--- Broad search fallback (player name only) ---");
-      const broadParams = new URLSearchParams({ q: player });
+    if (!hasPricing(prices) && (player || search_query)) {
+      const broadQuery = player || search_query.split(/\s+/).slice(-2).join(" "); // last 2 words as player guess
+      console.log("\n--- Broad search fallback (player name only):", broadQuery, "---");
+      const broadParams = new URLSearchParams({ q: broadQuery });
       if (year) broadParams.set("year", String(year));
 
       const broadResult = await csFetch(
@@ -263,11 +293,13 @@ export async function POST(request: NextRequest) {
         apiKey, "6. BROAD SEARCH FALLBACK"
       );
 
-      const playerNorm = normalize(player);
-      const broadCards = (broadResult.body?.results || []).filter((c: any) => {
-        const n = normalize(c.name || "");
-        return n === playerNorm || n.startsWith(playerNorm);
-      }).slice(0, 5);
+      const playerNorm = player ? normalize(player) : "";
+      const broadCards = player
+        ? (broadResult.body?.results || []).filter((c: any) => {
+            const n = normalize(c.name || "");
+            return n === playerNorm || n.startsWith(playerNorm);
+          }).slice(0, 5)
+        : (broadResult.body?.results || []).slice(0, 5);
 
       for (const match of broadCards) {
         const pr = await csFetch(
