@@ -4,20 +4,22 @@ import { createClient } from "@/lib/supabase";
 import { Card, NewCard, CardStatus } from "@/lib/types";
 import { calcTier, shouldFlagForGrading, today } from "@/lib/utils";
 
-export function useCards() {
+export function useCards(userId?: string) {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
   const fetchCards = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("cards")
       .select("*")
       .order("created_at", { ascending: false });
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query;
     if (!error && data) setCards(data);
     setLoading(false);
-  }, []);
+  }, [userId]);
 
   useEffect(() => { fetchCards(); }, [fetchCards]);
 
@@ -25,7 +27,8 @@ export function useCards() {
     const tier = calcTier(card.raw_value || 0);
     const gemProb = card.gem_probability || Math.random() * 0.6 + 0.1;
     const rawVal = card.raw_value || 0;
-    const newCard = {
+    const newCard: any = {
+      ...(userId ? { user_id: userId } : {}),
       player: card.player || "Unknown",
       sport: card.sport || "Baseball",
       team: card.team || "",
@@ -83,6 +86,7 @@ export function useCards() {
       const rawVal = c.raw_value || 0;
       const gemProb = Math.random() * 0.6 + 0.1;
       return {
+        ...(userId ? { user_id: userId } : {}),
         player: c.player || "Unknown", sport: c.sport || "Baseball", team: c.team || "",
         year: c.year || new Date().getFullYear(), brand: c.brand || "Topps", set: c.set || "Base",
         parallel: c.parallel || "Base", card_number: c.card_number || "#1",

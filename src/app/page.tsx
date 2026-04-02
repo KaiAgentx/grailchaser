@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { useCards } from "@/hooks/useCards";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 
@@ -56,8 +57,14 @@ function Shell({ children, title, back }: { children: React.ReactNode; title: st
 }
 
 export default function Home() {
-  const { cards, loading, addCard, deleteCard } = useCards();
+  const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
+  const { cards, loading, addCard, deleteCard } = useCards(user?.id);
   const [screen, setScreen] = useState<Screen>("home");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [checkName, setCheckName] = useState("");
@@ -110,6 +117,53 @@ export default function Home() {
     setScanning(false);
   };
 
+  // Auth loading
+  if (authLoading) return (
+    <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 700, color: accent, marginBottom: 8 }}>GrailChaser</div>
+        <div style={{ fontSize: 13, color: muted }}>Loading...</div>
+      </div>
+    </div>
+  );
+
+  // Login / Signup screen
+  if (!user) {
+    const handleAuth = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setAuthError("");
+      setAuthSubmitting(true);
+      const { error } = authMode === "login" ? await signIn(authEmail, authPassword) : await signUp(authEmail, authPassword);
+      if (error) setAuthError(error.message);
+      else if (authMode === "signup") setAuthError("Check your email to confirm your account");
+      setAuthSubmitting(false);
+    };
+
+    return (
+      <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px" }}>
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div style={{ fontSize: 36, fontWeight: 800, color: accent, letterSpacing: "-0.03em" }}>GrailChaser</div>
+          <div style={{ fontSize: 14, color: muted, marginTop: 6 }}>Sports card inventory & selling optimizer</div>
+        </div>
+        <form onSubmit={handleAuth}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 11, color: "#f0c040", textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Email</label>
+            <input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required placeholder="you@example.com" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", minHeight: 48, color: text, fontFamily: font, fontSize: 16, outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 11, color: "#f0c040", textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 4 }}>Password</label>
+            <input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required minLength={6} placeholder="Min 6 characters" style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", minHeight: 48, color: text, fontFamily: font, fontSize: 16, outline: "none", boxSizing: "border-box" }} />
+          </div>
+          {authError && <div style={{ fontSize: 13, color: authError.includes("Check your email") ? green : red, textAlign: "center", marginBottom: 16 }}>{authError}</div>}
+          <button type="submit" disabled={authSubmitting} style={{ width: "100%", padding: "16px", minHeight: 52, background: green, border: "none", borderRadius: 12, color: "#ffffff", fontFamily: font, fontSize: 17, fontWeight: 700, cursor: authSubmitting ? "wait" : "pointer", opacity: authSubmitting ? 0.6 : 1 }}>{authSubmitting ? "Please wait..." : authMode === "login" ? "Sign In" : "Create Account"}</button>
+        </form>
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }} style={{ background: "none", border: "none", color: cyan, fontFamily: font, fontSize: 14, cursor: "pointer" }}>{authMode === "login" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}</button>
+        </div>
+      </div>
+    );
+  }
+
   if (screen === "home") return (
     <Shell title="GrailChaser">
       <div style={{ paddingTop: 24 }}>
@@ -135,6 +189,7 @@ export default function Home() {
           <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 4 }}>My Cards ({unsold.length})</div>
           <div style={{ fontSize: 12, color: muted }}>Browse, search, and manage your collection</div>
         </button>
+        <button onClick={() => signOut()} style={{ width: "100%", padding: "12px", background: "none", border: "1px solid " + border, borderRadius: 12, color: muted, fontFamily: font, fontSize: 13, cursor: "pointer", marginTop: 8 }}>Sign Out ({user.email})</button>
       </div>
     </Shell>
   );
