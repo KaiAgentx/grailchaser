@@ -102,44 +102,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If CardSight has no pricing, try Zyla as fallback
-    if (!hasPricing(prices)) {
-      const zylaKey = process.env.ZYLA_API_KEY;
-      if (zylaKey) {
-        console.log("CardSight had no pricing, trying Zyla fallback...");
-        try {
-          const zylaRes = await fetch("https://zylalabs.com/api/2511/sports+card+and+trading+card+api/2494/card+search?search=" + encodeURIComponent(player), {
-            headers: { "Authorization": "Bearer " + zylaKey },
-          });
-          const zylaData = await zylaRes.json();
-          const zylaCards = Array.isArray(zylaData) ? zylaData : [];
-          let zylaMatch = zylaCards[0];
-          if (year && zylaCards.length > 1) {
-            const ym = zylaCards.find((c: any) => (c.set && c.set.includes(String(year))) || (c.description && c.description.includes(String(year))));
-            if (ym) zylaMatch = ym;
-          }
-          if (zylaMatch?.card_id) {
-            console.log("Zyla card:", zylaMatch.description);
-            for (const [grade, key] of [["PSA 10", "psa10"], ["PSA 9", "psa9"], ["PSA 8", "psa8"], ["Ungraded", "raw"]] as const) {
-              try {
-                const zPriceRes = await fetch("https://zylalabs.com/api/2511/sports+card+and+trading+card+api/2495/get+card+prices?card_id=" + encodeURIComponent(zylaMatch.card_id) + "&days=90&grade=" + encodeURIComponent(grade), {
-                  headers: { "Authorization": "Bearer " + zylaKey },
-                });
-                const zPriceData = await zPriceRes.json();
-                if (Array.isArray(zPriceData) && zPriceData.length > 0) {
-                  const avg = zPriceData.reduce((sum: number, p: any) => sum + parseFloat(p.price || "0"), 0) / zPriceData.length;
-                  prices[key as keyof typeof prices] = +avg.toFixed(2);
-                  console.log(`  [Zyla ${grade}] $${avg.toFixed(2)} from ${zPriceData.length} sales`);
-                }
-              } catch (e) {}
-            }
-          }
-        } catch (e: any) {
-          console.log("Zyla fallback failed:", e.message);
-        }
-      }
-    }
-
     // Estimate raw from graded if missing
     if (!prices.raw && prices.psa9) prices.raw = +(prices.psa9 * 0.6).toFixed(2);
     else if (!prices.raw && prices.psa10) prices.raw = +(prices.psa10 * 0.35).toFixed(2);
