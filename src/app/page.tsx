@@ -121,7 +121,10 @@ export default function Home() {
   if (authLoading) return (
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 32, fontWeight: 800, fontStyle: "italic", letterSpacing: "-0.02em", background: "linear-gradient(135deg, #c9a227, #f6e27a, #c9a227, #f6e27a, #c9a227)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 4px rgba(201,162,39,0.3))", marginBottom: 8 }}>GrailChaser</div>
+        <div style={{ background: "linear-gradient(160deg, #b8860b, #f0c040 40%, #daa520 60%, #b8860b)", borderRadius: 14, padding: "20px 28px 16px", marginBottom: 12, boxShadow: "0 4px 24px rgba(184,134,11,0.25), inset 0 1px 0 rgba(255,255,255,0.15)", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)" }} />
+          <div style={{ position: "relative", fontSize: 28, fontWeight: 900, color: "#0a0a0f", letterSpacing: 2, textTransform: "uppercase", textShadow: "0 1px 0 rgba(255,255,255,0.3)" }}>GRAILCHASER</div>
+        </div>
         <div style={{ fontSize: 13, color: muted }}>Loading...</div>
       </div>
     </div>
@@ -142,9 +145,12 @@ export default function Home() {
     return (
       <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 40, fontWeight: 800, fontStyle: "italic", letterSpacing: "-0.02em", background: "linear-gradient(135deg, #c9a227, #f6e27a, #dbb84d, #f6e27a, #c9a227)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 6px rgba(201,162,39,0.4))" }}>GrailChaser</div>
-          <div style={{ fontSize: 11, color: "#c9a227", marginTop: 8, textTransform: "uppercase", letterSpacing: 4, fontWeight: 500 }}>Sports Card Optimizer</div>
-          <div style={{ width: 120, height: 1, background: "linear-gradient(90deg, transparent, #c9a227, transparent)", margin: "10px auto 0" }} />
+          <div style={{ background: "linear-gradient(160deg, #b8860b, #f0c040 40%, #daa520 60%, #b8860b)", borderRadius: 16, padding: "28px 20px 22px", marginBottom: 0, position: "relative", overflow: "hidden", boxShadow: "0 4px 24px rgba(184,134,11,0.25), inset 0 1px 0 rgba(255,255,255,0.15)" }}>
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)" }} />
+            <div style={{ position: "relative", fontSize: 38, fontWeight: 900, color: "#0a0a0f", letterSpacing: 2, textTransform: "uppercase", textShadow: "0 1px 0 rgba(255,255,255,0.3)" }}>GRAILCHASER</div>
+            <div style={{ position: "relative", fontSize: 10, color: "#0a0a0f", marginTop: 6, textTransform: "uppercase", letterSpacing: 5, fontWeight: 600, opacity: 0.7 }}>Sports Card Optimizer</div>
+            <div style={{ position: "relative", width: 80, height: 1, background: "linear-gradient(90deg, transparent, rgba(10,10,15,0.3), transparent)", margin: "8px auto 0" }} />
+          </div>
         </div>
         <form onSubmit={handleAuth}>
           <div style={{ marginBottom: 16 }}>
