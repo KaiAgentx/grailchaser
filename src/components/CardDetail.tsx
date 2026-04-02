@@ -21,7 +21,7 @@ interface Props {
   markShipped: (id: string, tracking?: string) => Promise<any>;
   submitForGrading: (id: string, company: string) => Promise<any>;
   returnFromGrading: (id: string, grade: string) => Promise<any>;
-  getNextPosition: (box: string) => { row: number; position: number };
+  getNextPosition: (box: string) => number;
 }
 
 export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition }: Props) {
@@ -35,6 +35,8 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
   const [actionGrade, setActionGrade] = useState("");
   const [actionCompany, setActionCompany] = useState("PSA");
   const [saved, setSaved] = useState(false);
+  const [showMoveBox, setShowMoveBox] = useState(false);
+  const [moveConfirm, setMoveConfirm] = useState("");
 
   const val = (field: keyof Card) => (edits as any)[field] ?? (card as any)[field];
 
@@ -124,7 +126,7 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                 {["PENDING", ...boxes.map(b => b.name)].map(b => <button key={b} onClick={() => {
                   if (b === "PENDING") { setEdits({ ...edits, storage_box: "PENDING", storage_row: 1, storage_position: 1 }); }
-                  else { const pos = getNextPosition(b); setEdits({ ...edits, storage_box: b, storage_row: pos.row, storage_position: pos.position }); }
+                  else { const pos = getNextPosition(b); setEdits({ ...edits, storage_box: b, storage_row: 1, storage_position: pos }); }
                 }} style={{ ...btnSmall, padding: "8px 12px", background: val("storage_box") === b ? cyan + "20" : surface2, border: "1px solid " + (val("storage_box") === b ? cyan + "50" : border), color: val("storage_box") === b ? cyan : muted, fontSize: 11 }}>{b}</button>)}
               </div>
             </div>
@@ -143,6 +145,36 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
           </div>
         ) : (
           <button onClick={() => setEditing(true)} style={{ width: "100%", ...btnSmall, background: cyan + "15", border: "1px solid " + cyan + "30", color: cyan, marginBottom: 12 }}>Edit Card</button>
+        )}
+
+        {/* Storage / Move to Box */}
+        {!editing && (
+          <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Storage</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showMoveBox ? 10 : 0 }}>
+              <div>
+                <span style={{ fontSize: 14, fontWeight: 600, color: text }}>{card.storage_box || "PENDING"}</span>
+                {card.storage_box && card.storage_box !== "PENDING" && <span style={{ fontSize: 12, color: muted, marginLeft: 8 }}>#{card.storage_position}</span>}
+              </div>
+              <button onClick={() => setShowMoveBox(!showMoveBox)} style={{ ...btnSmall, padding: "6px 12px", background: cyan + "15", border: "1px solid " + cyan + "30", color: cyan, fontSize: 11 }}>{showMoveBox ? "Cancel" : "Move"}</button>
+            </div>
+            {showMoveBox && (
+              <div>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {boxes.map(b => (
+                    <button key={b.id} onClick={async () => {
+                      const pos = getNextPosition(b.name);
+                      await updateCard(card.id, { storage_box: b.name, storage_row: 1, storage_position: pos });
+                      setMoveConfirm(`Moved to ${b.name} — Position ${pos}`);
+                      setShowMoveBox(false);
+                      setTimeout(() => setMoveConfirm(""), 2500);
+                    }} style={{ ...btnSmall, padding: "8px 10px", background: surface2, border: "1px solid " + border, color: text, fontSize: 11 }}>{b.name}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {moveConfirm && <div style={{ fontSize: 12, color: green, marginTop: 8, fontWeight: 600 }}>{moveConfirm}</div>}
+          </div>
         )}
 
         {/* Sell Optimizer */}

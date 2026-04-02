@@ -7,6 +7,7 @@ import { LoginScreen } from "@/components/LoginScreen";
 import { CardDetail } from "@/components/CardDetail";
 import { StorageView } from "@/components/StorageView";
 import { CsvImport } from "@/components/CsvImport";
+import { BuyFlow } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
@@ -40,8 +41,9 @@ function compressImage(file: File, maxWidth = 800): Promise<string> {
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const { cards, loading, addCard, addCards, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition } = useCards(user?.id);
-  const { boxes, addBox, updateBox, deleteBox } = useBoxes(user?.id);
+  const { boxes, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
   const [buyConfirm, setBuyConfirm] = useState("");
+  const [showBuyFlow, setShowBuyFlow] = useState(false);
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [search, setSearch] = useState("");
@@ -224,11 +226,11 @@ export default function Home() {
 
   if (screen === "csvImport") return <CsvImport onBack={() => setScreen("home")} addCards={addCards} />;
 
-  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} />;
+  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <CardDetail card={liveCard} boxes={boxes} onBack={() => setScreen("myCards")} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); setScreen("myCards"); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getNextPosition} />;
+    return <CardDetail card={liveCard} boxes={boxes} onBack={() => setScreen("myCards")} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); setScreen("myCards"); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getBoxNextPosition} />;
   }
 
   if (screen === "cardCheck") return (
@@ -347,30 +349,33 @@ export default function Home() {
             <div style={{ fontSize: 18, fontWeight: 700, color: verdict === "buy" ? green : verdict === "maybe" ? accent : red, marginBottom: 4 }}>{verdict === "buy" ? "BUY" : verdict === "maybe" ? "NEGOTIATE" : "PASS"}</div>
             <div style={{ fontSize: 12, color: muted }}>{verdict === "buy" ? "Good at $" + askingPrice + " — " + belowMarket + "% below market" : verdict === "maybe" ? "Tight margin — try $" + +(maxPayRaw / 1.2).toFixed(0) : "Overpaying — max $" + maxPayRaw}</div>
           </div>
-          {buyConfirm && <div style={{ background: green + "15", border: "1px solid " + green + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: green, textAlign: "center", fontWeight: 600 }}>{buyConfirm}</div>}
-          <div style={{ display: "flex", gap: 12 }}>
-            <button onClick={async () => {
-              const sr = scanResult;
-              const yearMatch = checkName.match(/\b(19|20)\d{2}\b/);
-              const cardData: any = {
-                player: sr?.player || checkName.replace(/^\d{4}\s+/, "").replace(/#\S+/g, "").replace(/\b(Prizm|Topps|Panini|Bowman|Donruss|Select|Optic|Chrome|Silver|Gold|Holo|Refractor|Base|RC)\b/gi, "").replace(/\s+/g, " ").trim() || checkName,
-                year: sr?.year || (yearMatch ? +yearMatch[0] : new Date().getFullYear()),
-                brand: sr?.brand || "",
-                set: sr?.set || "",
-                parallel: sr?.parallel || "Base",
-                card_number: sr?.card_number || "",
-                sport: sr?.sport || "Baseball",
+          {showBuyFlow ? (
+            <BuyFlow
+              cardData={{
+                player: scanResult?.player || checkName.replace(/^\d{4}\s+/, "").replace(/#\S+/g, "").replace(/\b(Prizm|Topps|Panini|Bowman|Donruss|Select|Optic|Chrome|Silver|Gold|Holo|Refractor|Base|RC)\b/gi, "").replace(/\s+/g, " ").trim() || checkName,
+                year: scanResult?.year || +(checkName.match(/\b(19|20)\d{2}\b/)?.[0] || new Date().getFullYear()),
+                brand: scanResult?.brand || "",
+                set: scanResult?.set || "",
+                parallel: scanResult?.parallel || "Base",
+                card_number: scanResult?.card_number || "",
+                sport: scanResult?.sport || "Baseball",
                 raw_value: checkRaw,
                 cost_basis: askingPrice,
                 graded_values: { "10": checkPsa10 || rawVal * 3, "9": checkPsa9 || rawVal * 1.8, "8": checkPsa8 || rawVal * 1.2, "7": psa7 },
-                notes: "Added from Card Check",
-              };
-              const { error } = await addCard(cardData);
-              if (!error) { setBuyConfirm("Added to collection!"); setTimeout(() => { setBuyConfirm(""); setScreen("home"); }, 1500); }
-              else { setBuyConfirm("Error: " + error.message); }
-            }} style={{ flex: 1, padding: "18px", background: green, border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>BUY</button>
-            <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: surface2, border: "1px solid " + border, borderRadius: 14, color: muted, fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>PASS</button>
-          </div>
+              }}
+              boxes={boxes}
+              getNextPosition={getBoxNextPosition}
+              addCard={addCard}
+              addBox={addBox}
+              onDone={() => { setShowBuyFlow(false); setScreen("home"); }}
+              onCancel={() => setShowBuyFlow(false)}
+            />
+          ) : (
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setShowBuyFlow(true)} style={{ flex: 1, padding: "18px", background: green, border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>BUY</button>
+              <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: surface2, border: "1px solid " + border, borderRadius: 14, color: muted, fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>PASS</button>
+            </div>
+          )}
         </div>
       </Shell>
     );

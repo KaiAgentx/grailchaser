@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Card } from "@/lib/types";
-import { Box } from "@/hooks/useBoxes";
+import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, cyan, muted, text, font, mono } from "./styles";
 
@@ -9,25 +9,30 @@ const inputStyle = { background: surface2, border: "1px solid " + border, border
 const labelStyle = { fontSize: 10, color: muted, textTransform: "uppercase" as const, letterSpacing: 1, display: "block", marginBottom: 4 };
 const btnStyle = { padding: "12px 16px", minHeight: 44, border: "none", borderRadius: 10, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer" };
 
+const typeColors: Record<BoxType, string> = { scanned: cyan, singles: text, sell: green, slabs_sell: green, slabs_pc: "#a855f7", pc: "#a855f7", grade_check: "#f0c040", sorted: text };
+
 type Screen = "list" | "create" | "detail" | "edit";
 
 interface Props {
   cards: Card[];
   boxes: Box[];
   onBack: () => void;
-  addBox: (name: string, numRows: number, dividerSize: number) => Promise<any>;
-  updateBox: (id: string, updates: Partial<Pick<Box, "name" | "num_rows" | "divider_size">>) => Promise<any>;
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
+  updateBox: (id: string, updates: Partial<Pick<Box, "name" | "num_rows" | "divider_size" | "box_type">>) => Promise<any>;
   deleteBox: (id: string) => Promise<any>;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
   onCardTap: (card: Card) => void;
+  getNextPosition: (boxName: string) => number;
+  getBoxCards: (boxName: string) => Card[];
 }
 
-export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap }: Props) {
+export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, getNextPosition, getBoxCards }: Props) {
   const [screen, setScreen] = useState<Screen>("list");
   const [selectedBox, setSelectedBox] = useState<Box | null>(null);
   const [newName, setNewName] = useState("");
   const [newRows, setNewRows] = useState(1);
   const [newDivider, setNewDivider] = useState(50);
+  const [newType, setNewType] = useState<BoxType>("singles");
   const [editName, setEditName] = useState("");
   const [editRows, setEditRows] = useState(1);
   const [editDivider, setEditDivider] = useState(50);
@@ -35,7 +40,6 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
   const [createError, setCreateError] = useState("");
 
   const unassigned = cards.filter(c => !c.storage_box || c.storage_box === "PENDING");
-  const cardsInBox = (boxName: string) => cards.filter(c => c.storage_box === boxName);
 
   // ─── BOX LIST ───
   if (screen === "list") return (
@@ -49,12 +53,17 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
         )}
 
         {boxes.map(box => {
-          const count = cardsInBox(box.name).length;
+          const count = box.card_count || 0;
+          const typeLabel = BOX_TYPE_LABELS[box.box_type || "singles"]?.label || box.box_type;
+          const typeColor = typeColors[box.box_type || "singles"] || text;
           return (
             <button key={box.id} onClick={() => { setSelectedBox(box); setScreen("detail"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 14, padding: "16px 18px", cursor: "pointer", textAlign: "left", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: text }}>{box.name}</div>
-                <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{box.num_rows} row{box.num_rows > 1 ? "s" : ""} · dividers every {box.divider_size}</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4 }}>
+                  <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 8, background: typeColor + "15", border: "1px solid " + typeColor + "30", color: typeColor, fontWeight: 600 }}>{typeLabel}</span>
+                  <span style={{ fontSize: 11, color: muted }}>{box.num_rows} row{box.num_rows > 1 ? "s" : ""}</span>
+                </div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontFamily: mono, fontSize: 18, fontWeight: 700, color: count > 0 ? green : muted }}>{count}</div>
@@ -66,7 +75,7 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
 
         {boxes.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>No boxes yet — create one to start organizing</div>}
 
-        <button onClick={() => { setNewName(""); setNewRows(1); setNewDivider(50); setScreen("create"); }} style={{ width: "100%", ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green, marginTop: 8 }}>+ Create New Box</button>
+        <button onClick={() => { setNewName(""); setNewRows(1); setNewDivider(50); setNewType("singles"); setScreen("create"); }} style={{ width: "100%", ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green, marginTop: 8 }}>+ Create New Box</button>
       </div>
     </Shell>
   );
@@ -78,6 +87,17 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
         <div style={{ marginBottom: 16 }}>
           <div style={labelStyle}>Box Name</div>
           <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="BOX A, SELL BOX, GRAILS..." style={inputStyle} />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={labelStyle}>Box Type</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {(Object.entries(BOX_TYPE_LABELS) as [BoxType, { label: string; desc: string }][]).map(([key, { label, desc }]) => (
+              <button key={key} onClick={() => setNewType(key)} style={{ ...btnStyle, padding: "10px 14px", textAlign: "left", background: newType === key ? typeColors[key] + "15" : surface2, border: "1px solid " + (newType === key ? typeColors[key] + "50" : border), color: newType === key ? typeColors[key] : muted }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+                <div style={{ fontSize: 10, opacity: 0.7, marginTop: 2 }}>{desc}</div>
+              </button>
+            ))}
+          </div>
         </div>
         <div style={{ marginBottom: 16 }}>
           <div style={labelStyle}>Number of Rows</div>
@@ -95,119 +115,116 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
             ))}
           </div>
         </div>
-        {saving === false && createError && <div style={{ fontSize: 12, color: red, textAlign: "center", marginBottom: 8 }}>{createError}</div>}
-        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider); setSaving(false); if (error) { setCreateError(error.message || "Failed to create box — have you run the SQL migration?"); } else { setScreen("list"); } }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
+        {createError && <div style={{ fontSize: 12, color: red, textAlign: "center", marginBottom: 8 }}>{createError}</div>}
+        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider, newType); setSaving(false); if (error) setCreateError(error.message || "Failed to create box"); else setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
       </div>
     </Shell>
   );
 
   // ─── EDIT BOX ───
-  if (screen === "edit" && selectedBox) return (
-    <Shell title="Edit Box" back={() => setScreen("detail")}>
-      <div style={{ paddingTop: 16 }}>
-        <div style={{ marginBottom: 16 }}>
-          <div style={labelStyle}>Box Name</div>
-          <input value={editName} onChange={e => setEditName(e.target.value)} style={inputStyle} />
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <div style={labelStyle}>Number of Rows</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[1, 2, 4].map(n => (
-              <button key={n} onClick={() => setEditRows(n)} style={{ ...btnStyle, flex: 1, background: editRows === n ? cyan + "20" : surface2, border: "1px solid " + (editRows === n ? cyan + "50" : border), color: editRows === n ? cyan : muted }}>{n} Row{n > 1 ? "s" : ""}</button>
-            ))}
+  if (screen === "edit" && selectedBox) {
+    const count = selectedBox.card_count || 0;
+    return (
+      <Shell title="Edit Box" back={() => setScreen("detail")}>
+        <div style={{ paddingTop: 16 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={labelStyle}>Box Name</div>
+            <input value={editName} onChange={e => setEditName(e.target.value)} style={inputStyle} />
           </div>
-        </div>
-        <div style={{ marginBottom: 24 }}>
-          <div style={labelStyle}>Divider Every</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[25, 50, 100].map(n => (
-              <button key={n} onClick={() => setEditDivider(n)} style={{ ...btnStyle, flex: 1, background: editDivider === n ? cyan + "20" : surface2, border: "1px solid " + (editDivider === n ? cyan + "50" : border), color: editDivider === n ? cyan : muted }}>{n} cards</button>
-            ))}
+          <div style={{ marginBottom: 16 }}>
+            <div style={labelStyle}>Number of Rows</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[1, 2, 4].map(n => (
+                <button key={n} onClick={() => setEditRows(n)} style={{ ...btnStyle, flex: 1, background: editRows === n ? cyan + "20" : surface2, border: "1px solid " + (editRows === n ? cyan + "50" : border), color: editRows === n ? cyan : muted }}>{n}</button>
+              ))}
+            </div>
           </div>
-        </div>
-        <button disabled={!editName.trim() || saving} onClick={async () => {
-          setSaving(true);
-          const oldName = selectedBox.name;
-          await updateBox(selectedBox.id, { name: editName.trim(), num_rows: editRows, divider_size: editDivider });
-          // If name changed, update all cards in this box
-          if (editName.trim() !== oldName) {
-            const boxCards = cardsInBox(oldName);
-            for (const c of boxCards) { await updateCard(c.id, { storage_box: editName.trim() }); }
-          }
-          setSelectedBox({ ...selectedBox, name: editName.trim(), num_rows: editRows, divider_size: editDivider });
-          setSaving(false);
-          setScreen("detail");
-        }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", marginBottom: 12 }}>{saving ? "Saving..." : "Save Changes"}</button>
+          <div style={{ marginBottom: 24 }}>
+            <div style={labelStyle}>Divider Every</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[25, 50, 100].map(n => (
+                <button key={n} onClick={() => setEditDivider(n)} style={{ ...btnStyle, flex: 1, background: editDivider === n ? cyan + "20" : surface2, border: "1px solid " + (editDivider === n ? cyan + "50" : border), color: editDivider === n ? cyan : muted }}>{n}</button>
+              ))}
+            </div>
+          </div>
+          <button disabled={!editName.trim() || saving} onClick={async () => {
+            setSaving(true);
+            const oldName = selectedBox.name;
+            await updateBox(selectedBox.id, { name: editName.trim(), num_rows: editRows, divider_size: editDivider });
+            if (editName.trim() !== oldName) {
+              const boxCards = getBoxCards(oldName);
+              for (const c of boxCards) await updateCard(c.id, { storage_box: editName.trim() });
+            }
+            setSelectedBox({ ...selectedBox, name: editName.trim(), num_rows: editRows, divider_size: editDivider });
+            setSaving(false);
+            setScreen("detail");
+          }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", marginBottom: 12 }}>{saving ? "Saving..." : "Save Changes"}</button>
 
-        {cardsInBox(selectedBox.name).length === 0 && (
-          <button onClick={async () => { await deleteBox(selectedBox.id); setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: red + "15", border: "1px solid " + red + "30", color: red }}>Delete Box</button>
-        )}
-        {cardsInBox(selectedBox.name).length > 0 && (
-          <div style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 4 }}>Remove all cards to delete this box</div>
-        )}
-      </div>
-    </Shell>
-  );
+          {count === 0 ? (
+            <button onClick={async () => { await deleteBox(selectedBox.id); setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: red + "15", border: "1px solid " + red + "30", color: red }}>Delete Box</button>
+          ) : (
+            <div style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 4 }}>Remove all {count} cards to delete this box</div>
+          )}
+        </div>
+      </Shell>
+    );
+  }
 
   // ─── BOX DETAIL ───
   if (screen === "detail" && selectedBox) {
-    const boxCards = cardsInBox(selectedBox.name).sort((a, b) => a.storage_position - b.storage_position);
+    const boxCards = getBoxCards(selectedBox.name);
     const totalValue = boxCards.reduce((s, c) => s + (c.raw_value || 0), 0);
+    const typeLabel = BOX_TYPE_LABELS[selectedBox.box_type || "singles"]?.label || selectedBox.box_type;
+    const typeColor = typeColors[selectedBox.box_type || "singles"] || text;
 
-    // Calculate row boundaries: positions are continuous
-    // Row 1: positions 1 to (total/numRows), Row 2: continues, etc.
+    // Split by rows
     const rowCards: Card[][] = [];
     if (selectedBox.num_rows === 1) {
       rowCards.push(boxCards);
     } else {
-      // Split by storage_row field
-      for (let r = 1; r <= selectedBox.num_rows; r++) {
-        rowCards.push(boxCards.filter(c => c.storage_row === r));
-      }
-      // If no cards have row set, put all in row 1
-      if (rowCards.every(r => r.length === 0) && boxCards.length > 0) {
-        rowCards[0] = boxCards;
-      }
+      for (let r = 1; r <= selectedBox.num_rows; r++) rowCards.push(boxCards.filter(c => c.storage_row === r));
+      if (rowCards.every(r => r.length === 0) && boxCards.length > 0) rowCards[0] = boxCards;
     }
 
-    // Build sections with dividers
-    const renderSection = (sectionCards: Card[], dividerSize: number) => {
+    // Build divider sections
+    const buildSections = (sectionCards: Card[], dividerSize: number) => {
       const sections: { label: string; cards: Card[] }[] = [];
-      let currentSection: Card[] = [];
-      let currentStart = 0;
-
+      let current: Card[] = [];
+      let start = 0;
       for (const card of sectionCards) {
-        const sectionIdx = Math.floor((card.storage_position - 1) / dividerSize);
-        const sectionStart = sectionIdx * dividerSize + 1;
-        if (sectionStart !== currentStart) {
-          if (currentSection.length > 0) sections.push({ label: `${currentStart}–${currentStart + dividerSize - 1}`, cards: currentSection });
-          currentSection = [];
-          currentStart = sectionStart;
+        const idx = Math.floor((card.storage_position - 1) / dividerSize);
+        const s = idx * dividerSize + 1;
+        if (s !== start) {
+          if (current.length > 0) sections.push({ label: `${start}–${start + dividerSize - 1}`, cards: current });
+          current = [];
+          start = s;
         }
-        currentSection.push(card);
+        current.push(card);
       }
-      if (currentSection.length > 0) sections.push({ label: `${currentStart}–${currentStart + dividerSize - 1}`, cards: currentSection });
+      if (current.length > 0) sections.push({ label: `${start}–${start + dividerSize - 1}`, cards: current });
       return sections;
     };
 
     return (
       <Shell title={selectedBox.name} back={() => setScreen("list")}>
         <div style={{ paddingTop: 16 }}>
-          {/* Summary */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 8, background: typeColor + "15", border: "1px solid " + typeColor + "30", color: typeColor, fontWeight: 600 }}>{typeLabel}</span>
+              </div>
               <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: green }}>{boxCards.length} cards</div>
               <div style={{ fontSize: 12, color: muted }}>${totalValue.toFixed(2)} total value</div>
             </div>
-            <button onClick={() => { setEditName(selectedBox.name); setEditRows(selectedBox.num_rows); setEditDivider(selectedBox.divider_size); setScreen("edit"); }} style={{ ...btnStyle, padding: "8px 16px", background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>Edit Box</button>
+            <button onClick={() => { setEditName(selectedBox.name); setEditRows(selectedBox.num_rows); setEditDivider(selectedBox.divider_size); setScreen("edit"); }} style={{ ...btnStyle, padding: "8px 16px", background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>Edit</button>
           </div>
 
-          {boxCards.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>No cards in this box yet. Assign cards from Card Detail.</div>}
+          {boxCards.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>No cards in this box yet</div>}
 
-          {/* Rows */}
           {rowCards.map((rCards, rowIdx) => {
             if (rCards.length === 0 && selectedBox.num_rows === 1) return null;
-            const sections = renderSection(rCards, selectedBox.divider_size);
+            const sections = buildSections(rCards, selectedBox.divider_size);
             return (
               <div key={rowIdx}>
                 {selectedBox.num_rows > 1 && (
@@ -217,13 +234,13 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
                   <div key={section.label}>
                     <div style={{ fontSize: 10, color: cyan, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, padding: "8px 0 4px", borderBottom: "1px solid " + border, marginBottom: 4 }}>{section.label}</div>
                     {section.cards.map(card => (
-                      <button key={card.id} onClick={() => onCardTap(card)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid " + border, background: "none", border: "none", borderBottomWidth: 1, borderBottomStyle: "solid", borderBottomColor: border, cursor: "pointer", textAlign: "left" }}>
-                        <span style={{ fontFamily: mono, fontSize: 11, color: muted, width: 32, textAlign: "right" }}>#{card.storage_position}</span>
+                      <button key={card.id} onClick={() => onCardTap(card)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 0", background: "none", border: "none", borderBottom: "1px solid " + border, cursor: "pointer", textAlign: "left" }}>
+                        <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: cyan, width: 36, textAlign: "right" }}>{card.storage_position}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.player}</div>
-                          <div style={{ fontSize: 10, color: muted }}>{card.year} {card.brand} {card.parallel !== "Base" ? card.parallel : ""}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.player}</div>
+                          <div style={{ fontSize: 11, color: muted }}>{card.year} {card.brand} {card.set}{card.parallel !== "Base" ? " " + card.parallel : ""}</div>
                         </div>
-                        <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: green }}>${card.raw_value}</span>
+                        <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: green }}>${card.raw_value}</span>
                       </button>
                     ))}
                   </div>
