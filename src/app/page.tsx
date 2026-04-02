@@ -44,12 +44,12 @@ function compressImage(file: File, maxWidth = 800): Promise<string> {
   });
 }
 
-function Shell({ children, title, back }: { children: React.ReactNode; title: string; back?: () => void }) {
+function Shell({ children, title, back, brandTitle }: { children: React.ReactNode; title: string; back?: () => void; brandTitle?: boolean }) {
   return (
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 50, background: bg, borderBottom: "1px solid " + border, padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
         {back && <button onClick={back} style={{ background: "none", border: "none", color: muted, fontSize: 20, cursor: "pointer", padding: 0 }}>←</button>}
-        <span style={{ flex: 1, fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>{title}</span>
+        {brandTitle ? <span style={{ flex: 1, fontSize: 20, fontWeight: 800, fontStyle: "italic", letterSpacing: "-0.01em", background: "linear-gradient(135deg, #c9a227, #f6e27a, #c9a227)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{title}</span> : <span style={{ flex: 1, fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>{title}</span>}
       </div>
       <div style={{ padding: "0 20px 100px" }}>{children}</div>
     </div>
@@ -121,7 +121,7 @@ export default function Home() {
   if (authLoading) return (
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 28, fontWeight: 700, color: accent, marginBottom: 8 }}>GrailChaser</div>
+        <div style={{ fontSize: 32, fontWeight: 800, fontStyle: "italic", letterSpacing: "-0.02em", background: "linear-gradient(135deg, #c9a227, #f6e27a, #c9a227, #f6e27a, #c9a227)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 4px rgba(201,162,39,0.3))", marginBottom: 8 }}>GrailChaser</div>
         <div style={{ fontSize: 13, color: muted }}>Loading...</div>
       </div>
     </div>
@@ -142,8 +142,9 @@ export default function Home() {
     return (
       <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 36, fontWeight: 800, color: accent, letterSpacing: "-0.03em" }}>GrailChaser</div>
-          <div style={{ fontSize: 14, color: muted, marginTop: 6 }}>Sports card inventory & selling optimizer</div>
+          <div style={{ fontSize: 40, fontWeight: 800, fontStyle: "italic", letterSpacing: "-0.02em", background: "linear-gradient(135deg, #c9a227, #f6e27a, #dbb84d, #f6e27a, #c9a227)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", filter: "drop-shadow(0 2px 6px rgba(201,162,39,0.4))" }}>GrailChaser</div>
+          <div style={{ fontSize: 11, color: "#c9a227", marginTop: 8, textTransform: "uppercase", letterSpacing: 4, fontWeight: 500 }}>Sports Card Optimizer</div>
+          <div style={{ width: 120, height: 1, background: "linear-gradient(90deg, transparent, #c9a227, transparent)", margin: "10px auto 0" }} />
         </div>
         <form onSubmit={handleAuth}>
           <div style={{ marginBottom: 16 }}>
@@ -165,7 +166,7 @@ export default function Home() {
   }
 
   if (screen === "home") return (
-    <Shell title="GrailChaser">
+    <Shell title="GrailChaser" brandTitle>
       <div style={{ paddingTop: 24 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>Collection Value</div>
