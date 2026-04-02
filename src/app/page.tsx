@@ -278,7 +278,7 @@ export default function Home() {
           <div><label style={{ fontSize: 11, color: "#ef4444", display: "block", marginBottom: 4 }}>PSA 9 ($)</label><input type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" value={checkPsa9 || ""} onChange={e => setCheckPsa9(+e.target.value || 0)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 10px", minHeight: 48, color: text, fontFamily: mono, fontSize: 15, outline: "none", boxSizing: "border-box" }} /></div>
           <div><label style={{ fontSize: 11, color: "#ef4444", display: "block", marginBottom: 4 }}>PSA 8 ($)</label><input type="text" inputMode="decimal" pattern="[0-9]*\.?[0-9]*" value={checkPsa8 || ""} onChange={e => setCheckPsa8(+e.target.value || 0)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 10px", minHeight: 48, color: text, fontFamily: mono, fontSize: 15, outline: "none", boxSizing: "border-box" }} /></div>
         </div>
-        <button onClick={() => { if (checkRaw > 0) setScreen("cardResult"); }} style={{ width: "100%", padding: "16px", minHeight: 52, background: green, border: "none", borderRadius: 12, color: "#000", fontFamily: font, fontSize: 17, fontWeight: 700, cursor: "pointer", opacity: checkRaw > 0 ? 1 : 0.4 }}>Evaluate Card</button>
+        <button onClick={() => { if (checkRaw > 0) setScreen("cardResult"); }} style={{ width: "100%", padding: "16px", minHeight: 52, background: green, border: "none", borderRadius: 12, color: "#ffffff", fontFamily: font, fontSize: 17, fontWeight: 700, cursor: "pointer", opacity: checkRaw > 0 ? 1 : 0.4 }}>Evaluate Card</button>
       </div>
     </Shell>
   );
