@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     const hash = crypto.createHash("sha256");
     hash.update(challengeCode);
     hash.update(process.env.EBAY_VERIFICATION_TOKEN || "");
-    hash.update(process.env.NEXT_PUBLIC_APP_URL + "/api/webhooks/ebay-sold");
+    hash.update("https://grailchaser.vercel.app/api/webhooks/ebay-sold");
     return NextResponse.json({ challengeResponse: hash.digest("hex") });
   }
   return NextResponse.json({ status: "ok" });
