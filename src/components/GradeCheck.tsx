@@ -4,9 +4,8 @@ import { Card } from "@/lib/types";
 import { GRADING_COMPANIES } from "@/lib/utils";
 import { Box, BoxType } from "@/hooks/useBoxes";
 import { Shell } from "./Shell";
-import { surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "./styles";
+import { bg, surface, surface2, border, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono } from "./styles";
 
-const amber = "#f59e0b";
 const btnStyle = { padding: "12px 16px", minHeight: 48, border: "none", borderRadius: 12, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer" };
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "10px 12px", minHeight: 44, color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" as const, width: "100%" };
 
@@ -46,6 +45,8 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
   const [screen, setScreen] = useState<Screen>("list");
   const [inspectIndex, setInspectIndex] = useState(0);
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+
+  const [detailExpanded, setDetailExpanded] = useState(false);
 
   // Current inspection state
   const [corners, setCorners] = useState<Rating>("");
@@ -182,63 +183,76 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
 
     return (
       <Shell title={`Inspect ${inspectIndex + 1}/${gcCards.length}`} back={() => setScreen("list")}>
-        <div style={{ paddingTop: 12 }}>
-          {/* Card info */}
+        <div style={{ paddingTop: 12, paddingBottom: 80 }}>
+          {/* Card info — always visible */}
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
             {card.scan_image_url ? <img src={card.scan_image_url} style={{ width: "100%", maxHeight: 200, objectFit: "contain", borderRadius: 8, marginBottom: 10 }} /> : null}
             <div style={{ fontSize: 18, fontWeight: 700, color: text }}>{card.player}</div>
             <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{card.year} {card.brand} {card.set} {card.parallel !== "Base" ? card.parallel : ""}</div>
             <div style={{ fontSize: 13, color: purple, fontWeight: 600, marginTop: 6 }}>Raw: ${card.raw_value} → PSA 10: ${gv["10"]} ({ratio}x)</div>
-          </div>
-
-          {/* Condition rating */}
-          <div style={{ background: surface, borderRadius: 14, padding: 14, marginBottom: 12 }}>
-            <div style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Condition Check</div>
-            <RatingBtn label="Corners" value={corners} set={setCorners} />
-            <RatingBtn label="Centering" value={centering} set={setCentering} />
-            <RatingBtn label="Surface" value={surfaceR} set={setSurfaceR} />
-            <RatingBtn label="Edges" value={edges} set={setEdges} />
-            <input value={condNotes} onChange={e => setCondNotes(e.target.value)} placeholder="Condition notes..." style={{ ...inputStyle, fontSize: 12, marginTop: 4 }} />
-          </div>
-
-          {/* Gem probability */}
-          <div style={{ background: surface, borderRadius: 14, padding: 14, marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 1 }}>Gem Probability</span>
-              <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: accent }}>{gemProb}%</span>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: "1px solid " + border }}>
+              <span style={{ fontSize: 12, color: secondary }}>Expected at {gemProb}% gem rate</span>
+              <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: expectedProfit >= 0 ? green : red }}>{expectedProfit >= 0 ? "+" : ""}${expectedProfit.toFixed(2)}</span>
             </div>
-            <input type="range" min={0} max={50} step={5} value={gemProb} onChange={e => setGemProb(+e.target.value)} style={{ width: "100%", accentColor: accent }} />
           </div>
 
-          {/* Per-grade profit */}
-          <div style={{ background: surface, borderRadius: 14, padding: 14, marginBottom: 12 }}>
-            <div style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Grade Breakdown</div>
-            {grades.map(g => {
-              const profit = calcGradeProfit(g.val, gradingCost, cost);
-              return (
-                <div key={g.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid " + border }}>
-                  <span style={{ fontSize: 12, color: g.color }}>{g.label} <span style={{ color: muted }}>({(g.prob * 100).toFixed(0)}%)</span></span>
-                  <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 600, color: profit >= 0 ? green : red }}>{profit >= 0 ? "+" : ""}${profit}</span>
+          {/* Expandable detailed inspection */}
+          <button onClick={() => setDetailExpanded(!detailExpanded)} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 12, padding: "10px 14px", cursor: "pointer", textAlign: "left", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: secondary }}>{detailExpanded ? "▲" : "▼"} Detailed Inspection</span>
+            {corners && <span style={{ fontSize: 10, color: muted }}>Corners: {corners} · Gem: {gemProb}%</span>}
+          </button>
+
+          {detailExpanded && (
+            <div style={{ animation: "fadeIn 0.2s ease" }}>
+              {/* Condition rating */}
+              <div style={{ background: surface, borderRadius: 14, padding: 14, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Condition Check</div>
+                <RatingBtn label="Corners" value={corners} set={setCorners} />
+                <RatingBtn label="Centering" value={centering} set={setCentering} />
+                <RatingBtn label="Surface" value={surfaceR} set={setSurfaceR} />
+                <RatingBtn label="Edges" value={edges} set={setEdges} />
+                <input value={condNotes} onChange={e => setCondNotes(e.target.value)} placeholder="Condition notes..." style={{ ...inputStyle, fontSize: 12, marginTop: 4 }} />
+              </div>
+
+              {/* Gem probability */}
+              <div style={{ background: surface, borderRadius: 14, padding: 14, marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 1 }}>Gem Probability</span>
+                  <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: accent }}>{gemProb}%</span>
                 </div>
-              );
-            })}
-            <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, marginTop: 4 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: text }}>Expected profit</span>
-              <span style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: expectedProfit >= 0 ? green : red }}>{expectedProfit >= 0 ? "+" : ""}${expectedProfit.toFixed(2)}</span>
+                <input type="range" min={0} max={50} step={5} value={gemProb} onChange={e => setGemProb(+e.target.value)} style={{ width: "100%", accentColor: accent }} />
+              </div>
+
+              {/* Per-grade profit */}
+              <div style={{ background: surface, borderRadius: 14, padding: 14, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Grade Breakdown</div>
+                {grades.map(g => {
+                  const profit = calcGradeProfit(g.val, gradingCost, cost);
+                  return (
+                    <div key={g.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid " + border }}>
+                      <span style={{ fontSize: 12, color: g.color }}>{g.label} <span style={{ color: muted }}>({(g.prob * 100).toFixed(0)}%)</span></span>
+                      <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 600, color: profit >= 0 ? green : red }}>{profit >= 0 ? "+" : ""}${profit}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-
-          {/* Decision buttons */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <button onClick={() => saveDecision("grade")} style={{ flex: 2, ...btnStyle, background: green, color: "#fff", fontSize: 16 }}>GRADE IT ✓</button>
-            <button onClick={() => saveDecision("sell")} style={{ flex: 1, ...btnStyle, background: amber + "20", border: "1px solid " + amber + "40", color: amber }}>SELL RAW</button>
-            <button onClick={() => saveDecision("hold")} style={{ flex: 1, ...btnStyle, background: surface2, border: "1px solid " + border, color: muted }}>NOT SURE</button>
-          </div>
-
-          {/* Navigation */}
-          {inspectIndex > 0 && (
-            <button onClick={() => { const prev = inspectIndex - 1; setInspectIndex(prev); loadDecision(gcCards[prev]); }} style={{ width: "100%", ...btnStyle, background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>← Previous Card</button>
           )}
+        </div>
+
+        {/* Sticky decision buttons */}
+        <div style={{ position: "sticky", bottom: 64, zIndex: 50 }}>
+          <div style={{ background: `linear-gradient(transparent, ${bg})`, height: 24 }} />
+          <div style={{ background: bg, padding: "0 0 8px" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <button onClick={() => { saveDecision("grade"); setDetailExpanded(false); }} style={{ flex: 2, ...btnStyle, background: green, color: "#fff", fontSize: 16 }}>GRADE IT ✓</button>
+              <button onClick={() => { saveDecision("sell"); setDetailExpanded(false); }} style={{ flex: 1, ...btnStyle, background: amber + "20", border: "1px solid " + amber + "40", color: amber }}>SELL RAW</button>
+              <button onClick={() => { saveDecision("hold"); setDetailExpanded(false); }} style={{ flex: 1, ...btnStyle, background: surface2, border: "1px solid " + border, color: muted }}>NOT SURE</button>
+            </div>
+            {inspectIndex > 0 && (
+              <button onClick={() => { const prev = inspectIndex - 1; setInspectIndex(prev); loadDecision(gcCards[prev]); setDetailExpanded(false); }} style={{ width: "100%", background: "none", border: "none", color: muted, fontFamily: font, fontSize: 12, cursor: "pointer", padding: "4px 0" }}>← Previous Card</button>
+            )}
+          </div>
         </div>
       </Shell>
     );

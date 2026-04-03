@@ -94,11 +94,12 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({ player: "", sport: "Baseball" as any, team: "", year: 2024, brand: "Topps", set: "Base", parallel: "Base", card_number: "#1", is_rc: false, is_auto: false, is_numbered: false, numbered_to: null as number | null, condition: "NM" as any, raw_value: 0, cost_basis: 0, storage_box: "BOX A", notes: "", purchase_source: null as string | null, purchase_intent: null as any });
   const [filterSport, setFilterSport] = useState("All");
+  const [sortBy, setSortBy] = useState("value");
   const totalValue = cards.reduce((s, c) => s + (c.raw_value || 0), 0);
   const unsold = cards.filter(c => !c.sold);
   const listed = cards.filter(c => c.status === "listed");
   const grading = cards.filter(c => c.status === "grading");
-  const filteredCards = (statusFilter === "pending" ? cards.filter(c => !c.storage_box || c.storage_box === "PENDING") : statusFilter === "stale" ? listed.filter(c => c.listed_date && (Date.now() - new Date(c.listed_date).getTime()) / 86400000 > 14) : statusFilter ? cards.filter(c => c.status === statusFilter) : unsold).filter(c => filterSport === "All" || c.sport === filterSport).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase()));
+  const filteredCards = (statusFilter === "pending" ? cards.filter(c => !c.storage_box || c.storage_box === "PENDING") : statusFilter === "stale" ? listed.filter(c => c.listed_date && (Date.now() - new Date(c.listed_date).getTime()) / 86400000 > 14) : statusFilter ? cards.filter(c => c.status === statusFilter) : unsold).filter(c => filterSport === "All" || c.sport === filterSport).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase())).sort((a, b) => sortBy === "value" ? b.raw_value - a.raw_value : sortBy === "recent" ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime() : sortBy === "name" ? a.player.localeCompare(b.player) : (a.storage_box || "ZZZ").localeCompare(b.storage_box || "ZZZ") || (a.storage_position || 0) - (b.storage_position || 0));
   const sports = ["All", ...Array.from(new Set(cards.map(c => c.sport)))];
 
   const handleScan = async (file: File) => {
@@ -241,7 +242,15 @@ export default function Home() {
   if (screen === "myCards") return (<>
     <Shell title={"My Cards (" + filteredCards.length + ")"} back={() => { setStatusFilter(""); setScreen("home"); }}>
       <div style={{ paddingTop: 12 }}>
-        <input placeholder="Search player, brand, set..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input placeholder="Search player, brand..." value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "8px 12px", color: secondary, fontFamily: font, fontSize: 12, outline: "none", cursor: "pointer" }}>
+            <option value="value">Value ↓</option>
+            <option value="recent">Recent</option>
+            <option value="name">Name A-Z</option>
+            <option value="box">Box</option>
+          </select>
+        </div>
         <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
           {sports.map(s => (<button key={s} onClick={() => { setFilterSport(s); if (statusFilter === "pending") setStatusFilter(""); }} style={{ padding: "6px 14px", background: filterSport === s ? accent + "20" : surface2, border: "1px solid " + (filterSport === s ? accent + "50" : border), borderRadius: 20, color: filterSport === s ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{s}</button>))}
           <button onClick={() => setStatusFilter(statusFilter === "pending" ? "" : "pending")} style={{ padding: "6px 14px", background: statusFilter === "pending" ? red + "20" : surface2, border: "1px solid " + (statusFilter === "pending" ? red + "50" : border), borderRadius: 20, color: statusFilter === "pending" ? red : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Unassigned</button>

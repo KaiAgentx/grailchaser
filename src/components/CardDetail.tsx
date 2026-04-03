@@ -4,7 +4,7 @@ import { Card } from "@/lib/types";
 import { Box } from "@/hooks/useBoxes";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 import { Shell } from "./Shell";
-import { surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "./styles";
+import { surface, surface2, border, accent, green, red, cyan, purple, muted, secondary, text, font, mono } from "./styles";
 
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "10px 12px", minHeight: 44, color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" as const, width: "100%" };
 const labelStyle = { fontSize: 10, color: muted, textTransform: "uppercase" as const, letterSpacing: 1, display: "block", marginBottom: 3 };
@@ -39,6 +39,7 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
   const [saved, setSaved] = useState(false);
   const [showMoveBox, setShowMoveBox] = useState(false);
   const [moveConfirm, setMoveConfirm] = useState("");
+  const [sellOptExpanded, setSellOptExpanded] = useState(false);
 
   const val = (field: keyof Card) => (edits as any)[field] ?? (card as any)[field];
 
@@ -248,9 +249,16 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
             </div>
           );
         })() : (
-          <div style={{ background: surface, borderRadius: 14, padding: 20, marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Sell Optimizer</div>
-            {PLATFORMS.slice(0, 6).map(p => { const net = calcNet(card.raw_value, p); const ship = calcShipping(card.raw_value); return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>); })}
+          <div style={{ background: surface, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
+            <button onClick={() => setSellOptExpanded(!sellOptExpanded)} style={{ width: "100%", padding: "14px 20px", background: "none", border: "none", cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Sell Optimizer {sellOptExpanded ? "▲" : "▼"}</span>
+              {!sellOptExpanded && (() => { const best = PLATFORMS.slice(0, 6).map(p => ({ name: p.name, net: calcNet(card.raw_value, p) - calcShipping(card.raw_value) })).sort((a, b) => b.net - a.net)[0]; return <span style={{ fontSize: 11, color: secondary }}>Best: {best.name} <span style={{ fontFamily: mono, color: green, fontWeight: 600 }}>${best.net.toFixed(2)}</span></span>; })()}
+            </button>
+            {sellOptExpanded && (
+              <div style={{ padding: "0 20px 14px" }}>
+                {PLATFORMS.slice(0, 6).map(p => { const net = calcNet(card.raw_value, p); const ship = calcShipping(card.raw_value); return (<div key={p.name} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: text }}>{p.name}</span><span style={{ fontFamily: mono, fontSize: 13, color: green, fontWeight: 600 }}>${(net - ship).toFixed(2)}</span></div>); })}
+              </div>
+            )}
           </div>
         )}
 
