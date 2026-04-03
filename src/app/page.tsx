@@ -52,6 +52,25 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState("");
   const [screen, setScreen] = useState<Screen>("home");
   const [selectedCard, setSelectedCard] = useState<any>(null);
+  const [prevScreen, setPrevScreen] = useState<string>("home");
+  const [prevScreenData, setPrevScreenData] = useState<any>(null);
+  const [storageInitialBox, setStorageInitialBox] = useState("");
+
+  const goToCardDetail = (card: any, fromScreen: string, fromData?: any) => {
+    setSelectedCard(card);
+    setPrevScreen(fromScreen);
+    setPrevScreenData(fromData || null);
+    setScreen("cardDetail");
+  };
+  const goBackFromDetail = () => {
+    if (prevScreen === "storage" && prevScreenData?.boxName) {
+      setStorageInitialBox(prevScreenData.boxName);
+    }
+    if (prevScreen === "smartPull" && prevScreenData?.boxName) {
+      setSmartPullBoxName(prevScreenData.boxName);
+    }
+    setScreen(prevScreen as Screen);
+  };
   const [search, setSearch] = useState("");
   const [checkName, setCheckName] = useState("");
   const [checkRaw, setCheckRaw] = useState(0);
@@ -125,7 +144,7 @@ export default function Home() {
       userEmail={user.email || ""}
       onNavigate={(t: any) => {
         if (t.screen === "cardCheck") { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setLookupError(""); setNameEdited(false); }
-        if (t.card) setSelectedCard(t.card);
+        if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "home"); return; }
         if (t.filter) setStatusFilter(t.filter);
         if (t.boxName) setSmartPullBoxName(t.boxName);
         setScreen(t.screen as Screen);
@@ -192,7 +211,7 @@ export default function Home() {
         {loading && <div style={{ textAlign: "center", color: muted, padding: 40 }}>Loading...</div>}
         {!loading && filteredCards.length === 0 && (<div style={{ textAlign: "center", color: muted, padding: 40 }}><div style={{ fontSize: 36, marginBottom: 12 }}>📦</div><div style={{ fontSize: 14 }}>No cards yet</div></div>)}
         {filteredCards.map(card => (
-          <button key={card.id} onClick={() => { setSelectedCard(card); setScreen("cardDetail"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button key={card.id} onClick={() => goToCardDetail(card, "myCards")} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: text }}>{card.player}</div>
               <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{card.year} {card.brand} {card.parallel !== "Base" ? card.parallel : ""} {card.card_number}</div>
@@ -216,13 +235,13 @@ export default function Home() {
 
   if (screen === "scanToCollection") return <ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
 
-  if (screen === "smartPull" && smartPullBoxName) return <SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />;
+  if (screen === "smartPull" && smartPullBoxName) return <SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />;
 
-  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
+  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <CardDetail card={liveCard} boxes={boxes} onBack={() => setScreen("myCards")} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); setScreen("myCards"); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getBoxNextPosition} />;
+    return <CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getBoxNextPosition} />;
   }
 
   if (screen === "cardCheck") return (

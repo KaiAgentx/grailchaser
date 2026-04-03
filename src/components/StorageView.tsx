@@ -21,15 +21,17 @@ interface Props {
   updateBox: (id: string, updates: Partial<Pick<Box, "name" | "num_rows" | "divider_size" | "box_type">>) => Promise<any>;
   deleteBox: (id: string) => Promise<any>;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
-  onCardTap: (card: Card) => void;
+  onCardTap: (card: Card, boxName?: string) => void;
   onNavigate?: (target: { screen: string; boxName?: string }) => void;
+  initialBoxName?: string;
   getNextPosition: (boxName: string) => number;
   getBoxCards: (boxName: string) => Card[];
 }
 
-export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
-  const [screen, setScreen] = useState<Screen>("list");
-  const [selectedBox, setSelectedBox] = useState<Box | null>(null);
+export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
+  const initBox = initialBoxName ? boxes.find(b => b.name === initialBoxName) || null : null;
+  const [screen, setScreen] = useState<Screen>(initBox ? "detail" : "list");
+  const [selectedBox, setSelectedBox] = useState<Box | null>(initBox);
   const [newName, setNewName] = useState("");
   const [newRows, setNewRows] = useState(1);
   const [newDivider, setNewDivider] = useState(50);
@@ -238,7 +240,7 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
                   <div key={section.label}>
                     <div style={{ fontSize: 10, color: cyan, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, padding: "8px 0 4px", borderBottom: "1px solid " + border, marginBottom: 4 }}>{section.label}</div>
                     {section.cards.map(card => (
-                      <button key={card.id} onClick={() => onCardTap(card)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 0", background: "none", border: "none", borderBottom: "1px solid " + border, cursor: "pointer", textAlign: "left" }}>
+                      <button key={card.id} onClick={() => onCardTap(card, selectedBox?.name)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 0", background: "none", border: "none", borderBottom: "1px solid " + border, cursor: "pointer", textAlign: "left" }}>
                         <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: cyan, width: 36, textAlign: "right" }}>{card.storage_position}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 600, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.player}</div>

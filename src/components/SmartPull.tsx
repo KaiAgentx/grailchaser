@@ -241,7 +241,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
                         <div><div style={{ fontSize: 9, color: muted }}>Location</div><div style={{ fontSize: 12, color: text }}>{c.storage_box} #{c.storage_position}</div></div>
                       </div>
 
-                      <button onClick={() => onNavigate({ screen: "cardDetail" } as any)} style={{ width: "100%", padding: "8px", background: surface2, border: "1px solid " + border, borderRadius: 8, color: cyan, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>View Full Detail →</button>
+                      <button onClick={() => onNavigate({ screen: "cardDetail", card: c, boxName } as any)} style={{ width: "100%", padding: "8px", background: surface2, border: "1px solid " + border, borderRadius: 8, color: cyan, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>View Full Detail →</button>
                     </div>
                   </div>
                 )}
