@@ -47,6 +47,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
   // Pull state managed as mutable overrides
   const [destOverrides, setDestOverrides] = useState<Record<string, "sell" | "grade">>({});
   const [borderlineIncludes, setBorderlineIncludes] = useState<Set<string>>(new Set());
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
 
   const settings: PullSettings = { rawThreshold, gradeRatio, minRawForGrading: 5, borderlineRange: 0.2 };
   const result = useMemo(() => analyzePull(boxCards, settings), [boxCards, rawThreshold, gradeRatio]);
@@ -135,6 +136,9 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
     const info = catInfo[detailCat];
     const items = detailCat === "sellRaw" ? result.sellRaw : detailCat === "gradeCandidate" ? result.gradeCandidates : detailCat === "both" ? result.both : detailCat === "borderline" ? result.borderline : detailCat === "noPricing" ? result.noPricing : result.bulk;
 
+    const calcGradeProfit = (gv: number, cost: number) => +(gv - gv * 0.1325 - 4.50 - 25 - cost).toFixed(2);
+    const calcSellNet = (rv: number, cost: number) => { const fees = +(rv * 0.1325 + 0.30).toFixed(2); const ship = rv >= 20 ? 4.50 : 1.05; return { net: +(rv - fees - ship - cost).toFixed(2), fees, ship }; };
+
     return (
       <Shell title={`${info.icon} ${info.label}`} back={() => setScreen("analysis")}>
         <div style={{ paddingTop: 16 }}>
@@ -142,37 +146,105 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
             const c = pc.card;
             const dest = getDestination(pc);
             const included = isIncluded(pc);
+            const expanded = expandedCard === c.id;
+            const gv = c.graded_values || { "10": 0, "9": 0, "8": 0, "7": 0 };
+            const cost = c.cost_basis || 0;
+            const sell = calcSellNet(c.raw_value || 0, cost);
+
             return (
-              <div key={c.id} style={{ background: surface, borderRadius: 12, padding: 14, marginBottom: 8, opacity: included || pc.category !== "borderline" ? 1 : 0.5 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                  <span style={{ fontFamily: mono, fontSize: 24, fontWeight: 800, color: accent }}>{c.storage_position}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: text }}>{c.player}</div>
+              <div key={c.id} style={{ background: surface, borderRadius: 12, marginBottom: 8, opacity: included || pc.category !== "borderline" ? 1 : 0.5, overflow: "hidden" }}>
+                {/* Compact header — tap to expand */}
+                <button onClick={() => setExpandedCard(expanded ? null : c.id)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: 14, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ fontFamily: mono, fontSize: 28, fontWeight: 800, color: accent, minWidth: 40, textAlign: "center" }}>{c.storage_position}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.player}</div>
                     <div style={{ fontSize: 11, color: muted }}>{c.year} {c.brand} {c.set}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: green }}>${c.raw_value}</div>
-                    <div style={{ fontSize: 10, color: muted }}>PSA 10: ${c.graded_values?.["10"] || 0}</div>
+                    <div style={{ fontSize: 10, color: muted }}>{expanded ? "▲" : "▼"}</div>
                   </div>
+                </button>
+
+                {/* Category-specific summary (always visible) */}
+                <div style={{ padding: "0 14px 10px", borderTop: "1px solid " + border }}>
+                  {pc.category === "sellRaw" && (
+                    <div style={{ paddingTop: 8 }}>
+                      <div style={{ fontSize: 13, color: green, fontWeight: 600 }}>Net if sold on eBay: ${sell.net}</div>
+                      <div style={{ fontSize: 10, color: muted, marginTop: 2 }}>price ${c.raw_value} - fees ${sell.fees} - shipping ${sell.ship} - cost ${cost}</div>
+                    </div>
+                  )}
+
+                  {pc.category === "gradeCandidate" && (
+                    <div style={{ paddingTop: 8 }}>
+                      <div style={{ fontSize: 12, color: muted, marginBottom: 4 }}>Raw: ${c.raw_value} → PSA 10: ${gv["10"]} ({pc.ratio}x) 💎</div>
+                      {[{ g: "PSA 10", v: gv["10"], c: green }, { g: "PSA 9", v: gv["9"], c: cyan }, { g: "PSA 8", v: gv["8"], c: text }].map(gr => {
+                        const p = calcGradeProfit(gr.v, cost);
+                        return <div key={gr.g} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 12 }}><span style={{ color: gr.c }}>If {gr.g}:</span><span style={{ fontFamily: mono, fontWeight: 600, color: p >= 0 ? green : red }}>{p >= 0 ? "+" : ""}${p}</span></div>;
+                      })}
+                      <div style={{ fontSize: 10, color: muted, marginTop: 4 }}>Grade cost: $25 (PSA)</div>
+                    </div>
+                  )}
+
+                  {pc.category === "both" && (
+                    <div style={{ paddingTop: 8 }}>
+                      <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Raw: ${c.raw_value} → PSA 10: ${gv["10"]} ({pc.ratio}x)</div>
+                      <div style={{ background: green + "08", borderRadius: 8, padding: "8px 10px", marginBottom: 6 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: green }}>OPTION A — Sell raw now:</div>
+                        <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: green, marginTop: 2 }}>Net profit: ${sell.net} <span style={{ fontSize: 10, fontWeight: 400, color: muted }}>(guaranteed)</span></div>
+                      </div>
+                      <div style={{ background: purple + "08", borderRadius: 8, padding: "8px 10px", marginBottom: 6 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: purple }}>OPTION B — Grade first:</div>
+                        {[{ g: "PSA 10", v: gv["10"], c: green }, { g: "PSA 9", v: gv["9"], c: cyan }, { g: "PSA 8", v: gv["8"], c: text }].map(gr => {
+                          const p = calcGradeProfit(gr.v, cost);
+                          return <div key={gr.g} style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", fontSize: 11 }}><span style={{ color: gr.c }}>If {gr.g}:</span><span style={{ fontFamily: mono, fontWeight: 600, color: p >= 0 ? green : red }}>{p >= 0 ? "+" : ""}${p}</span></div>;
+                        })}
+                        <div style={{ fontSize: 10, color: muted, marginTop: 2 }}>Grade cost: $25</div>
+                      </div>
+                      <div style={{ fontSize: 11, color: muted, marginBottom: 4 }}>Currently going to: {dest === "grade" ? "💎 GRADE CHECK" : "💰 SELL BOX"}</div>
+                      <button onClick={() => setDestOverrides(prev => ({ ...prev, [c.id]: dest === "grade" ? "sell" : "grade" }))} style={{ padding: "8px 14px", background: (dest === "grade" ? green : purple) + "15", border: "1px solid " + (dest === "grade" ? green : purple) + "30", borderRadius: 8, color: dest === "grade" ? green : purple, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Switch to {dest === "grade" ? "💰 SELL BOX" : "💎 GRADE CHECK"}</button>
+                    </div>
+                  )}
+
+                  {pc.category === "borderline" && (
+                    <div style={{ paddingTop: 8 }}>
+                      <div style={{ fontSize: 13, color: text }}>Net if sold: ${sell.net}</div>
+                      <div style={{ fontSize: 11, color: amber, marginTop: 2 }}>${(rawThreshold - (c.raw_value || 0)).toFixed(0)} below your sell threshold</div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                        <button onClick={() => setBorderlineIncludes(prev => { const n = new Set(prev); n.add(c.id); return n; })} style={{ flex: 1, padding: "8px", background: included ? green + "20" : surface2, border: "1px solid " + (included ? green + "50" : border), borderRadius: 8, color: included ? green : muted, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{included ? "✓ Included" : "Include in Pull"}</button>
+                        <button onClick={() => setBorderlineIncludes(prev => { const n = new Set(prev); n.delete(c.id); return n; })} style={{ flex: 1, padding: "8px", background: !included ? surface2 : surface2, border: "1px solid " + border, borderRadius: 8, color: muted, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Leave in Bulk</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {pc.category === "noPricing" && <div style={{ fontSize: 11, color: red, paddingTop: 8 }}>No pricing data — look up prices before pulling</div>}
+                  {pc.category === "bulk" && <div style={{ fontSize: 11, color: muted, paddingTop: 8 }}>Below thresholds — stays in box</div>}
                 </div>
 
-                {/* Ratio */}
-                <div style={{ fontSize: 11, color: muted, marginBottom: 4 }}>Ratio: {pc.ratio}x · Sell profit: ${pc.sellProfit} · Grade profit: ${pc.gradeExpectedProfit}</div>
+                {/* Expanded detail */}
+                {expanded && (
+                  <div style={{ padding: "0 14px 14px", borderTop: "1px solid " + border }}>
+                    <div style={{ paddingTop: 10 }}>
+                      <div style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Graded Values</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 10 }}>
+                        {[{ l: "PSA 10", v: gv["10"], c: green }, { l: "PSA 9", v: gv["9"], c: cyan }, { l: "PSA 8", v: gv["8"], c: text }, { l: "PSA 7", v: gv["7"], c: muted }].map(g => (
+                          <div key={g.l} style={{ textAlign: "center", background: surface2, borderRadius: 6, padding: "6px 4px" }}>
+                            <div style={{ fontSize: 9, color: muted }}>{g.l}</div>
+                            <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: g.c }}>${g.v}</div>
+                          </div>
+                        ))}
+                      </div>
 
-                {/* Both: toggle destination */}
-                {pc.category === "both" && (
-                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                    <button onClick={() => setDestOverrides(prev => ({ ...prev, [c.id]: "sell" }))} style={{ flex: 1, padding: "6px", background: dest === "sell" ? green + "20" : surface2, border: "1px solid " + (dest === "sell" ? green + "50" : border), borderRadius: 8, color: dest === "sell" ? green : muted, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>💰 Sell (${pc.sellProfit})</button>
-                    <button onClick={() => setDestOverrides(prev => ({ ...prev, [c.id]: "grade" }))} style={{ flex: 1, padding: "6px", background: dest === "grade" ? purple + "20" : surface2, border: "1px solid " + (dest === "grade" ? purple + "50" : border), borderRadius: 8, color: dest === "grade" ? purple : muted, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>💎 Grade (${pc.gradeExpectedProfit})</button>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+                        <div><div style={{ fontSize: 9, color: muted }}>Cost</div><div style={{ fontFamily: mono, fontSize: 12, color: text }}>${cost}</div></div>
+                        <div><div style={{ fontSize: 9, color: muted }}>Tier</div><div style={{ fontSize: 12, color: (c.raw_value || 0) >= 100 ? accent : (c.raw_value || 0) >= 25 ? green : text }}>{(c.raw_value || 0) >= 100 ? "Gem" : (c.raw_value || 0) >= 25 ? "Star" : (c.raw_value || 0) >= 5 ? "Core" : "Bulk"}</div></div>
+                        <div><div style={{ fontSize: 9, color: muted }}>Location</div><div style={{ fontSize: 12, color: text }}>{c.storage_box} #{c.storage_position}</div></div>
+                      </div>
+
+                      <button onClick={() => onNavigate({ screen: "cardDetail" } as any)} style={{ width: "100%", padding: "8px", background: surface2, border: "1px solid " + border, borderRadius: 8, color: cyan, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>View Full Detail →</button>
+                    </div>
                   </div>
                 )}
-
-                {/* Borderline: include toggle */}
-                {pc.category === "borderline" && (
-                  <button onClick={() => setBorderlineIncludes(prev => { const n = new Set(prev); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })} style={{ marginTop: 6, padding: "6px 12px", background: included ? green + "20" : surface2, border: "1px solid " + (included ? green + "50" : border), borderRadius: 8, color: included ? green : muted, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{included ? "✓ Included" : "Include in pull"}</button>
-                )}
-
-                {pc.category === "noPricing" && <div style={{ fontSize: 11, color: red, marginTop: 4 }}>Needs pricing lookup</div>}
               </div>
             );
           })}
