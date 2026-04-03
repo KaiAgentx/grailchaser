@@ -3,9 +3,7 @@ import { Card } from "@/lib/types";
 import { Box, BOX_TYPE_LABELS, BoxType } from "@/hooks/useBoxes";
 import { Lot } from "@/hooks/useLots";
 import { Shell } from "./Shell";
-import { surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "./styles";
-
-const amber = "#f59e0b";
+import { surface, surface2, border, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "./styles";
 
 type NavTarget = { screen: string; filter?: string; card?: Card; box?: Box };
 
@@ -66,12 +64,12 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
   ];
 
   const quickActions = [
-    { icon: "📸", label: "Scan to Box", screen: "scanToCollection" },
-    { icon: "🔍", label: "Check Card", screen: "cardCheck" },
-    { icon: "➕", label: "Add", screen: "addCard" },
-    { icon: "📦", label: "Import", screen: "csvImport" },
-    { icon: "📊", label: "Boxes", screen: "storage" },
-    { icon: "📋", label: "Cards", screen: "myCards" },
+    { icon: "S", label: "Scan", screen: "scanToCollection", color: green },
+    { icon: "?", label: "Check", screen: "cardCheck", color: cyan },
+    { icon: "+", label: "Add", screen: "addCard", color: accent },
+    { icon: "^", label: "Import", screen: "csvImport", color: secondary },
+    { icon: "#", label: "Boxes", screen: "storage", color: purple },
+    { icon: "=", label: "Cards", screen: "myCards", color: secondary },
   ];
 
   return (
@@ -79,18 +77,18 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
       <div style={{ paddingTop: 20 }}>
 
         {/* SECTION 1 — Collection Value */}
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Collection Value</div>
-          <div style={{ fontSize: 42, fontFamily: mono, fontWeight: 700, color: accent }}>${totalValue.toFixed(2)}</div>
-          <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{unsold.length} card{unsold.length !== 1 ? "s" : ""}</div>
+        <div style={{ textAlign: "center", padding: "32px 0 24px" }}>
+          <div style={{ fontSize: 10, color: muted, textTransform: "uppercase", letterSpacing: 4, marginBottom: 8, fontWeight: 600 }}>Collection Value</div>
+          <div style={{ fontSize: 42, fontFamily: mono, fontWeight: 700, color: accent, textShadow: "0 0 40px rgba(212,168,67,0.2)" }}>${totalValue.toFixed(2)}</div>
+          <div style={{ marginTop: 8 }}><span style={{ fontSize: 13, color: secondary, background: "rgba(255,255,255,0.05)", borderRadius: 9999, padding: "4px 12px" }}>{unsold.length} card{unsold.length !== 1 ? "s" : ""}</span></div>
         </div>
 
         {/* SECTION 2 — Stats Row */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
           {stats.map(s => (
-            <button key={s.label} onClick={() => onNavigate({ screen: "myCards", filter: s.filter })} style={{ background: surface, borderRadius: 12, padding: "10px 4px", textAlign: "center", border: "none", cursor: "pointer" }}>
-              <div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: s.count > 0 ? s.color : muted }}>{s.count}</div>
-              <div style={{ fontSize: 9, color: muted, marginTop: 2 }}>{s.label}</div>
+            <button key={s.label} onClick={() => onNavigate({ screen: "myCards", filter: s.filter })} style={{ background: surface, borderRadius: 12, padding: "12px 8px", textAlign: "center", border: "none", borderTop: "2px solid " + (s.count > 0 ? s.color : "transparent"), cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+              <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: s.count > 0 ? s.color : muted }}>{s.count}</div>
+              <div style={{ fontSize: 10, color: muted, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</div>
             </button>
           ))}
         </div>
@@ -99,9 +97,9 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
         {hasActions ? (
           <div style={{ marginBottom: 20 }}>
             {needShipping.length > 0 && (
-              <button onClick={() => onNavigate({ screen: "pickList" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + red, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: red }}>{needShipping.length} card{needShipping.length !== 1 ? "s" : ""} need shipping</div>
-                <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>{needShipping.slice(0, 3).map(c => `${c.player} $${c.sold_price}`).join(" · ")}</div>
+              <button onClick={() => onNavigate({ screen: "pickList" })} style={{ width: "100%", background: "linear-gradient(90deg, rgba(248,113,113,0.06), transparent)", borderLeft: "3px solid " + red, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div><div style={{ fontSize: 14, fontWeight: 600, color: red }}>{needShipping.length} card{needShipping.length !== 1 ? "s" : ""} need shipping</div><div style={{ fontSize: 12, color: secondary, marginTop: 4 }}>{needShipping.slice(0, 3).map(c => `${c.player} $${c.sold_price}`).join(" · ")}</div></div>
+                <span style={{ fontSize: 20, color: muted }}>›</span>
               </button>
             )}
             {unassigned.length > 0 && (
@@ -134,9 +132,9 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
         {/* SECTION 4 — Quick Actions */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
           {quickActions.map(a => (
-            <button key={a.label} onClick={() => onNavigate({ screen: a.screen })} style={{ background: surface, border: "1px solid " + border, borderRadius: 14, padding: "16px 8px", textAlign: "center", cursor: "pointer", minHeight: 48 }}>
-              <div style={{ fontSize: 22, marginBottom: 4 }}>{a.icon}</div>
-              <div style={{ fontSize: 11, color: muted, fontWeight: 600 }}>{a.label}</div>
+            <button key={a.label} onClick={() => onNavigate({ screen: a.screen })} style={{ background: surface, border: "1px solid " + border, borderTop: "1px solid " + (a as any).color + "40", borderRadius: 12, padding: "16px 8px", textAlign: "center", cursor: "pointer", minHeight: 48, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+              <div style={{ fontSize: 20, fontFamily: mono, fontWeight: 700, color: (a as any).color, marginBottom: 6, opacity: 0.7 }}>{a.icon}</div>
+              <div style={{ fontSize: 12, color: secondary, fontWeight: 600 }}>{a.label}</div>
             </button>
           ))}
         </div>
@@ -144,7 +142,7 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
         {/* SECTION 5 — Recently Added */}
         {recent.length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Recently Added</div>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700, marginTop: 28 }}>Recently Added</div>
             {recent.map(c => (
               <button key={c.id} onClick={() => onNavigate({ screen: "cardDetail", card: c })} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 0", background: "none", border: "none", borderBottom: "1px solid " + border, cursor: "pointer", textAlign: "left" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -160,7 +158,7 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
         {/* SECTION 6 — Top Value Cards */}
         {topValue.length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Top Value</div>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700, marginTop: 28 }}>Top Value</div>
             {topValue.map((c, i) => (
               <button key={c.id} onClick={() => onNavigate({ screen: "cardDetail", card: c })} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 0", background: "none", border: "none", borderBottom: "1px solid " + border, cursor: "pointer", textAlign: "left" }}>
                 <span style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: accent, width: 24, textAlign: "center" }}>{i + 1}</span>
@@ -177,7 +175,7 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
         {/* SECTION 7 — Boxes Overview */}
         {(boxes.length > 0 || unassigned.length > 0) && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Boxes</div>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700, marginTop: 28 }}>Boxes</div>
             {unassigned.length > 0 && (
               <button onClick={() => onNavigate({ screen: "myCards", filter: "pending" })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: amber + "08", border: "1px solid " + amber + "20", borderRadius: 10, marginBottom: 6, cursor: "pointer", textAlign: "left" }}>
                 <span style={{ fontSize: 12, color: amber, fontWeight: 600 }}>Unassigned</span>
@@ -208,7 +206,7 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
         {/* Lots */}
         {lots.length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Lots</div>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700, marginTop: 28 }}>Lots</div>
             <button onClick={() => onNavigate({ screen: "lotBuilder" })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: surface, border: "1px solid " + border, borderRadius: 10, cursor: "pointer", textAlign: "left" }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: text }}>Lot Builder</div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -222,8 +220,8 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
 
         {/* SECTION 8 — Footer */}
         <div style={{ textAlign: "center", paddingTop: 12, borderTop: "1px solid " + border }}>
-          <div style={{ fontSize: 11, color: muted, marginBottom: 8 }}>{userEmail}</div>
-          <button onClick={onSignOut} style={{ padding: "10px 24px", background: "none", border: "1px solid " + border, borderRadius: 10, color: muted, fontFamily: font, fontSize: 12, cursor: "pointer" }}>Sign Out</button>
+          <div style={{ fontSize: 12, color: muted, marginBottom: 8 }}>{userEmail}</div>
+          <button onClick={onSignOut} style={{ padding: "10px 24px", background: "none", border: "none", color: muted, fontFamily: font, fontSize: 12, cursor: "pointer", textTransform: "uppercase", letterSpacing: 1 }}>Sign Out</button>
         </div>
       </div>
     </Shell>

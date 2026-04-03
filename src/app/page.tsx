@@ -18,7 +18,7 @@ import { useLots } from "@/hooks/useLots";
 import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { useBoxes } from "@/hooks/useBoxes";
-import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
+import { bg, surface, surface2, border, borderMed, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "@/components/styles";
 
 type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder";
 
@@ -132,9 +132,9 @@ export default function Home() {
   if (authLoading) return (
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ background: "linear-gradient(160deg, #b8860b, #f0c040 40%, #daa520 60%, #b8860b)", borderRadius: 14, padding: "20px 28px 16px", marginBottom: 12, boxShadow: "0 4px 24px rgba(184,134,11,0.25), inset 0 1px 0 rgba(255,255,255,0.15)", position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)" }} />
-          <div style={{ position: "relative", fontSize: 28, fontWeight: 900, color: "#0a0a0f", letterSpacing: 2, textTransform: "uppercase", textShadow: "0 1px 0 rgba(255,255,255,0.3)" }}>GRAILCHASER</div>
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>
+          <span style={{ color: accent, opacity: 0.7 }}>♦ </span>
+          <span style={{ background: "linear-gradient(135deg, " + accent + ", #e8c66a)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>GRAILCHASER</span>
         </div>
         <div style={{ fontSize: 13, color: muted }}>Loading...</div>
       </div>
@@ -218,18 +218,17 @@ export default function Home() {
         {loading && <div style={{ textAlign: "center", color: muted, padding: 40 }}>Loading...</div>}
         {!loading && filteredCards.length === 0 && (<div style={{ textAlign: "center", color: muted, padding: 40 }}><div style={{ fontSize: 36, marginBottom: 12 }}>📦</div><div style={{ fontSize: 14 }}>No cards yet</div></div>)}
         {filteredCards.map(card => (
-          <button key={card.id} onClick={() => goToCardDetail(card, "myCards")} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 12, padding: "14px 16px", marginBottom: 8, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <button key={card.id} onClick={() => goToCardDetail(card, "myCards")} style={{ width: "100%", background: surface, borderLeft: "3px solid " + (sportColors[card.sport] || muted), borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 12, padding: "14px 16px", marginBottom: 6, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: text }}>{card.player}</div>
-              <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{card.year} {card.brand} {card.parallel !== "Base" ? card.parallel : ""} {card.card_number}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: text }}>{card.player}</div>
+              <div style={{ fontSize: 12, color: secondary, marginTop: 2 }}>{card.year} {card.brand} {card.parallel !== "Base" ? card.parallel : ""} {card.card_number}</div>
               <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-                {card.is_rc && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: green + "15", border: "1px solid " + green + "30", color: green, fontWeight: 600 }}>RC</span>}
-                {card.is_auto && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: purple + "15", border: "1px solid " + purple + "30", color: purple, fontWeight: 600 }}>AUTO</span>}
-                <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: surface2, color: muted }}>{card.sport}</span>
-                {card.storage_box && card.storage_box !== "PENDING" ? <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: surface2, color: muted }}>{card.storage_box} #{card.storage_position}</span> : <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: red + "15", border: "1px solid " + red + "30", color: red, fontWeight: 600 }}>No Box</span>}
+                {card.is_rc && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 9999, background: "rgba(52,211,153,0.1)", color: green, fontWeight: 600 }}>RC</span>}
+                {card.is_auto && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 9999, background: "rgba(167,139,250,0.1)", color: purple, fontWeight: 600 }}>AUTO</span>}
+                {card.storage_box && card.storage_box !== "PENDING" ? <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 9999, background: "rgba(255,255,255,0.06)", color: muted }}>{card.storage_box} #{card.storage_position}</span> : <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 9999, background: "rgba(248,113,113,0.1)", color: red, fontWeight: 600 }}>No Box</span>}
               </div>
             </div>
-            <div style={{ textAlign: "right" }}><div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: card.raw_value >= 25 ? green : card.raw_value >= 5 ? text : muted }}>${card.raw_value}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{card.status}</div></div>
+            <div style={{ textAlign: "right" }}><div style={{ fontFamily: mono, fontSize: 15, fontWeight: 600, color: green }}>${card.raw_value}</div><div style={{ fontSize: 10, color: muted, marginTop: 2 }}>{card.status}</div></div>
           </button>
         ))}
       </div>
