@@ -1,0 +1,81 @@
+"use client";
+import { useState } from "react";
+import { bg, border, accent, muted, secondary, text, font, mono, red } from "./styles";
+
+type Tab = "home" | "myCards" | "scanChooser" | "storage" | "more";
+
+const tabScreenMap: Record<string, Tab> = {
+  home: "home", myCards: "myCards", cardDetail: "myCards", cardCheck: "scanChooser", cardResult: "scanChooser",
+  scanToCollection: "scanChooser", scanChooser: "scanChooser", storage: "storage", smartPull: "storage",
+  gradeCheck: "storage", gradingReturn: "storage", pickList: "home", lotBuilder: "more", csvImport: "more",
+};
+
+interface Props {
+  currentScreen: string;
+  prevScreen: string;
+  onNavigate: (screen: string) => void;
+}
+
+export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // Determine active tab — use prevScreen context for detail screens
+  let activeTab: Tab = tabScreenMap[currentScreen] || "home";
+  if (currentScreen === "cardDetail") {
+    activeTab = tabScreenMap[prevScreen] || "myCards";
+  }
+
+  const tabs: { id: Tab; label: string; icon: string }[] = [
+    { id: "home", label: "Home", icon: "⌂" },
+    { id: "myCards", label: "Cards", icon: "☰" },
+    { id: "scanChooser", label: "Scan", icon: "◎" },
+    { id: "storage", label: "Boxes", icon: "▦" },
+    { id: "more", label: "More", icon: "•••" },
+  ];
+
+  const handleTab = (tab: Tab) => {
+    if (tab === "more") {
+      setMoreOpen(!moreOpen);
+      return;
+    }
+    setMoreOpen(false);
+    onNavigate(tab);
+  };
+
+  return (
+    <>
+      {/* More menu overlay */}
+      {moreOpen && (
+        <>
+          <div onClick={() => setMoreOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 98 }} />
+          <div style={{ position: "fixed", bottom: 56, left: 0, right: 0, zIndex: 99, display: "flex", justifyContent: "center" }}>
+            <div style={{ maxWidth: 500, width: "100%", background: "#111318", borderTop: "1px solid " + border, borderRadius: "16px 16px 0 0", padding: "8px 0", animation: "scaleIn 0.15s ease" }}>
+              {[
+                { label: "Lot Builder", screen: "lotBuilder" },
+                { label: "Import CSV", screen: "csvImport" },
+              ].map(item => (
+                <button key={item.screen} onClick={() => { setMoreOpen(false); onNavigate(item.screen); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderBottom: "1px solid " + border, color: text, fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>{item.label}</button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Tab bar */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, display: "flex", justifyContent: "center" }}>
+        <div style={{ maxWidth: 500, width: "100%", height: 56, background: "rgba(8,9,13,0.95)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderTop: "1px solid " + border, display: "flex", alignItems: "center" }}>
+          {tabs.map(tab => {
+            const active = activeTab === tab.id;
+            const isScan = tab.id === "scanChooser";
+            return (
+              <button key={tab.id} onClick={() => handleTab(tab.id)} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "6px 0", transition: "transform 0.15s" }}>
+                <span style={{ fontSize: isScan ? 22 : 18, color: isScan ? accent : active ? accent : muted, lineHeight: 1 }}>{tab.icon}</span>
+                <span style={{ fontSize: active ? 10 : 9, color: active ? accent : muted, fontFamily: font, fontWeight: active ? 600 : 400 }}>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}

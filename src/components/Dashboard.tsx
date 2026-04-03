@@ -53,8 +53,8 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
   const hasActions = needShipping.length > 0 || unassigned.length > 0 || staleListings.length > 0 || grading.length > 0 || toInspect.length > 0;
 
   // Recent & top
-  const recent = [...cards].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
-  const topValue = [...unsold].sort((a, b) => b.raw_value - a.raw_value).slice(0, 5);
+  const recent = [...cards].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 3);
+  const topValue = [...unsold].sort((a, b) => b.raw_value - a.raw_value).slice(0, 3);
 
   const stats = [
     { label: "Listed", count: listed.length, color: cyan, filter: "listed" },
@@ -63,14 +63,7 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
     { label: "Shipped", count: shipped.length, color: green, filter: "shipped" },
   ];
 
-  const quickActions = [
-    { icon: "S", label: "Scan", screen: "scanToCollection", color: green },
-    { icon: "?", label: "Check", screen: "cardCheck", color: cyan },
-    { icon: "+", label: "Add", screen: "addCard", color: accent },
-    { icon: "^", label: "Import", screen: "csvImport", color: secondary },
-    { icon: "#", label: "Boxes", screen: "storage", color: purple },
-    { icon: "=", label: "Cards", screen: "myCards", color: secondary },
-  ];
+  // Quick actions removed — bottom tab bar handles navigation
 
   return (
     <Shell title="GrailChaser" brandTitle>
@@ -83,15 +76,15 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
           <div style={{ marginTop: 8 }}><span style={{ fontSize: 13, color: secondary, background: "rgba(255,255,255,0.05)", borderRadius: 9999, padding: "4px 12px" }}>{unsold.length} card{unsold.length !== 1 ? "s" : ""}</span></div>
         </div>
 
-        {/* SECTION 2 — Stats Row */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
-          {stats.map(s => (
+        {/* SECTION 2 — Stats Row (hide all-zeros) */}
+        {stats.some(s => s.count > 0) && <div style={{ display: "grid", gridTemplateColumns: `repeat(${stats.filter(s => s.count > 0).length || 4}, 1fr)`, gap: 8, marginBottom: 24 }}>
+          {stats.filter(s => s.count > 0).map(s => (
             <button key={s.label} onClick={() => onNavigate({ screen: "myCards", filter: s.filter })} style={{ background: surface, borderRadius: 12, padding: "12px 8px", textAlign: "center", border: "none", borderTop: "2px solid " + (s.count > 0 ? s.color : "transparent"), cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
               <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: s.count > 0 ? s.color : muted }}>{s.count}</div>
               <div style={{ fontSize: 10, color: muted, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>{s.label}</div>
             </button>
           ))}
-        </div>
+        </div>}
 
         {/* SECTION 3 — Action Items */}
         {hasActions ? (
@@ -129,15 +122,7 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
           <div style={{ background: green + "10", border: "1px solid " + green + "30", borderRadius: 12, padding: "14px", marginBottom: 20, textAlign: "center", fontSize: 14, color: green, fontWeight: 600 }}>All caught up! ✓</div>
         ) : null}
 
-        {/* SECTION 4 — Quick Actions */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 24 }}>
-          {quickActions.map(a => (
-            <button key={a.label} onClick={() => onNavigate({ screen: a.screen })} style={{ background: surface, border: "1px solid " + border, borderTop: "1px solid " + (a as any).color + "40", borderRadius: 12, padding: "16px 8px", textAlign: "center", cursor: "pointer", minHeight: 48, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
-              <div style={{ fontSize: 20, fontFamily: mono, fontWeight: 700, color: (a as any).color, marginBottom: 6, opacity: 0.7 }}>{a.icon}</div>
-              <div style={{ fontSize: 12, color: secondary, fontWeight: 600 }}>{a.label}</div>
-            </button>
-          ))}
-        </div>
+        {/* Quick actions removed — bottom tab bar handles navigation */}
 
         {/* SECTION 5 — Recently Added */}
         {recent.length > 0 && (
@@ -152,6 +137,7 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
                 <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: green }}>${c.raw_value}</span>
               </button>
             ))}
+            {cards.length > 3 && <button onClick={() => onNavigate({ screen: "myCards" })} style={{ background: "none", border: "none", color: secondary, fontFamily: font, fontSize: 12, cursor: "pointer", padding: "8px 0", width: "100%", textAlign: "center" }}>See all →</button>}
           </div>
         )}
 
@@ -169,53 +155,42 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
                 <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: green }}>${c.raw_value}</span>
               </button>
             ))}
+            {unsold.length > 3 && <button onClick={() => onNavigate({ screen: "myCards" })} style={{ background: "none", border: "none", color: secondary, fontFamily: font, fontSize: 12, cursor: "pointer", padding: "8px 0", width: "100%", textAlign: "center" }}>See all →</button>}
           </div>
         )}
 
-        {/* SECTION 7 — Boxes Overview */}
+        {/* SECTION 7 — Boxes (compact) */}
         {(boxes.length > 0 || unassigned.length > 0) && (
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700, marginTop: 28 }}>Boxes</div>
-            {unassigned.length > 0 && (
-              <button onClick={() => onNavigate({ screen: "myCards", filter: "pending" })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: amber + "08", border: "1px solid " + amber + "20", borderRadius: 10, marginBottom: 6, cursor: "pointer", textAlign: "left" }}>
-                <span style={{ fontSize: 12, color: amber, fontWeight: 600 }}>Unassigned</span>
-                <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: amber }}>{unassigned.length}</span>
-              </button>
-            )}
-            {boxes.map(box => {
-              const count = box.card_count || 0;
-              const boxValue = cards.filter(c => c.storage_box === box.name && !c.sold).reduce((s, c) => s + (c.raw_value || 0), 0);
-              const typeLabel = BOX_TYPE_LABELS[box.box_type || ("singles" as BoxType)]?.label || box.box_type || "Singles";
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 13, color: secondary }}>{boxes.length} box{boxes.length !== 1 ? "es" : ""} · {cards.filter(c => !c.sold).length} total cards</span>
+              {unassigned.length > 0 && <span style={{ fontSize: 11, color: amber, fontWeight: 600 }}>{unassigned.length} unassigned</span>}
+            </div>
+            {boxes.filter(b => ["grade_check", "sell"].includes(b.box_type || "") && (b.card_count || 0) > 0).slice(0, 3).map(box => {
+              const typeLabel = BOX_TYPE_LABELS[box.box_type || ("singles" as BoxType)]?.label || box.box_type;
               const typeColor = typeColors[box.box_type || "singles"] || text;
               return (
-                <button key={box.id} onClick={() => onNavigate({ screen: "storage", box })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: surface, border: "1px solid " + border, borderRadius: 10, marginBottom: 6, cursor: "pointer", textAlign: "left" }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: text }}>{box.name}</div>
-                    <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 6, background: typeColor + "15", color: typeColor, fontWeight: 600 }}>{typeLabel}</span>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: count > 0 ? green : muted }}>{count}</div>
-                    <div style={{ fontSize: 9, color: muted }}>${boxValue.toFixed(0)}</div>
-                  </div>
+                <button key={box.id} onClick={() => onNavigate({ screen: "storage", box })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: surface, border: "1px solid " + border, borderRadius: 10, marginBottom: 4, cursor: "pointer", textAlign: "left" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 13, fontWeight: 600, color: text }}>{box.name}</span><span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 9999, background: typeColor + "12", color: typeColor, fontWeight: 600 }}>{typeLabel}</span></div>
+                  <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: green }}>{box.card_count}</span>
                 </button>
               );
             })}
+            <button onClick={() => onNavigate({ screen: "storage" })} style={{ background: "none", border: "none", color: secondary, fontFamily: font, fontSize: 12, cursor: "pointer", padding: "8px 0", width: "100%", textAlign: "center" }}>View all boxes →</button>
           </div>
         )}
 
-        {/* Lots */}
+        {/* Lots (compact row) */}
         {lots.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700, marginTop: 28 }}>Lots</div>
-            <button onClick={() => onNavigate({ screen: "lotBuilder" })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: surface, border: "1px solid " + border, borderRadius: 10, cursor: "pointer", textAlign: "left" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: text }}>Lot Builder</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {lots.filter(l => l.status === "draft").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: surface2, color: muted }}>{lots.filter(l => l.status === "draft").length} draft</span>}
-                {lots.filter(l => l.status === "listed").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: cyan + "15", color: cyan }}>{lots.filter(l => l.status === "listed").length} listed</span>}
-                {lots.filter(l => l.status === "sold").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: amber + "15", color: amber }}>{lots.filter(l => l.status === "sold").length} to ship</span>}
-              </div>
-            </button>
-          </div>
+          <button onClick={() => onNavigate({ screen: "lotBuilder" })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: surface, border: "1px solid " + border, borderRadius: 10, cursor: "pointer", textAlign: "left", marginBottom: 16 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: text }}>Lots</span>
+            <div style={{ display: "flex", gap: 4 }}>
+              {lots.filter(l => l.status === "draft").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 9999, background: "rgba(255,255,255,0.06)", color: muted }}>{lots.filter(l => l.status === "draft").length} draft</span>}
+              {lots.filter(l => l.status === "listed").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 9999, background: "rgba(34,211,238,0.1)", color: cyan }}>{lots.filter(l => l.status === "listed").length} listed</span>}
+              {lots.filter(l => l.status === "sold").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 9999, background: "rgba(251,191,36,0.1)", color: amber }}>{lots.filter(l => l.status === "sold").length} to ship</span>}
+            </div>
+          </button>
         )}
 
         {/* SECTION 8 — Footer */}

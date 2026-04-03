@@ -16,7 +16,7 @@ export function Shell({ children, title, back, brandTitle }: { children: React.R
           <span style={{ flex: 1, fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em" }}>{title}</span>
         )}
       </div>
-      <div style={{ padding: "0 20px 100px", animation: "fadeIn 0.3s ease" }}>{children}</div>
+      <div style={{ padding: "0 20px 80px", animation: "fadeIn 0.3s ease" }}>{children}</div>
     </div>
   );
 }

@@ -17,10 +17,11 @@ import { LotBuilder } from "@/components/LotBuilder";
 import { useLots } from "@/hooks/useLots";
 import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
+import { BottomNav } from "@/components/BottomNav";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, borderMed, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -143,8 +144,37 @@ export default function Home() {
 
   if (!user) return <LoginScreen signIn={signIn} signUp={signUp} />;
 
+  // Bottom nav handler
+  const handleBottomNav = (s: string) => {
+    if (s === "scanChooser") setScreen("scanChooser");
+    else if (s === "home") setScreen("home");
+    else if (s === "myCards") { setStatusFilter(""); setScreen("myCards"); }
+    else if (s === "storage") { setStorageInitialBox(""); setScreen("storage"); }
+    else setScreen(s as Screen);
+  };
+
+  const bottomNav = <BottomNav currentScreen={screen} prevScreen={prevScreen} onNavigate={handleBottomNav} />;
+
+  if (screen === "scanChooser") return (
+    <>
+      <Shell title="What are you doing?" back={() => setScreen("home")}>
+        <div style={{ paddingTop: 24 }}>
+          <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setLookupError(""); setNameEdited(false); setScreen("cardCheck"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "24px 20px", cursor: "pointer", textAlign: "left", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: text, marginBottom: 4 }}>Check a Card</div>
+            <div style={{ fontSize: 13, color: secondary }}>Evaluate a card before buying</div>
+          </button>
+          <button onClick={() => setScreen("scanToCollection")} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "24px 20px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: text, marginBottom: 4 }}>Scan to Collection</div>
+            <div style={{ fontSize: 13, color: secondary }}>Log cards you already own</div>
+          </button>
+        </div>
+      </Shell>
+      {bottomNav}
+    </>
+  );
+
   if (screen === "home") return (
-    <Dashboard
+    <><Dashboard
       cards={cards}
       boxes={boxes}
       lots={lots}
@@ -157,10 +187,10 @@ export default function Home() {
         setScreen(t.screen as Screen);
       }}
       onSignOut={() => signOut()}
-    />
+    />{bottomNav}</>
   );
 
-  if (screen === "addCard") return (
+  if (screen === "addCard") return (<>
     <Shell title="Add Card" back={() => setScreen("home")}>
       <div style={{ paddingTop: 16 }}>
         {[{ label: "Player", key: "player", type: "text", placeholder: "Justin Herbert" }, { label: "Year", key: "year", type: "number", placeholder: "2024" }, { label: "Brand", key: "brand", type: "text", placeholder: "Panini" }, { label: "Set", key: "set", type: "text", placeholder: "Prizm Football" }, { label: "Card Number", key: "card_number", type: "text", placeholder: "#315" }, { label: "Value ($)", key: "raw_value", type: "number", placeholder: "0" }, { label: "Cost Paid ($)", key: "cost_basis", type: "number", placeholder: "0" }].map(f => (
@@ -205,9 +235,10 @@ export default function Home() {
         <button onClick={async () => { if (!formData.player) return; await addCard(formData); setFormData({ player: "", sport: "Baseball", team: "", year: 2024, brand: "Topps", set: "Base", parallel: "Base", card_number: "#1", is_rc: false, is_auto: false, is_numbered: false, numbered_to: null, condition: "NM", raw_value: 0, cost_basis: 0, storage_box: "BOX A", notes: "", purchase_source: null, purchase_intent: null }); setScreen("myCards"); }} style={{ width: "100%", padding: "16px", background: accent, border: "none", borderRadius: 12, color: "#000", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer", marginTop: 8 }}>Add Card</button>
       </div>
     </Shell>
+    {bottomNav}</>
   );
 
-  if (screen === "myCards") return (
+  if (screen === "myCards") return (<>
     <Shell title={"My Cards (" + filteredCards.length + ")"} back={() => { setStatusFilter(""); setScreen("home"); }}>
       <div style={{ paddingTop: 12 }}>
         <input placeholder="Search player, brand, set..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" }} />
@@ -233,30 +264,31 @@ export default function Home() {
         ))}
       </div>
     </Shell>
+    {bottomNav}</>
   );
 
-  if (screen === "csvImport") return <CsvImport onBack={() => setScreen("home")} addCards={addCards} />;
+  if (screen === "csvImport") return <><CsvImport onBack={() => setScreen("home")} addCards={addCards} />{bottomNav}</>;
 
-  if (screen === "pickList") return <PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />;
+  if (screen === "pickList") return <><PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />{bottomNav}</>;
 
-  if (screen === "scanToCollection") return <ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
+  if (screen === "scanToCollection") return <><ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
-  if (screen === "lotBuilder") return <LotBuilder cards={cards} boxes={boxes} lots={lots} boxName={lotBuilderBoxName || undefined} createLot={createLot} updateLot={updateLot} deleteLot={deleteLot} markLotListed={markLotListed} markLotSold={markLotSold} markLotShipped={markLotShipped} fetchLots={fetchLots} fetchCards={fetchCards} onNavigate={(t: any) => setScreen(t.screen as Screen)} />;
+  if (screen === "lotBuilder") return <><LotBuilder cards={cards} boxes={boxes} lots={lots} boxName={lotBuilderBoxName || undefined} createLot={createLot} updateLot={updateLot} deleteLot={deleteLot} markLotListed={markLotListed} markLotSold={markLotSold} markLotShipped={markLotShipped} fetchLots={fetchLots} fetchCards={fetchCards} onNavigate={(t: any) => setScreen(t.screen as Screen)} />{bottomNav}</>;
 
-  if (screen === "gradeCheck") return <GradeCheck cards={cards} boxes={boxes} updateCard={updateCard} submitForGrading={submitForGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
+  if (screen === "gradeCheck") return <><GradeCheck cards={cards} boxes={boxes} updateCard={updateCard} submitForGrading={submitForGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
-  if (screen === "gradingReturn") return <GradingReturn cards={cards} boxes={boxes} updateCard={updateCard} returnFromGrading={returnFromGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => setScreen(t.screen as Screen)} />;
+  if (screen === "gradingReturn") return <><GradingReturn cards={cards} boxes={boxes} updateCard={updateCard} returnFromGrading={returnFromGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => setScreen(t.screen as Screen)} />{bottomNav}</>;
 
-  if (screen === "smartPull" && smartPullBoxName) return <SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.boxName) setLotBuilderBoxName(t.boxName); if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />;
+  if (screen === "smartPull" && smartPullBoxName) return <><SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.boxName) setLotBuilderBoxName(t.boxName); if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
-  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
+  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getBoxNextPosition} />;
+    return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
   }
 
-  if (screen === "cardCheck") return (
+  if (screen === "cardCheck") return (<>
     <Shell title="Check a Card" back={() => setScreen("home")}>
       <div style={{ paddingTop: 20 }}>
         <input type="file" accept="image/*" capture="environment" ref={fileInputRef} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); }} />
@@ -298,6 +330,7 @@ export default function Home() {
         <button onClick={() => { if (checkRaw > 0) setScreen("cardResult"); }} style={{ width: "100%", padding: "16px", minHeight: 52, background: green, border: "none", borderRadius: 12, color: "#ffffff", fontFamily: font, fontSize: 17, fontWeight: 700, cursor: "pointer", opacity: checkRaw > 0 ? 1 : 0.4 }}>Evaluate Card</button>
       </div>
     </Shell>
+    {bottomNav}</>
   );
 
   if (screen === "cardResult") {
@@ -322,7 +355,7 @@ export default function Home() {
     const belowMarket = askingPrice > 0 && rawVal > 0 ? +(((rawVal - askingPrice) / rawVal) * 100).toFixed(0) : 0;
     const verdict = flipROI > 20 ? "buy" : flipROI > 0 ? "maybe" : "pass";
     const gradeBreakdown = [{ grade: "PSA 10", prob: "15%", val: psa10, color: green }, { grade: "PSA 9", prob: "35%", val: psa9, color: cyan }, { grade: "PSA 8", prob: "30%", val: psa8, color: text }, { grade: "PSA 7", prob: "20%", val: psa7, color: muted }];
-    return (
+    return (<>
       <Shell title={checkName || "Card Check"} back={() => setScreen("cardCheck")}>
         <div style={{ paddingTop: 16 }}>
           {checkName && <div style={{ textAlign: "center", fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{checkName}</div>}
@@ -407,6 +440,7 @@ export default function Home() {
           )}
         </div>
       </Shell>
+      {bottomNav}</>
     );
   }
 
