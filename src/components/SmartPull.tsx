@@ -408,6 +408,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {moveResults.movedToGrade > 0 && <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ ...btnStyle, background: purple + "15", border: "1px solid " + purple + "30", color: purple }}>💎 Go to Grade Check</button>}
             {moveResults.movedToSell > 0 && <button onClick={() => onNavigate({ screen: "myCards" })} style={{ ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green }}>💰 View Sell Box</button>}
+            <button onClick={() => onNavigate({ screen: "lotBuilder", boxName } as any)} style={{ ...btnStyle, background: amber + "15", border: "1px solid " + amber + "30", color: amber }}>📋 Lot Builder</button>
             <button onClick={() => onNavigate({ screen: "home" })} style={{ ...btnStyle, background: surface2, border: "1px solid " + border, color: muted }}>🏠 Home</button>
           </div>
         </div>

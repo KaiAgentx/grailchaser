@@ -68,6 +68,7 @@ export interface Card {
   facebook_listed: boolean;
   tcgplayer_listed: boolean;
   tcgplayer_url: string | null;
+  lot_id: string | null;
   notes: string;
   date_added: string;
   created_at: string;

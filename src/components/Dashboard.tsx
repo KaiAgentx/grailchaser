@@ -1,6 +1,7 @@
 "use client";
 import { Card } from "@/lib/types";
 import { Box, BOX_TYPE_LABELS, BoxType } from "@/hooks/useBoxes";
+import { Lot } from "@/hooks/useLots";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "./styles";
 
@@ -11,6 +12,7 @@ type NavTarget = { screen: string; filter?: string; card?: Card; box?: Box };
 interface Props {
   cards: Card[];
   boxes: Box[];
+  lots: Lot[];
   userEmail: string;
   onNavigate: (target: NavTarget) => void;
   onSignOut: () => void;
@@ -34,7 +36,7 @@ function daysSince(dateStr: string | null): number {
 
 const typeColors: Record<string, string> = { scanned: cyan, singles: text, sell: green, slabs_sell: green, slabs_pc: purple, pc: purple, grade_check: amber, sorted: text };
 
-export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Props) {
+export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut }: Props) {
   const unsold = cards.filter(c => !c.sold);
   const totalValue = unsold.reduce((s, c) => s + (c.raw_value || 0), 0);
 
@@ -200,6 +202,21 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Lots */}
+        {lots.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Lots</div>
+            <button onClick={() => onNavigate({ screen: "lotBuilder" })} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: surface, border: "1px solid " + border, borderRadius: 10, cursor: "pointer", textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: text }}>Lot Builder</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {lots.filter(l => l.status === "draft").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: surface2, color: muted }}>{lots.filter(l => l.status === "draft").length} draft</span>}
+                {lots.filter(l => l.status === "listed").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: cyan + "15", color: cyan }}>{lots.filter(l => l.status === "listed").length} listed</span>}
+                {lots.filter(l => l.status === "sold").length > 0 && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: amber + "15", color: amber }}>{lots.filter(l => l.status === "sold").length} to ship</span>}
+              </div>
+            </button>
           </div>
         )}
 

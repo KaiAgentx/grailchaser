@@ -13,12 +13,14 @@ import { ScanToCollection } from "@/components/ScanToCollection";
 import { SmartPull } from "@/components/SmartPull";
 import { GradeCheck } from "@/components/GradeCheck";
 import { GradingReturn } from "@/components/GradingReturn";
+import { LotBuilder } from "@/components/LotBuilder";
+import { useLots } from "@/hooks/useLots";
 import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -49,6 +51,8 @@ export default function Home() {
   const { cards, loading, addCard, addCards, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition, renumberBox, fetchCards } = useCards(user?.id);
   const [smartPullBoxName, setSmartPullBoxName] = useState("");
   const { boxes, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
+  const { lots, createLot, updateLot, deleteLot, markLotListed, markLotSold, markLotShipped, fetchLots } = useLots(user?.id);
+  const [lotBuilderBoxName, setLotBuilderBoxName] = useState("");
   const [buyConfirm, setBuyConfirm] = useState("");
   const [showBuyFlow, setShowBuyFlow] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
@@ -143,12 +147,13 @@ export default function Home() {
     <Dashboard
       cards={cards}
       boxes={boxes}
+      lots={lots}
       userEmail={user.email || ""}
       onNavigate={(t: any) => {
         if (t.screen === "cardCheck") { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setLookupError(""); setNameEdited(false); }
         if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "home"); return; }
         if (t.filter) setStatusFilter(t.filter);
-        if (t.boxName) setSmartPullBoxName(t.boxName);
+        if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); }
         setScreen(t.screen as Screen);
       }}
       onSignOut={() => signOut()}
@@ -237,13 +242,15 @@ export default function Home() {
 
   if (screen === "scanToCollection") return <ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
 
+  if (screen === "lotBuilder") return <LotBuilder cards={cards} boxes={boxes} lots={lots} boxName={lotBuilderBoxName || undefined} createLot={createLot} updateLot={updateLot} deleteLot={deleteLot} markLotListed={markLotListed} markLotSold={markLotSold} markLotShipped={markLotShipped} fetchLots={fetchLots} fetchCards={fetchCards} onNavigate={(t: any) => setScreen(t.screen as Screen)} />;
+
   if (screen === "gradeCheck") return <GradeCheck cards={cards} boxes={boxes} updateCard={updateCard} submitForGrading={submitForGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
 
   if (screen === "gradingReturn") return <GradingReturn cards={cards} boxes={boxes} updateCard={updateCard} returnFromGrading={returnFromGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => setScreen(t.screen as Screen)} />;
 
-  if (screen === "smartPull" && smartPullBoxName) return <SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />;
+  if (screen === "smartPull" && smartPullBoxName) return <SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.boxName) setLotBuilderBoxName(t.boxName); if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />;
 
-  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
+  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
