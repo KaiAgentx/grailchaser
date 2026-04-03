@@ -120,7 +120,7 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
     <Shell title="Grade Check" back={() => onNavigate({ screen: "home" })}>
       <div style={{ paddingTop: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-          <div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: purple }}>{gcCards.length} cards</div>
+          <div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: purple }}>{gcCards.length} card{gcCards.length !== 1 ? "s" : ""}</div>
           <div style={{ display: "flex", gap: 8, fontSize: 11 }}>
             <span style={{ color: muted }}>{uninspected.length} new</span>
             <span style={{ color: green }}>{gradeCards.length} grade</span>
@@ -261,7 +261,7 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
           {/* Sell section */}
           {sellCardData.length > 0 && (
             <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 12 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: amber, marginBottom: 8 }}>{sellCardData.length} cards → SELL BOX</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: amber, marginBottom: 8 }}>{sellCardData.length} card{sellCardData.length !== 1 ? "s" : ""} → SELL BOX</div>
               {sellCardData.slice(0, 5).map(c => <div key={c.id} style={{ fontSize: 11, color: muted, padding: "2px 0" }}>{c.player} — ${c.raw_value}</div>)}
               <button onClick={async () => {
                 setSubmitting(true);
@@ -284,7 +284,7 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
             <button onClick={() => setScreen("submission")} style={{ width: "100%", ...btnStyle, background: purple, color: "#fff", fontSize: 16, marginBottom: 12 }}>Submit {gradeCards.length} for Grading →</button>
           )}
 
-          {holdCards.length > 0 && <div style={{ fontSize: 12, color: muted, textAlign: "center" }}>{holdCards.length} cards stay in Grade Check</div>}
+          {holdCards.length > 0 && <div style={{ fontSize: 12, color: muted, textAlign: "center" }}>{holdCards.length} card{holdCards.length !== 1 ? "s" : ""} stay{holdCards.length === 1 ? "s" : ""} in Grade Check</div>}
         </div>
       </Shell>
     );
@@ -371,9 +371,9 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
     <Shell title="Submitted!" back={() => onNavigate({ screen: "home" })}>
       <div style={{ paddingTop: 40, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>💎</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: green }}>{submitResult.graded} cards submitted</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: green }}>{submitResult.graded} card{submitResult.graded !== 1 ? "s" : ""} submitted</div>
         <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>to {selectedCompany}</div>
-        {submitResult.sold > 0 && <div style={{ fontSize: 13, color: amber, marginTop: 8 }}>{submitResult.sold} cards moved to SELL BOX</div>}
+        {submitResult.sold > 0 && <div style={{ fontSize: 13, color: amber, marginTop: 8 }}>{submitResult.sold} card{submitResult.sold !== 1 ? "s" : ""} moved to SELL BOX</div>}
         {submitResult.errors > 0 && <div style={{ fontSize: 13, color: red, marginTop: 4 }}>{submitResult.errors} errors</div>}
         <button onClick={() => onNavigate({ screen: "home" })} style={{ marginTop: 24, ...btnStyle, background: green, color: "#fff", padding: "14px 32px" }}>Done</button>
       </div>

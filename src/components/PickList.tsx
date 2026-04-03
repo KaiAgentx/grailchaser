@@ -201,7 +201,7 @@ export function PickList({ cards, boxes, markShipped, updateCard, onBack }: Prop
         <Shell title="All Shipped!" back={onBack}>
           <div style={{ paddingTop: 40, textAlign: "center" }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>✓</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: green }}>{picked.length} cards shipped</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: green }}>{picked.length} card{picked.length !== 1 ? "s" : ""} shipped</div>
             <div style={{ fontSize: 13, color: muted, marginTop: 6 }}>${picked.reduce((s, c) => s + (c.sold_price || 0), 0).toFixed(2)} total revenue</div>
             <button onClick={onBack} style={{ marginTop: 24, ...btnStyle, background: green, color: "#fff", padding: "14px 32px" }}>Done</button>
           </div>

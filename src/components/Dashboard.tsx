@@ -80,7 +80,7 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Collection Value</div>
           <div style={{ fontSize: 42, fontFamily: mono, fontWeight: 700, color: accent }}>${totalValue.toFixed(2)}</div>
-          <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{unsold.length} cards</div>
+          <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{unsold.length} card{unsold.length !== 1 ? "s" : ""}</div>
         </div>
 
         {/* SECTION 2 — Stats Row */}
@@ -98,13 +98,13 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
           <div style={{ marginBottom: 20 }}>
             {needShipping.length > 0 && (
               <button onClick={() => onNavigate({ screen: "pickList" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + red, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: red }}>{needShipping.length} card{needShipping.length > 1 ? "s" : ""} need shipping</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: red }}>{needShipping.length} card{needShipping.length !== 1 ? "s" : ""} need shipping</div>
                 <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>{needShipping.slice(0, 3).map(c => `${c.player} $${c.sold_price}`).join(" · ")}</div>
               </button>
             )}
             {unassigned.length > 0 && (
               <button onClick={() => onNavigate({ screen: "myCards", filter: "pending" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + amber, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: amber }}>{unassigned.length} card{unassigned.length > 1 ? "s" : ""} not in a box</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: amber }}>{unassigned.length} card{unassigned.length !== 1 ? "s" : ""} not in a box</div>
               </button>
             )}
             {staleListings.length > 0 && (
@@ -114,13 +114,13 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
             )}
             {toInspect.length > 0 && (
               <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + purple, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: purple }}>{toInspect.length} card{toInspect.length > 1 ? "s" : ""} to inspect</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: purple }}>{toInspect.length} card{toInspect.length !== 1 ? "s" : ""} to inspect</div>
                 <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Grade Check — tap to start inspecting</div>
               </button>
             )}
             {grading.length > 0 && (
               <button onClick={() => onNavigate({ screen: "gradingReturn" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + purple, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: purple }}>{grading.length} card{grading.length > 1 ? "s" : ""} at grading</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: purple }}>{grading.length} card{grading.length !== 1 ? "s" : ""} at grading</div>
                 <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>{grading.slice(0, 3).map(c => `${c.player} (${c.grading_company || "?"} · ${daysSince(c.grading_submit_date)}d)`).join(" · ")}</div>
               </button>
             )}

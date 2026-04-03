@@ -58,7 +58,7 @@ export function GradingReturn({ cards, boxes, updateCard, returnFromGrading, add
           return (
             <button key={co} onClick={() => { setSelectedCompany(co!); setGradeIndex(0); setScreen("grading"); }} style={{ width: "100%", ...btnStyle, background: surface, border: "1px solid " + border, marginBottom: 8, textAlign: "left", display: "flex", justifyContent: "space-between" }}>
               <span style={{ color: text }}>{co}</span>
-              <span style={{ fontFamily: mono, color: purple }}>{count} cards</span>
+              <span style={{ fontFamily: mono, color: purple }}>{count} card{count !== 1 ? "s" : ""}</span>
             </button>
           );
         })}
@@ -184,7 +184,7 @@ export function GradingReturn({ cards, boxes, updateCard, returnFromGrading, add
       <Shell title="Return Complete" back={() => onNavigate({ screen: "home" })}>
         <div style={{ paddingTop: 24, textAlign: "center" }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>💎</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: green }}>{results.moved} cards returned</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: green }}>{results.moved} card{results.moved !== 1 ? "s" : ""} returned</div>
           <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>from {selectedCompany}</div>
 
           <div style={{ background: surface, borderRadius: 14, padding: 16, marginTop: 16, marginBottom: 16, textAlign: "left" }}>

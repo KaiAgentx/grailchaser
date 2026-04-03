@@ -9,6 +9,7 @@ import { surface, surface2, border, accent, green, red, cyan, purple, muted, tex
 const btnStyle = { padding: "12px 16px", minHeight: 48, border: "none", borderRadius: 12, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer" };
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "10px 12px", minHeight: 44, color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" as const };
 const amber = "#f59e0b";
+const pl = (n: number) => n === 1 ? "card" : "cards";
 
 type Screen = "analysis" | "detail" | "confirm" | "pulling" | "complete";
 type Category = "sellRaw" | "gradeCandidate" | "both" | "borderline" | "noPricing" | "bulk";
@@ -69,7 +70,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
   // Complete state
   const [completing, setCompleting] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const [moveResults, setMoveResults] = useState({ moved: 0, errors: 0, sellBoxName: "", gradeBoxName: "", renumbered: 0 });
+  const [moveResults, setMoveResults] = useState({ moved: 0, errors: 0, sellBoxName: "", gradeBoxName: "", renumbered: 0, movedToSell: 0, movedToGrade: 0 });
 
   const getSection = (pos: number) => { const s = Math.floor((pos - 1) / dividerSize) * dividerSize + 1; return `${s}–${s + dividerSize - 1}`; };
 
@@ -87,7 +88,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
     return (
       <Shell title={`Smart Pull — ${boxName}`} back={() => onNavigate({ screen: "home" })}>
         <div style={{ paddingTop: 16 }}>
-          <div style={{ fontSize: 12, color: muted, marginBottom: 12 }}>{boxCards.length} cards in box</div>
+          <div style={{ fontSize: 12, color: muted, marginBottom: 12 }}>{boxCards.length} {pl(boxCards.length)} in box</div>
 
           {/* Threshold controls */}
           <div style={{ background: surface, borderRadius: 12, padding: 14, marginBottom: 16 }}>
@@ -114,7 +115,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
               <button key={key} onClick={() => { setDetailCat(key); setScreen("detail"); }} style={{ width: "100%", background: surface, borderLeft: "3px solid " + info.color, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "14px", marginBottom: 8, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: info.color }}>{info.icon} {info.label}</div>
-                  <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{items.length} cards · ${totalValue.toFixed(0)}</div>
+                  <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{items.length} {pl(items.length)} · ${totalValue.toFixed(0)}</div>
                 </div>
                 <span style={{ fontSize: 12, color: muted }}>View →</span>
               </button>
@@ -124,7 +125,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
           {pullCards.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "20px 0" }}>Nothing to pull at these thresholds</div>}
 
           {pullCards.length > 0 && (
-            <button onClick={() => setScreen("confirm")} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", marginTop: 12, fontSize: 16 }}>Start Pull ({pullCards.length} cards)</button>
+            <button onClick={() => setScreen("confirm")} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", marginTop: 12, fontSize: 16 }}>Start Pull ({pullCards.length} {pl(pullCards.length)})</button>
           )}
         </div>
       </Shell>
@@ -261,7 +262,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
     return (
       <Shell title="Confirm Pull" back={() => setScreen("analysis")}>
         <div style={{ paddingTop: 20, textAlign: "center" }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: text, marginBottom: 16 }}>Pull {pullCards.length} cards from {boxName}?</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: text, marginBottom: 16 }}>Pull {pullCards.length} {pl(pullCards.length)} from {boxName}?</div>
           <div style={{ background: surface, borderRadius: 12, padding: 16, marginBottom: 16, textAlign: "left" }}>
             {pullSellCount > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ fontSize: 13, color: green }}>💰 To SELL BOX</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: green }}>{pullSellCount}</span></div>}
             {pullGradeCount > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}><span style={{ fontSize: 13, color: purple }}>💎 To GRADE CHECK</span><span style={{ fontFamily: mono, fontSize: 14, fontWeight: 700, color: purple }}>{pullGradeCount}</span></div>}
@@ -341,18 +342,23 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
 
     if (!hasSellBox && sorted.some(pc => gotIds.has(pc.card.id) && getDestination(pc) === "sell")) {
       const { error } = await addBox(sellBoxName, 1, 50, "sell");
-      if (error) { setMoveResults({ moved: 0, errors: 1, sellBoxName, gradeBoxName, renumbered: 0 }); setCompleted(true); setCompleting(false); return; }
+      if (error) { setMoveResults({ moved: 0, errors: 1, sellBoxName, gradeBoxName, renumbered: 0, movedToSell: 0, movedToGrade: 0 }); setCompleted(true); setCompleting(false); return; }
     }
     if (!hasGradeBox && sorted.some(pc => gotIds.has(pc.card.id) && getDestination(pc) === "grade")) {
       const { error } = await addBox(gradeBoxName, 1, 50, "grade_check");
-      if (error) { setMoveResults({ moved: 0, errors: 1, sellBoxName, gradeBoxName, renumbered: 0 }); setCompleted(true); setCompleting(false); return; }
+      if (error) { setMoveResults({ moved: 0, errors: 1, sellBoxName, gradeBoxName, renumbered: 0, movedToSell: 0, movedToGrade: 0 }); setCompleted(true); setCompleting(false); return; }
     }
 
-    // Move each GOT IT card
+    // Move each GOT IT card — track positions manually for sequential assignment
+    let sellPos = getNextPosition(sellBoxName);
+    let gradePos = getNextPosition(gradeBoxName);
+    let movedToSell = 0, movedToGrade = 0;
+
     for (const pc of sorted) {
       if (!gotIds.has(pc.card.id)) continue;
-      const dest = getDestination(pc) === "grade" ? gradeBoxName : sellBoxName;
-      const pos = getNextPosition(dest);
+      const destType = getDestination(pc);
+      const dest = destType === "grade" ? gradeBoxName : sellBoxName;
+      const pos = destType === "grade" ? gradePos++ : sellPos++;
       const note = `Pulled from ${boxName} #${pc.card.storage_position} on ${today}`;
       const { error } = await updateCard(pc.card.id, {
         storage_box: dest,
@@ -361,7 +367,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
         notes: pc.card.notes ? pc.card.notes + " · " + note : note,
       });
       if (error) errors++;
-      else moved++;
+      else { moved++; if (destType === "sell") movedToSell++; else movedToGrade++; }
     }
 
     // Renumber source box if scanned type
@@ -371,7 +377,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
     }
 
     await fetchCards();
-    setMoveResults({ moved, errors, sellBoxName, gradeBoxName, renumbered });
+    setMoveResults({ moved, errors, sellBoxName, gradeBoxName, renumbered, movedToSell, movedToGrade });
     setCompleted(true);
     setCompleting(false);
     setScreen("complete");
@@ -391,17 +397,17 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
           <div style={{ background: surface, borderRadius: 12, padding: 16, marginBottom: 16, textAlign: "left" }}>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ color: muted }}>Found</span><span style={{ fontFamily: mono, fontWeight: 700, color: green }}>{gotCount}</span></div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ color: muted }}>Skipped</span><span style={{ fontFamily: mono, fontWeight: 700, color: skipCount > 0 ? amber : muted }}>{skipCount}</span></div>
-            {pullSellCount > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ color: green }}>💰 Moved to {moveResults.sellBoxName}</span><span style={{ fontFamily: mono, fontWeight: 700 }}>{pullCards.filter(pc => gotIds.has(pc.card.id) && getDestination(pc) === "sell").length}</span></div>}
-            {pullGradeCount > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ color: purple }}>💎 Moved to {moveResults.gradeBoxName}</span><span style={{ fontFamily: mono, fontWeight: 700 }}>{pullCards.filter(pc => gotIds.has(pc.card.id) && getDestination(pc) === "grade").length}</span></div>}
-            {moveResults.renumbered > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}><span style={{ color: cyan }}>{boxName} renumbered</span><span style={{ fontFamily: mono, fontWeight: 700 }}>{boxCards.length - gotCount} cards → 1-{boxCards.length - gotCount}</span></div>}
-            {moveResults.errors > 0 && <div style={{ fontSize: 12, color: red, marginTop: 8 }}>{moveResults.errors} cards failed to move</div>}
+            {moveResults.movedToSell > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ color: green }}>💰 Moved to {moveResults.sellBoxName}</span><span style={{ fontFamily: mono, fontWeight: 700 }}>{moveResults.movedToSell}</span></div>}
+            {moveResults.movedToGrade > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid " + border }}><span style={{ color: purple }}>💎 Moved to {moveResults.gradeBoxName}</span><span style={{ fontFamily: mono, fontWeight: 700 }}>{moveResults.movedToGrade}</span></div>}
+            {moveResults.renumbered > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}><span style={{ color: cyan }}>{boxName} renumbered</span><span style={{ fontFamily: mono, fontWeight: 700 }}>{moveResults.renumbered} updated</span></div>}
+            {moveResults.errors > 0 && <div style={{ fontSize: 12, color: red, marginTop: 8 }}>{moveResults.errors} card{moveResults.errors !== 1 ? "s" : ""} failed to move</div>}
           </div>
 
-          {skipCount > 0 && <div style={{ fontSize: 12, color: muted, marginBottom: 16 }}>{skipCount} skipped cards remain in {boxName}{moveResults.renumbered > 0 ? " at new positions" : ""}</div>}
+          {skipCount > 0 && <div style={{ fontSize: 12, color: muted, marginBottom: 16 }}>{skipCount} skipped card{skipCount !== 1 ? "s" : ""} remain{skipCount === 1 ? "s" : ""} in {boxName}{moveResults.renumbered > 0 ? " at new positions" : ""}</div>}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pullGradeCount > 0 && <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ ...btnStyle, background: purple + "15", border: "1px solid " + purple + "30", color: purple }}>💎 Go to Grade Check</button>}
-            {pullSellCount > 0 && <button onClick={() => onNavigate({ screen: "myCards" })} style={{ ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green }}>💰 View Sell Box</button>}
+            {moveResults.movedToGrade > 0 && <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ ...btnStyle, background: purple + "15", border: "1px solid " + purple + "30", color: purple }}>💎 Go to Grade Check</button>}
+            {moveResults.movedToSell > 0 && <button onClick={() => onNavigate({ screen: "myCards" })} style={{ ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green }}>💰 View Sell Box</button>}
             <button onClick={() => onNavigate({ screen: "home" })} style={{ ...btnStyle, background: surface2, border: "1px solid " + border, color: muted }}>🏠 Home</button>
           </div>
         </div>
