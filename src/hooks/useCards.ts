@@ -210,11 +210,28 @@ export function useCards(userId?: string) {
     return updateCard(cardId, { [field]: publicUrl });
   };
 
+  const renumberBox = async (boxName: string): Promise<number> => {
+    const boxCards = cards
+      .filter(c => c.storage_box === boxName)
+      .sort((a, b) => (a.storage_position || 0) - (b.storage_position || 0));
+    let count = 0;
+    for (let i = 0; i < boxCards.length; i++) {
+      const newPos = i + 1;
+      if (boxCards[i].storage_position !== newPos) {
+        await supabase.from("cards").update({ storage_position: newPos }).eq("id", boxCards[i].id);
+        count++;
+      }
+    }
+    if (count > 0) await fetchCards();
+    return count;
+  };
+
   return {
     cards, loading, fetchCards,
     addCard, addCards, updateCard, deleteCard, deleteCards,
     markListed, markSold, markShipped, submitForGrading, returnFromGrading,
     toggleWatchlist, toggleGradeCandidate,
     batchUpdate, getNextPosition, updateCardLocation, isDuplicate, uploadCardImage,
+    renumberBox,
   };
 }

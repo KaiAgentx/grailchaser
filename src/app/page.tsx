@@ -10,12 +10,13 @@ import { StorageView } from "@/components/StorageView";
 import { CsvImport } from "@/components/CsvImport";
 import { PickList } from "@/components/PickList";
 import { ScanToCollection } from "@/components/ScanToCollection";
+import { SmartPull } from "@/components/SmartPull";
 import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,7 +44,8 @@ function compressImage(file: File, maxWidth = 800): Promise<string> {
 
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
-  const { cards, loading, addCard, addCards, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition } = useCards(user?.id);
+  const { cards, loading, addCard, addCards, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition, renumberBox, fetchCards } = useCards(user?.id);
+  const [smartPullBoxName, setSmartPullBoxName] = useState("");
   const { boxes, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
   const [buyConfirm, setBuyConfirm] = useState("");
   const [showBuyFlow, setShowBuyFlow] = useState(false);
@@ -121,10 +123,11 @@ export default function Home() {
       cards={cards}
       boxes={boxes}
       userEmail={user.email || ""}
-      onNavigate={(t) => {
+      onNavigate={(t: any) => {
         if (t.screen === "cardCheck") { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setLookupError(""); setNameEdited(false); }
         if (t.card) setSelectedCard(t.card);
         if (t.filter) setStatusFilter(t.filter);
+        if (t.boxName) setSmartPullBoxName(t.boxName);
         setScreen(t.screen as Screen);
       }}
       onSignOut={() => signOut()}
@@ -211,9 +214,11 @@ export default function Home() {
 
   if (screen === "pickList") return <PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />;
 
-  if (screen === "scanToCollection") return <ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t) => setScreen(t.screen as Screen)} />;
+  if (screen === "scanToCollection") return <ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
 
-  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
+  if (screen === "smartPull" && smartPullBoxName) return <SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />;
+
+  if (screen === "storage") return <StorageView cards={cards} boxes={boxes} onBack={() => setScreen("home")} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card) => { setSelectedCard(card); setScreen("cardDetail"); }} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />;
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;

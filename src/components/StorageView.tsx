@@ -22,11 +22,12 @@ interface Props {
   deleteBox: (id: string) => Promise<any>;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
   onCardTap: (card: Card) => void;
+  onNavigate?: (target: { screen: string; boxName?: string }) => void;
   getNextPosition: (boxName: string) => number;
   getBoxCards: (boxName: string) => Card[];
 }
 
-export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, getNextPosition, getBoxCards }: Props) {
+export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
   const [screen, setScreen] = useState<Screen>("list");
   const [selectedBox, setSelectedBox] = useState<Box | null>(null);
   const [newName, setNewName] = useState("");
@@ -217,7 +218,10 @@ export function StorageView({ cards, boxes, onBack, addBox, updateBox, deleteBox
               <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: green }}>{boxCards.length} cards</div>
               <div style={{ fontSize: 12, color: muted }}>${totalValue.toFixed(2)} total value</div>
             </div>
-            <button onClick={() => { setEditName(selectedBox.name); setEditRows(selectedBox.num_rows); setEditDivider(selectedBox.divider_size); setScreen("edit"); }} style={{ ...btnStyle, padding: "8px 16px", background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>Edit</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              {selectedBox.box_type === "scanned" && onNavigate && <button onClick={() => onNavigate({ screen: "smartPull", boxName: selectedBox.name })} style={{ ...btnStyle, padding: "8px 12px", background: "#a855f715", border: "1px solid #a855f730", color: "#a855f7", fontSize: 11 }}>Smart Pull</button>}
+              <button onClick={() => { setEditName(selectedBox.name); setEditRows(selectedBox.num_rows); setEditDivider(selectedBox.divider_size); setScreen("edit"); }} style={{ ...btnStyle, padding: "8px 16px", background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>Edit</button>
+            </div>
           </div>
 
           {boxCards.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>No cards in this box yet</div>}

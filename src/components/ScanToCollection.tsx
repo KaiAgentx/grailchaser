@@ -336,6 +336,7 @@ export function ScanToCollection({ boxes, addCard, addBox, getNextPosition, onNa
             {bulk > 0 && <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 8, background: surface2, color: muted, fontWeight: 600 }}>{bulk} bulk</span>}
           </div>
 
+          <button onClick={() => onNavigate({ screen: "smartPull", boxName: targetBox } as any)} style={{ width: "100%", ...btnStyle, background: "#a855f715", border: "1px solid #a855f730", color: "#a855f7", marginBottom: 8 }}>Run Smart Pull on {targetBox}</button>
           <button onClick={() => onNavigate({ screen: "myCards" })} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", marginBottom: 8 }}>View Added Cards</button>
           <button onClick={() => onNavigate({ screen: "home" })} style={{ width: "100%", ...btnStyle, background: surface2, border: "1px solid " + border, color: muted }}>Back to Home</button>
         </div>
