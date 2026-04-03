@@ -281,7 +281,7 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
 
           {/* Grade section */}
           {gradeCardData.length > 0 && (
-            <button onClick={() => setScreen("submission")} style={{ width: "100%", ...btnStyle, background: purple, color: "#fff", fontSize: 16, marginBottom: 12 }}>Submit {gradeCards.length} for Grading →</button>
+            <button onClick={() => { setSelectedCompany(""); setScreen("submission"); }} style={{ width: "100%", ...btnStyle, background: purple, color: "#fff", fontSize: 16, marginBottom: 12 }}>Submit {gradeCards.length} for Grading →</button>
           )}
 
           {holdCards.length > 0 && <div style={{ fontSize: 12, color: muted, textAlign: "center" }}>{holdCards.length} card{holdCards.length !== 1 ? "s" : ""} stay{holdCards.length === 1 ? "s" : ""} in Grade Check</div>}
@@ -314,7 +314,8 @@ export function GradeCheck({ cards, boxes, updateCard, submitForGrading, addBox,
     });
 
     const bestValue = companyData.reduce((best, co) => co.profit > best.profit ? co : best, companyData[0]);
-    const selected = companyData.find(co => co.name === selectedCompany) || companyData[0];
+    if (!selectedCompany && bestValue) setSelectedCompany(bestValue.name);
+    const selected = companyData.find(co => co.name === selectedCompany) || bestValue;
     const insuranceVal = Math.ceil(selected.expectedReturn / 500) * 500;
 
     return (
