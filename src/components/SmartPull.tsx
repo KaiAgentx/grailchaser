@@ -400,7 +400,7 @@ export function SmartPull({ boxName, cards, boxes, updateCard, addBox, getNextPo
           {skipCount > 0 && <div style={{ fontSize: 12, color: muted, marginBottom: 16 }}>{skipCount} skipped cards remain in {boxName}{moveResults.renumbered > 0 ? " at new positions" : ""}</div>}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pullGradeCount > 0 && <button onClick={() => onNavigate({ screen: "home" })} style={{ ...btnStyle, background: purple + "15", border: "1px solid " + purple + "30", color: purple }}>💎 Go to Grade Check</button>}
+            {pullGradeCount > 0 && <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ ...btnStyle, background: purple + "15", border: "1px solid " + purple + "30", color: purple }}>💎 Go to Grade Check</button>}
             {pullSellCount > 0 && <button onClick={() => onNavigate({ screen: "myCards" })} style={{ ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green }}>💰 View Sell Box</button>}
             <button onClick={() => onNavigate({ screen: "home" })} style={{ ...btnStyle, background: surface2, border: "1px solid " + border, color: muted }}>🏠 Home</button>
           </div>

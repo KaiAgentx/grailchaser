@@ -222,6 +222,8 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               {selectedBox.box_type === "scanned" && onNavigate && <button onClick={() => onNavigate({ screen: "smartPull", boxName: selectedBox.name })} style={{ ...btnStyle, padding: "8px 12px", background: "#a855f715", border: "1px solid #a855f730", color: "#a855f7", fontSize: 11 }}>Smart Pull</button>}
+              {selectedBox.box_type === "grade_check" && !selectedBox.name.startsWith("AT ") && onNavigate && <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ ...btnStyle, padding: "8px 12px", background: "#a855f715", border: "1px solid #a855f730", color: "#a855f7", fontSize: 11 }}>Inspect</button>}
+              {selectedBox.name.startsWith("AT ") && onNavigate && <button onClick={() => onNavigate({ screen: "gradingReturn" })} style={{ ...btnStyle, padding: "8px 12px", background: "#a855f715", border: "1px solid #a855f730", color: "#a855f7", fontSize: 11 }}>Process Return</button>}
               <button onClick={() => { setEditName(selectedBox.name); setEditRows(selectedBox.num_rows); setEditDivider(selectedBox.divider_size); setScreen("edit"); }} style={{ ...btnStyle, padding: "8px 16px", background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>Edit</button>
             </div>
           </div>

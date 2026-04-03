@@ -47,8 +47,10 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
   // Action items
   const unassigned = cards.filter(c => !c.storage_box || c.storage_box === "PENDING");
   const staleListings = listed.filter(c => c.listed_date && daysSince(c.listed_date) > 14);
+  const gradeCheckBoxNames = boxes.filter(b => b.box_type === "grade_check" && !b.name.startsWith("AT ")).map(b => b.name);
+  const toInspect = cards.filter(c => gradeCheckBoxNames.includes(c.storage_box));
 
-  const hasActions = needShipping.length > 0 || unassigned.length > 0 || staleListings.length > 0 || grading.length > 0;
+  const hasActions = needShipping.length > 0 || unassigned.length > 0 || staleListings.length > 0 || grading.length > 0 || toInspect.length > 0;
 
   // Recent & top
   const recent = [...cards].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
@@ -110,11 +112,17 @@ export function Dashboard({ cards, boxes, userEmail, onNavigate, onSignOut }: Pr
                 <div style={{ fontSize: 13, fontWeight: 600, color: amber }}>{staleListings.length} listing{staleListings.length > 1 ? "s" : ""} over 14 days</div>
               </button>
             )}
+            {toInspect.length > 0 && (
+              <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + purple, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: purple }}>{toInspect.length} card{toInspect.length > 1 ? "s" : ""} to inspect</div>
+                <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Grade Check — tap to start inspecting</div>
+              </button>
+            )}
             {grading.length > 0 && (
-              <div style={{ background: surface, borderLeft: "3px solid " + purple, borderRadius: 10, padding: "12px 14px", marginBottom: 8 }}>
+              <button onClick={() => onNavigate({ screen: "gradingReturn" })} style={{ width: "100%", background: surface, borderLeft: "3px solid " + purple, borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer", textAlign: "left" }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: purple }}>{grading.length} card{grading.length > 1 ? "s" : ""} at grading</div>
                 <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>{grading.slice(0, 3).map(c => `${c.player} (${c.grading_company || "?"} · ${daysSince(c.grading_submit_date)}d)`).join(" · ")}</div>
-              </div>
+              </button>
             )}
           </div>
         ) : cards.length > 0 ? (

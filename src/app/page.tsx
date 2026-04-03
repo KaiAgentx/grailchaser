@@ -11,12 +11,14 @@ import { CsvImport } from "@/components/CsvImport";
 import { PickList } from "@/components/PickList";
 import { ScanToCollection } from "@/components/ScanToCollection";
 import { SmartPull } from "@/components/SmartPull";
+import { GradeCheck } from "@/components/GradeCheck";
+import { GradingReturn } from "@/components/GradingReturn";
 import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -234,6 +236,10 @@ export default function Home() {
   if (screen === "pickList") return <PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />;
 
   if (screen === "scanToCollection") return <ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
+
+  if (screen === "gradeCheck") return <GradeCheck cards={cards} boxes={boxes} updateCard={updateCard} submitForGrading={submitForGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />;
+
+  if (screen === "gradingReturn") return <GradingReturn cards={cards} boxes={boxes} updateCard={updateCard} returnFromGrading={returnFromGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => setScreen(t.screen as Screen)} />;
 
   if (screen === "smartPull" && smartPullBoxName) return <SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />;
 
