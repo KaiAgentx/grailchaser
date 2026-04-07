@@ -6,7 +6,7 @@
  */
 
 export { normalizeName } from "./normalize";
-export { phash, dhash, whash } from "./hashing";
+export { phash, dhash, whash, hashToBytes, hashFromBytes } from "./hashing";
 export { hamming64, weightedDistance, HASH_WEIGHTS } from "./distance";
 export { bandFromDistance, CONFIDENCE_THRESHOLDS } from "./confidence";
 export type { ConfidenceBand } from "./confidence";

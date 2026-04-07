@@ -10,8 +10,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit",
-    "benchmark": "tsx scripts/benchmark.ts"
-  },
+  "benchmark": "tsx scripts/benchmark.ts",
+     "sync:pokemon": "tsx scripts/syncPokemonCatalog.ts"},
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",

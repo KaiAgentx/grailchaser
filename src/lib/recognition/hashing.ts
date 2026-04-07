@@ -1,8 +1,11 @@
 /**
  * Perceptual hash functions for card image matching.
  *
- * All three return a 64-bit hash as a bigint, matching the BIT(64) database column.
+ * All three return a 64-bit hash as a bigint.
  * Input buffers are Uint8Array of grayscale pixel data at the specified dimensions.
+ *
+ * hashToBytes / hashFromBytes convert between bigint and 8-byte big-endian
+ * Uint8Array for Postgres BYTEA storage in the catalog_hashes table.
  */
 
 // ─── Helpers ───
@@ -154,4 +157,75 @@ export function whash(grayscaleBuffer: Uint8Array, width: number, height: number
     }
   }
   return hash;
+}
+
+// ─── Bigint ↔ bytes serialization for Postgres BYTEA ───
+
+const MAX_U64 = (1n << 64n) - 1n;
+
+/**
+ * Convert a 64-bit unsigned bigint to an 8-byte big-endian Uint8Array.
+ * Suitable for Postgres BYTEA storage in catalog_hashes columns.
+ *
+ * @throws if hash is negative or exceeds 2^64 - 1
+ */
+export function hashToBytes(hash: bigint): Uint8Array {
+  if (hash < 0n) throw new RangeError("hash must be non-negative");
+  if (hash > MAX_U64) throw new RangeError("hash exceeds 64 bits");
+  const bytes = new Uint8Array(8);
+  let val = hash;
+  for (let i = 7; i >= 0; i--) {
+    bytes[i] = Number(val & 0xFFn);
+    val >>= 8n;
+  }
+  return bytes;
+}
+
+/**
+ * Convert an 8-byte big-endian Uint8Array back to a 64-bit unsigned bigint.
+ *
+ * @throws if input is not exactly 8 bytes
+ */
+export function hashFromBytes(bytes: Uint8Array): bigint {
+  if (bytes.length !== 8) throw new RangeError("expected exactly 8 bytes, got " + bytes.length);
+  let val = 0n;
+  for (let i = 0; i < 8; i++) {
+    val = (val << 8n) | BigInt(bytes[i]);
+  }
+  return val;
+}
+
+/**
+ * Convert a 64-bit hash bigint to Postgres BYTEA text input format (\xHEX).
+ * Use this when inserting hashes via supabase-js — passing a raw Uint8Array
+ * causes supabase-js to JSON.stringify it as {"0":n,"1":n,...} which is wrong.
+ * Returns a string like "\\x0123456789abcdef" (16 hex chars after \x).
+ */
+export function hashToBytea(hash: bigint): string {
+  const bytes = hashToBytes(hash);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return '\\x' + hex;
+}
+
+/**
+ * Convert a Postgres BYTEA text representation (\xHEX) back to bigint.
+ * Used when reading hashes from supabase-js — bytea columns come back as
+ * "\\xHEX" strings in PostgREST JSON responses.
+ */
+export function hashFromBytea(bytea: string): bigint {
+  if (typeof bytea !== 'string' || !bytea.startsWith('\\x')) {
+    throw new TypeError('hashFromBytea expects a string starting with \\x');
+  }
+  const hex = bytea.slice(2);
+  if (hex.length !== 16) {
+    throw new RangeError(`hashFromBytea expected 16 hex chars, got ${hex.length}`);
+  }
+  const bytes = new Uint8Array(8);
+  for (let i = 0; i < 8; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return hashFromBytes(bytes);
 }
