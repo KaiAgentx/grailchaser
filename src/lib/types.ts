@@ -132,3 +132,68 @@ export interface GradingCompany {
   turnaround: string;
   premium: number;
 }
+
+// =====================================================================
+// TCG foundation types (Phase 0A)
+//
+// These describe the new TCG vocabulary: which games we support, which
+// "world" each game lives in (Sports vs TCG), and the various states a
+// TCG card can be in. None of these touch existing Sports types.
+//
+// IMPORTANT: TcgCondition is intentionally named to avoid colliding with
+// the existing Sports `Condition` type at the top of this file.
+// =====================================================================
+
+// Which game a card belongs to. Used as the database `game` column.
+export type Game = "sports" | "pokemon" | "mtg" | "one_piece";
+
+// Which "world" the user is currently browsing. Derived from Game in code,
+// never stored on rows. (sports → sports, pokemon/mtg/one_piece → tcg)
+export type Mode = "sports" | "tcg";
+
+// Standard TCG condition grades. Different from sports `Condition`.
+export type TcgCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
+
+// What kind of attention a card needs after a scan or import.
+// "none" = good to go. Anything else = appears in the review queue.
+export type ReviewState =
+  | "none"
+  | "needs_identity_review"
+  | "needs_variant_review"
+  | "needs_condition_review"
+  | "needs_price_review"
+  | "needs_duplicate_review"
+  | "no_market_data";
+
+// What the user decided after seeing a card's price (Quick Check buttons).
+export type DecisionState =
+  | "none"
+  | "buy"
+  | "maybe"
+  | "pass"
+  | "own_already"
+  | "saved"
+  | "grade_candidate"
+  | "lot_candidate";
+
+// Where a price came from. eBay is never primary for raw TCG.
+export type PriceSource =
+  | "pokemon_tcg_api"
+  | "scryfall"
+  | "one_piece_provider"
+  | "ebay"
+  | "manual";
+
+// Status of a batch import job (e.g. scanning 800 MTG cards at once).
+export type BatchStatus =
+  | "queued"
+  | "processing"
+  | "review_required"
+  | "completed"
+  | "failed";
+
+// What kind of scanning session is happening.
+export type SessionType = "quick_check" | "collection_save" | "batch_import";
+
+// Status of a card on the user's Watchlist (the "Maybe" pile).
+export type WatchlistStatus = "active" | "acquired" | "dismissed";
