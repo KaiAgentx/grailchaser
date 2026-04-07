@@ -5,7 +5,8 @@ import { bg, border, accent, muted, secondary, text, font, mono, red } from "./s
 type Tab = "home" | "myCards" | "scanChooser" | "storage" | "more";
 
 const tabScreenMap: Record<string, Tab> = {
-  home: "home", myCards: "myCards", cardDetail: "myCards", cardCheck: "scanChooser", cardResult: "scanChooser",
+  home: "home", tcgHome: "home", modeSelector: "home",
+  myCards: "myCards", cardDetail: "myCards", cardCheck: "scanChooser", cardResult: "scanChooser",
   scanToCollection: "scanChooser", scanChooser: "scanChooser", storage: "storage", smartPull: "storage",
   gradeCheck: "storage", gradingReturn: "storage", pickList: "home", lotBuilder: "more", csvImport: "more",
 };

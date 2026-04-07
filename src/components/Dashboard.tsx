@@ -14,6 +14,7 @@ interface Props {
   userEmail: string;
   onNavigate: (target: NavTarget) => void;
   onSignOut: () => void;
+  onModeSelect?: () => void;
 }
 
 function relativeDate(dateStr: string): string {
@@ -34,7 +35,7 @@ function daysSince(dateStr: string | null): number {
 
 const typeColors: Record<string, string> = { scanned: cyan, singles: text, sell: green, slabs_sell: green, slabs_pc: purple, pc: purple, grade_check: amber, sorted: text };
 
-export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut }: Props) {
+export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut, onModeSelect }: Props) {
   const unsold = cards.filter(c => !c.sold);
   const totalValue = unsold.reduce((s, c) => s + (c.raw_value || 0), 0);
 
@@ -68,6 +69,9 @@ export function Dashboard({ cards, boxes, lots, userEmail, onNavigate, onSignOut
   return (
     <Shell title="GrailChaser" brandTitle>
       <div style={{ paddingTop: 20 }}>
+
+        {/* Mode pill */}
+        {onModeSelect && <div style={{ textAlign: "center", marginBottom: 8 }}><button onClick={onModeSelect} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid " + border, borderRadius: 9999, padding: "4px 14px", color: secondary, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Sports ▾</button></div>}
 
         {/* SECTION 1 — Collection Value */}
         <div style={{ textAlign: "center", padding: "32px 0 24px" }}>

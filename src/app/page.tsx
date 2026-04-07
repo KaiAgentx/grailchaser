@@ -1,7 +1,10 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCards } from "@/hooks/useCards";
+import { useActiveGame } from "@/hooks/useActiveGame";
+import { GAME_DISPLAY_NAME, TCG_GAMES, isTcgGame } from "@/lib/games";
+import type { Game } from "@/lib/types";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 import { LoginScreen } from "@/components/LoginScreen";
 import { Dashboard } from "@/components/Dashboard";
@@ -21,7 +24,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, borderMed, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser" | "modeSelector" | "tcgHome";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,7 +60,20 @@ export default function Home() {
   const [buyConfirm, setBuyConfirm] = useState("");
   const [showBuyFlow, setShowBuyFlow] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  const { activeGame, setActiveGame, mode, modeStreak, recordModeSelection, hydrated: gameHydrated, lastTcgGame } = useActiveGame();
   const [screen, setScreen] = useState<Screen>("home");
+  const [initialScreenSet, setInitialScreenSet] = useState(false);
+
+  // Set initial screen based on streak after hydration
+  useEffect(() => {
+    if (!gameHydrated || initialScreenSet || authLoading || !user) return;
+    if (modeStreak.count >= 5) {
+      setScreen(modeStreak.mode === "tcg" ? "tcgHome" : "home");
+    } else {
+      setScreen("modeSelector");
+    }
+    setInitialScreenSet(true);
+  }, [gameHydrated, initialScreenSet, authLoading, user, modeStreak]);
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [prevScreen, setPrevScreen] = useState<string>("home");
   const [prevScreenData, setPrevScreenData] = useState<any>(null);
@@ -145,16 +161,79 @@ export default function Home() {
 
   if (!user) return <LoginScreen signIn={signIn} signUp={signUp} />;
 
+  // Wait for game hydration to avoid flash
+  if (!gameHydrated || !initialScreenSet) return (
+    <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ fontSize: 13, color: muted }}>Loading...</div>
+    </div>
+  );
+
   // Bottom nav handler
   const handleBottomNav = (s: string) => {
     if (s === "scanChooser") setScreen("scanChooser");
-    else if (s === "home") setScreen("home");
+    else if (s === "home") setScreen(mode === "tcg" ? "tcgHome" : "home");
     else if (s === "myCards") { setStatusFilter(""); setScreen("myCards"); }
     else if (s === "storage") { setStorageInitialBox(""); setScreen("storage"); }
     else setScreen(s as Screen);
   };
 
   const bottomNav = <BottomNav currentScreen={screen} prevScreen={prevScreen} onNavigate={handleBottomNav} />;
+
+  // ─── MODE SELECTOR ───
+  if (screen === "modeSelector") return (
+    <Shell title="Choose Mode">
+      <div style={{ paddingTop: 32 }}>
+        <button onClick={() => { setActiveGame("sports"); recordModeSelection("sports"); setScreen("home"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "28px 20px", cursor: "pointer", textAlign: "left", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+          <div style={{ fontSize: 19, fontWeight: 700, color: text, marginBottom: 4 }}>Sports Cards</div>
+          <div style={{ fontSize: 13, color: secondary }}>Baseball, Football, Basketball, Hockey, Soccer</div>
+        </button>
+        <button onClick={() => { setActiveGame(lastTcgGame); recordModeSelection("tcg"); setScreen("tcgHome"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "28px 20px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+          <div style={{ fontSize: 19, fontWeight: 700, color: text, marginBottom: 4 }}>TCG</div>
+          <div style={{ fontSize: 13, color: secondary }}>Pokémon, Magic: The Gathering, One Piece</div>
+        </button>
+      </div>
+    </Shell>
+  );
+
+  // ─── TCG HOME ───
+  if (screen === "tcgHome") return (
+    <>
+      <Shell title={GAME_DISPLAY_NAME[activeGame] || "TCG"}>
+        <div style={{ paddingTop: 16 }}>
+          {/* Mode pill */}
+          <div style={{ textAlign: "center", marginBottom: 16 }}>
+            <button onClick={() => setScreen("modeSelector")} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 9999, padding: "4px 14px", color: purple, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>TCG ▾</button>
+          </div>
+
+          {/* Game pills */}
+          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 24 }}>
+            {TCG_GAMES.map(g => (
+              <button key={g} onClick={() => setActiveGame(g)} style={{ padding: "6px 14px", background: activeGame === g ? accent + "20" : surface2, border: "1px solid " + (activeGame === g ? accent + "50" : border), borderRadius: 9999, color: activeGame === g ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{GAME_DISPLAY_NAME[g]}</button>
+            ))}
+          </div>
+
+          {/* Primary CTA placeholder */}
+          <button onClick={() => {}} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.4)", opacity: 0.5 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
+            <div style={{ fontSize: 12, color: muted }}>Coming soon — scan or search {GAME_DISPLAY_NAME[activeGame]} cards</div>
+          </button>
+
+          {/* Recent Checks */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700 }}>Recent Checks</div>
+            <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "20px 0" }}>No checks yet</div>
+          </div>
+
+          {/* Recently Added */}
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700 }}>Recently Added</div>
+            <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "20px 0" }}>No cards yet</div>
+          </div>
+        </div>
+      </Shell>
+      {bottomNav}
+    </>
+  );
 
   if (screen === "scanChooser") return (
     <>
@@ -188,6 +267,7 @@ export default function Home() {
         setScreen(t.screen as Screen);
       }}
       onSignOut={() => signOut()}
+      onModeSelect={() => setScreen("modeSelector")}
     />{bottomNav}</>
   );
 
