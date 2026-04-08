@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Shell } from "./Shell";
 import { bg, surface, surface2, border, accent, green, red, amber, muted, secondary, text, font, mono } from "./styles";
 import type { TcgCondition } from "@/lib/types";
@@ -9,7 +9,7 @@ const CONDITIONS: TcgCondition[] = ["NM", "LP", "MP", "HP", "DMG"];
 const bandStyles: Record<string, { bg: string; border: string; color: string; label: string }> = {
   exact: { bg: "rgba(52,211,153,0.1)", border: "rgba(52,211,153,0.3)", color: "#34d399", label: "✓ Exact Match" },
   likely: { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", color: "#fbbf24", label: "~ Good Match" },
-  choose_version: { bg: "rgba(251,191,36,0.15)", border: "rgba(251,191,36,0.4)", color: "#f59e0b", label: "? Multiple Versions" },
+  choose_version: { bg: "rgba(251,191,36,0.15)", border: "rgba(251,191,36,0.4)", color: "#f59e0b", label: "~ Close Match" },
   unclear: { bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.3)", color: "#f87171", label: "! Low Confidence" },
 };
 
@@ -23,9 +23,9 @@ function autoSelectVariant(pricing: any, visionResult: any): string {
   const available = Object.keys(pricing?.allPrices || {});
   if (available.length === 0) return pricing?.priceType || "";
   if (available.length === 1) return available[0];
-  if (visionResult?.edition === "1st") { const f = available.find(t => t.includes("1stEdition")); if (f) return f; }
+  if (visionResult?.edition === "1st") { const f = available.find((t: string) => t.includes("1stEdition")); if (f) return f; }
   if (visionResult?.finish === "reverse_holo") { if (available.includes("reverseHolofoil")) return "reverseHolofoil"; }
-  if (visionResult?.finish === "non_holo") { const f = available.find(t => t.includes("Normal") || t === "normal"); if (f) return f; }
+  if (visionResult?.finish === "non_holo") { const f = available.find((t: string) => t.includes("Normal") || t === "normal"); if (f) return f; }
   return pricing?.priceType || available[0];
 }
 
@@ -42,10 +42,10 @@ interface Props {
 export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAnother, userId }: Props) {
   const candidates: Candidate[] = result.result?.candidates || [];
   const band: string = result.result?.confidenceBand || "unclear";
-  const topDistance: number = result.result?.topDistance || 64;
   const visionResult = result.visionResult || null;
 
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  // Selection by catalogCardId instead of index
+  const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
   const [condition, setCondition] = useState<TcgCondition>("NM");
   const [pricing, setPricing] = useState<any>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
@@ -55,27 +55,49 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   const [countdown, setCountdown] = useState(3);
   const [imgError, setImgError] = useState(false);
 
-  const selected = candidates[selectedIdx] || candidates[0];
-  const showCandidates = band === "choose_version" || band === "unclear" || topDistance > 20;
+  // Price cache to avoid re-fetching
+  const priceCache = useRef(new Map<string, any>());
+  // Generation counter to discard stale fetches
+  const fetchGen = useRef(0);
 
-  // Fetch pricing
+  const selected = candidates.find(c => c.catalogCardId === selectedCardId) || candidates[0];
+
+  // Fetch pricing — with cache and stale-discard
   useEffect(() => {
     if (!selected?.catalogCardId) return;
-    setPricingLoading(true); setPricing(null); setSelectedVariant("");
+    setImgError(false);
+
+    const cached = priceCache.current.get(selected.catalogCardId);
+    if (cached) {
+      setPricing(cached);
+      setPricingLoading(false);
+      setSelectedVariant(autoSelectVariant(cached, visionResult));
+      return;
+    }
+
+    setPricingLoading(true);
+    setPricing(null);
+    setSelectedVariant("");
+    const gen = ++fetchGen.current;
+
     fetch(`/api/tcg/price?cardId=${encodeURIComponent(selected.catalogCardId)}`)
       .then(r => r.json())
       .then(d => {
+        if (gen !== fetchGen.current) return; // stale
         if (!d.error) {
+          priceCache.current.set(selected.catalogCardId, d);
           setPricing(d);
           setSelectedVariant(autoSelectVariant(d, visionResult));
         }
         setPricingLoading(false);
       })
-      .catch(() => setPricingLoading(false));
+      .catch(() => { if (gen === fetchGen.current) setPricingLoading(false); });
   }, [selected?.catalogCardId]);
 
-  useEffect(() => { setImgError(false); }, [selectedIdx]);
+  // Haptic on mount
   useEffect(() => { if (band === "exact") navigator.vibrate?.(50); else if (band === "unclear") navigator.vibrate?.([30, 50, 30]); }, []);
+
+  // Rapid scan countdown
   useEffect(() => {
     if (!saved || scanIntent !== "collect") return;
     const iv = setInterval(() => { setCountdown(c => { if (c <= 1) { clearInterval(iv); onScanAnother(); return 0; } return c - 1; }); }, 1000);
@@ -120,43 +142,61 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   const imgSrc = imgError ? null : (selected?.imageLargeUrl || selected?.imageSmallUrl);
   const bStyle = bandStyles[band] || bandStyles.unclear;
 
+  // ─── Zero candidates ───
+  if (candidates.length === 0) {
+    return (
+      <Shell title="Result" back={onBack}>
+        <div style={{ paddingTop: 60, textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 12, color: muted }}>🎴</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: text, marginBottom: 8 }}>Couldn't identify this card</div>
+          <button onClick={onScanAnother} style={{ padding: "14px 28px", minHeight: 48, background: green, border: "none", borderRadius: 12, color: "#fff", fontFamily: font, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Try scanning again</button>
+        </div>
+      </Shell>
+    );
+  }
+
   return (
     <Shell title="Result" back={onBack}>
       <div style={{ paddingTop: 16, paddingBottom: 140 }}>
 
-        {showCandidates && candidates.length > 1 && (
-          <div style={{ fontSize: 12, color: muted, textAlign: "center", marginBottom: 8 }}>Which version is this?</div>
-        )}
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
-          {showCandidates && candidates.length > 1 && (
-            <button onClick={() => setSelectedIdx(Math.max(0, selectedIdx - 1))} disabled={selectedIdx === 0} style={{ width: 44, height: 44, background: "none", border: "none", color: selectedIdx === 0 ? surface2 : secondary, fontSize: 24, cursor: "pointer" }}>←</button>
-          )}
-          <div style={{ textAlign: "center" }}>
-            {imgSrc ? <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ width: 180, borderRadius: 12, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }} /> : <div style={{ width: 180, height: 252, background: surface2, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, color: muted }}>🎴</div>}
-          </div>
-          {showCandidates && candidates.length > 1 && (
-            <button onClick={() => setSelectedIdx(Math.min(candidates.length - 1, selectedIdx + 1))} disabled={selectedIdx >= candidates.length - 1} style={{ width: 44, height: 44, background: "none", border: "none", color: selectedIdx >= candidates.length - 1 ? surface2 : secondary, fontSize: 24, cursor: "pointer" }}>→</button>
-          )}
+        {/* Card image */}
+        <div style={{ textAlign: "center", marginBottom: 8 }}>
+          {imgSrc ? <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ width: 180, borderRadius: 12, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }} /> : <div style={{ width: 180, height: 252, margin: "0 auto", background: surface2, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, color: muted }}>🎴</div>}
         </div>
 
-        {showCandidates && candidates.length > 1 && (
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 12 }}>
-            {candidates.slice(0, 5).map((_, i) => <div key={i} style={{ width: 6, height: 6, borderRadius: 3, background: i === selectedIdx ? accent : surface2 }} />)}
-          </div>
-        )}
-
+        {/* Confidence badge */}
         <div style={{ textAlign: "center", marginBottom: 12 }}>
           <span style={{ display: "inline-block", padding: "4px 14px", borderRadius: 9999, background: bStyle.bg, border: "1px solid " + bStyle.border, color: bStyle.color, fontSize: 12, fontWeight: 600 }}>{bStyle.label}</span>
         </div>
 
+        {/* Card info */}
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 20, fontWeight: 700, color: text }}>{selected?.name}</div>
           <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{selected?.setName} · #{selected?.cardNumber} · {selected?.rarity}</div>
           {result.method === "vision" && visionResult?.name && (
-            <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Read: {visionResult.name}{visionResult.number ? ` · #${visionResult.number}` : ""}</div>
+            <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Vision read: {visionResult.name}{visionResult.number ? ` #${visionResult.number}` : ""}</div>
           )}
         </div>
+
+        {/* ─── Candidate picker (horizontal scroll) ─── */}
+        {candidates.length >= 2 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 8 }}>Which card is this?</div>
+            <div style={{ display: "flex", gap: 10, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
+              {candidates.map(c => {
+                const isSel = c.catalogCardId === selectedCardId;
+                return (
+                  <button key={c.catalogCardId} onClick={() => setSelectedCardId(c.catalogCardId)} style={{ flex: "0 0 auto", width: 90, scrollSnapAlign: "start", background: surface, border: isSel ? "2px solid " + accent : "1px solid " + border, borderRadius: 10, padding: 6, cursor: "pointer", textAlign: "center", minHeight: 44 }}>
+                    {c.imageSmallUrl ? <img src={c.imageSmallUrl} alt="" loading="lazy" onError={e => (e.currentTarget.style.display = "none")} style={{ width: 72, height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 4 }} /> : <div style={{ width: 72, height: 100, background: surface2, borderRadius: 6, marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: muted, margin: "0 auto" }}>🎴</div>}
+                    <div style={{ fontSize: 10, fontWeight: 600, color: isSel ? accent : text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                    <div style={{ fontSize: 9, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.setName}</div>
+                    <div style={{ fontSize: 9, color: muted }}>{c.rarity}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Variant picker */}
         {!pricingLoading && showVariantPicker && (
