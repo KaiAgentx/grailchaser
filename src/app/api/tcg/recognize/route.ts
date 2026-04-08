@@ -17,6 +17,13 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
+function detectMediaType(base64: string): "image/jpeg" | "image/png" | "image/webp" {
+  if (base64.startsWith("/9j/")) return "image/jpeg";
+  if (base64.startsWith("iVBOR")) return "image/png";
+  if (base64.startsWith("UklGR")) return "image/webp";
+  return "image/jpeg";
+}
+
 export async function POST(req: NextRequest) {
   try {
     let body: any;
@@ -43,13 +50,15 @@ export async function POST(req: NextRequest) {
 
     if (anthropic) {
       try {
+        const mediaType = detectMediaType(rawB64);
+        console.log("[vision] calling Claude, key present:", !!process.env.ANTHROPIC_API_KEY, "mediaType:", mediaType);
         const msg = await anthropic.messages.create({
           model: "claude-sonnet-4-20250514",
           max_tokens: 256,
           messages: [{
             role: "user",
             content: [
-              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: rawB64 } },
+              { type: "image", source: { type: "base64", media_type: mediaType, data: rawB64 } },
               { type: "text", text: `Examine this Pokemon card image carefully.
 
 Extract these fields:
@@ -72,7 +81,7 @@ If this is not a Pokemon card or the text is completely unreadable:
         const parsed = JSON.parse(cleaned);
         if (parsed && typeof parsed.name !== "undefined") visionResult = parsed;
       } catch (err) {
-        console.error("[vision] Claude error:", err);
+        console.error("[vision] Claude error:", (err as any)?.message || (err as any)?.status || JSON.stringify(err));
       }
     }
 
@@ -195,7 +204,7 @@ async function recognizeByHash(imageBase64: string, game: string, supabase: any)
       confidenceBand: band,
       topDistance: top[0]?.distance ?? 64,
       candidates: top.map((r, i) => ({
-        rank: i + 1, catalogCardId: r.entry.catalogCardId, name: r.entry.name,
+        rank: i + 1, catalogCardId: `${r.entry.setCode}-${r.entry.cardNumber}`, name: r.entry.name,
         setName: r.entry.setName, setCode: r.entry.setCode, cardNumber: r.entry.cardNumber,
         rarity: r.entry.rarity, imageSmallUrl: r.entry.imageSmallUrl, imageLargeUrl: r.entry.imageLargeUrl,
         weightedDistance: r.distance, distanceBreakdown: { phash: r.phashDist, dhash: r.dhashDist, whash: r.whashDist },
