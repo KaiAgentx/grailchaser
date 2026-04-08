@@ -49,18 +49,12 @@ function classifySale(title: string): "psa10" | "psa9" | "psa8" | "raw" {
 
 export async function POST(request: NextRequest) {
   try {
-    const { player, year, set, search_query, game } = await request.json();
+    const { player, year, set, search_query } = await request.json();
 
-    // Determine eBay category: sports cards vs TCG
-    const isTcg = game === "pokemon" || game === "mtg" || game === "one_piece";
-    const categoryId = isTcg ? "183454" : "261328";
-
-    // Build search keywords
+    // Build search keywords (sports cards only — TCG uses /api/tcg/price)
     let keywords = search_query || "";
     if (!keywords && player) {
-      keywords = isTcg
-        ? [player, set, game === "pokemon" ? "pokemon" : game].filter(Boolean).join(" ")
-        : [year, set, player].filter(Boolean).join(" ");
+      keywords = [year, set, player].filter(Boolean).join(" ");
     }
     if (!keywords) {
       return NextResponse.json({ error: "No search terms provided" }, { status: 400 });
@@ -83,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Search eBay Browse API
     const params = new URLSearchParams({
       q: keywords,
-      category_ids: categoryId,
+      category_ids: "261328",
       filter: "conditionIds:{1000|1500|2000|2500|3000}",
       sort: "newlyListed",
       limit: "20",

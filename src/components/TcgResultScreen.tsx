@@ -50,18 +50,14 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   const [searchResults, setSearchResults] = useState<Candidate[]>([]);
   const [imgError, setImgError] = useState(false);
 
-  // Fetch pricing for selected candidate
+  // Fetch pricing from Pokemon TCG API
   useEffect(() => {
-    if (!selected) return;
+    if (!selected?.catalogCardId) return;
     setPriceLoading(true);
     setPrices(null);
-    fetch("/api/price", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ search_query: `${selected.name} ${selected.setName} pokemon`, game: "pokemon" }),
-    })
+    fetch(`/api/tcg/price?cardId=${encodeURIComponent(selected.catalogCardId)}`)
       .then(r => r.json())
-      .then(d => { setPrices(d.prices || null); setPriceLoading(false); })
+      .then(d => { if (!d.error) setPrices(d); setPriceLoading(false); })
       .catch(() => setPriceLoading(false));
   }, [selected?.catalogCardId]);
 
@@ -93,7 +89,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           card_number: selected.cardNumber,
           rarity: selected.rarity,
           condition,
-          raw_value: prices?.raw || 0,
+          raw_value: prices?.market || 0,
           scan_image_url: selected.imageLargeUrl || selected.imageSmallUrl,
           tcg_card_id: selected.catalogCardId,
         }),
@@ -136,21 +132,70 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{selected?.setName} · #{selected?.cardNumber} · {selected?.rarity}</div>
         </div>
 
-        {/* Pricing */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-          {[{ label: "Raw", val: prices?.raw }, { label: "PSA 9", val: prices?.psa9 }, { label: "PSA 10", val: prices?.psa10 }].map(p => (
-            <div key={p.label} style={{ background: surface, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
-              <div style={{ fontSize: 10, color: muted, marginBottom: 4 }}>{p.label}</div>
-              <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: priceLoading ? muted : (p.val ? green : muted) }}>{priceLoading ? "—" : (p.val ? `$${p.val}` : "—")}</div>
-            </div>
-          ))}
-        </div>
-        {!priceLoading && !prices?.raw && !prices?.psa9 && !prices?.psa10 && (
-          <div style={{ fontSize: 11, color: muted, textAlign: "center", marginBottom: 12 }}>No recent eBay sales found</div>
-        )}
-        {(prices?.raw || prices?.psa9 || prices?.psa10) && (
-          <div style={{ fontSize: 10, color: muted, textAlign: "center", marginBottom: 16 }}>eBay market data</div>
-        )}
+        {/* Pricing — TCGPlayer + CardMarket */}
+        {(() => {
+          const hasAnyPrice = prices && (prices.market || prices.avg7 || prices.avg30);
+          const trendDir = prices?.avg7 && prices?.avg30 ? (prices.avg7 > prices.avg30 * 1.1 ? "up" : prices.avg7 < prices.avg30 * 0.9 ? "down" : "stable") : null;
+          const marketSignal = prices?.market && prices?.low ? (prices.market / prices.low > 1.5 ? "hot" : prices.market / prices.low < 1.1 ? "thin" : null) : null;
+
+          return (
+            <>
+              {/* Market signal badge */}
+              {!priceLoading && marketSignal === "hot" && (
+                <div style={{ textAlign: "center", marginBottom: 8 }}><span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 9999, background: "rgba(52,211,153,0.1)", color: green, fontWeight: 600 }}>Active Market 🔥</span></div>
+              )}
+              {!priceLoading && marketSignal === "thin" && (
+                <div style={{ textAlign: "center", marginBottom: 8 }}><span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 9999, background: "rgba(255,255,255,0.06)", color: muted, fontWeight: 600 }}>Thin Market</span></div>
+              )}
+
+              {/* Primary prices */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                {[
+                  { label: "TCGPlayer", val: prices?.market, prefix: "$" },
+                  { label: "7-Day Avg", val: prices?.avg7, prefix: "€" },
+                  { label: "30-Day Avg", val: prices?.avg30, prefix: "€" },
+                ].map(p => (
+                  <div key={p.label} style={{ background: surface, borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+                    <div style={{ fontSize: 9, color: muted, marginBottom: 4 }}>{p.label}</div>
+                    <div style={{ fontFamily: mono, fontSize: 16, fontWeight: 700, color: priceLoading ? muted : (p.val ? green : muted) }}>{priceLoading ? "—" : (p.val ? `${p.prefix}${p.val.toLocaleString()}` : "—")}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Price range */}
+              {!priceLoading && (prices?.low || prices?.mid || prices?.high) && (
+                <div style={{ fontSize: 11, color: muted, textAlign: "center", marginBottom: 8 }}>
+                  {prices.low && `Low: $${prices.low}`}{prices.mid && ` · Mid: $${prices.mid}`}{prices.high && ` · High: $${prices.high}`}
+                </div>
+              )}
+
+              {/* Trend indicator */}
+              {!priceLoading && trendDir && (
+                <div style={{ textAlign: "center", marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: trendDir === "up" ? green : trendDir === "down" ? red : muted, fontWeight: 600 }}>
+                    {trendDir === "up" ? "↑ Rising" : trendDir === "down" ? "↓ Falling" : "→ Stable"}
+                  </span>
+                </div>
+              )}
+
+              {/* No pricing */}
+              {!priceLoading && !hasAnyPrice && (
+                <div style={{ fontSize: 12, color: muted, textAlign: "center", marginBottom: 12 }}>Price unavailable</div>
+              )}
+
+              {/* Data source */}
+              {!priceLoading && hasAnyPrice && (
+                <div style={{ textAlign: "center", marginBottom: 16 }}>
+                  {prices.tcgplayerUrl ? (
+                    <a href={prices.tcgplayerUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: muted, textDecoration: "none" }}>Prices from TCGPlayer & CardMarket · Updated daily</a>
+                  ) : (
+                    <span style={{ fontSize: 10, color: muted }}>Prices from TCGPlayer & CardMarket · Updated daily</span>
+                  )}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Blurry photo warning */}
         {showBlurry && (
