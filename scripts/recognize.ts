@@ -41,13 +41,15 @@ if (!fs.existsSync(imagePath)) {
 // ─── Env ───
 
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPA_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!SUPA_URL || !SUPA_KEY) {
-  console.error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   process.exit(1);
 }
 
-const supabase = createClient(SUPA_URL, SUPA_KEY);
+const supabase = createClient(SUPA_URL, SUPA_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
 // ─── Main ───
 
