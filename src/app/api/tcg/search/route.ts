@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     results: (data || []).map(r => ({
-      catalogCardId: r.id,
+      id: `${r.set_code}-${r.card_number}`,
+      catalogCardId: `${r.set_code}-${r.card_number}`,
       name: r.name,
       setName: r.set_name,
       setCode: r.set_code,
