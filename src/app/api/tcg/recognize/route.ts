@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     );
 
     // ── STEP 1: Claude Vision reads card text ──
-    let visionResult: { name: string | null; number: string | null; set: string | null; confidence: "high" | "medium" | "low" } = { name: null, number: null, set: null, confidence: "low" };
+    let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low" } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
 
     if (anthropic) {
       try {
@@ -59,19 +59,24 @@ export async function POST(req: NextRequest) {
             role: "user",
             content: [
               { type: "image", source: { type: "base64", media_type: mediaType, data: rawB64 } },
-              { type: "text", text: `Examine this Pokemon card image carefully.
+              { type: "text", text: `Examine this Pokémon card image carefully.
 
 Extract these fields:
-1. name: The Pokemon or card name printed at the top (e.g. "Charizard", "Pikachu VMAX", "Iono", "Professor's Research")
-2. number: The card number at the bottom left (e.g. "4/102", "025/185", "SWSH146", "069/080")
-3. set: The set name if visible (e.g. "Base Set", "Scarlet & Violet", "Sword & Shield")
-4. confidence: "high" if text is clearly readable, "medium" if partially readable, "low" if unclear
+1. name: The Pokémon or card name at the top (e.g. "Charizard", "M Charizard-EX", "Iono")
+2. number: The card number at the BOTTOM LEFT corner (e.g. "4/102", "025/185", "SWSH146")
+3. set: The set name if visible (e.g. "Base Set", "Scarlet & Violet")
+4. edition: Look for an oval "Edition 1" or "1st Edition" stamp near the bottom left of the card artwork. If you see it return "1st", otherwise return "unlimited"
+5. finish: Look at the card surface:
+   - If the artwork/illustration area has a rainbow sparkle or holographic shine: "holo"
+   - If the card border/background (outside the artwork) has a sparkle pattern but the artwork itself is flat: "reverse_holo"
+   - If the entire card is flat with no sparkle anywhere: "non_holo"
+6. confidence: "high" if text is clearly readable, "medium" if partial, "low" if unclear
 
-Return ONLY a JSON object, no markdown, no explanation:
-{"name":"...","number":"...","set":"...","confidence":"high"}
+Return ONLY valid JSON, no markdown:
+{"name":"...","number":"...","set":"...","edition":"1st|unlimited","finish":"holo|reverse_holo|non_holo","confidence":"high|medium|low"}
 
-If this is not a Pokemon card or the text is completely unreadable:
-{"name":null,"number":null,"set":null,"confidence":"low"}` }
+If not a Pokémon card or completely unreadable:
+{"name":null,"number":null,"set":null,"edition":"unlimited","finish":"holo","confidence":"low"}` }
             ]
           }]
         });

@@ -55,8 +55,24 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Build all TCGPlayer variants
+    const allPrices: Record<string, { market: number | null; low: number | null; mid: number | null; high: number | null }> = {};
+    for (const [type, data] of Object.entries(tcgPrices)) {
+      allPrices[type] = {
+        market: (data as any).market ?? null,
+        low: (data as any).low ?? null,
+        mid: (data as any).mid ?? null,
+        high: (data as any).high ?? null,
+      };
+    }
+
     // Extract CardMarket prices
     const cm = card?.cardmarket?.prices || {};
+    const reverseHoloCardmarket = cm ? {
+      avg7: cm.reverseHoloAvg7 || null,
+      avg30: cm.reverseHoloAvg30 || null,
+      trend: cm.reverseHoloTrend || null,
+    } : null;
 
     const result = {
       market: tcgData?.market ?? null,
@@ -67,9 +83,12 @@ export async function GET(req: NextRequest) {
       avg30: cm.avg30 ?? null,
       trend: cm.trendPrice ?? null,
       priceType: priceType || "none",
+      allPrices,
+      reverseHoloCardmarket,
       updatedAt: card?.tcgplayer?.updatedAt ?? null,
       tcgplayerUrl: card?.tcgplayer?.url ?? null,
       cardmarketUrl: card?.cardmarket?.url ?? null,
+      currency: { tcgplayer: "USD", cardmarket: "EUR" },
     };
 
     // Cache the result
