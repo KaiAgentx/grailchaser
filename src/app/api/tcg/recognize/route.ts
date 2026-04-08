@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
 Extract these fields:
 1. name: The Pokemon or card name printed at the top (e.g. "Charizard", "Pikachu VMAX", "Iono", "Professor's Research")
-2. number: The card number at the bottom right (e.g. "4/102", "025/185", "SWSH146", "TG01/TG30")
+2. number: The card number at the bottom left (e.g. "4/102", "025/185", "SWSH146", "069/080")
 3. set: The set name if visible (e.g. "Base Set", "Scarlet & Violet", "Sword & Shield")
 4. confidence: "high" if text is clearly readable, "medium" if partially readable, "low" if unclear
 
