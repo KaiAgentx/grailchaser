@@ -21,10 +21,12 @@ import { useLots } from "@/hooks/useLots";
 import { BuyFlow, parseCardName } from "@/components/BuyFlow";
 import { Shell } from "@/components/Shell";
 import { BottomNav } from "@/components/BottomNav";
+import { TcgScanScreen } from "@/components/TcgScanScreen";
+import { TcgResultScreen } from "@/components/TcgResultScreen";
 import { useBoxes } from "@/hooks/useBoxes";
 import { bg, surface, surface2, border, borderMed, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser" | "modeSelector" | "tcgHome";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser" | "modeSelector" | "tcgHome" | "tcgScan" | "tcgResult";
 
 function compressImage(file: File, maxWidth = 800): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,6 +59,8 @@ export default function Home() {
   const { boxes, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
   const { lots, createLot, updateLot, deleteLot, markLotListed, markLotSold, markLotShipped, fetchLots } = useLots(user?.id);
   const [lotBuilderBoxName, setLotBuilderBoxName] = useState("");
+  const [tcgScanIntent, setTcgScanIntent] = useState<"check" | "collect">("check");
+  const [tcgRecognizeResult, setTcgRecognizeResult] = useState<any>(null);
   const [buyConfirm, setBuyConfirm] = useState("");
   const [showBuyFlow, setShowBuyFlow] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
@@ -212,10 +216,14 @@ export default function Home() {
             ))}
           </div>
 
-          {/* Primary CTA placeholder */}
-          <button onClick={() => {}} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.4)", opacity: 0.5 }}>
+          {/* Scan CTAs */}
+          <button onClick={() => { setTcgScanIntent("check"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 8, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
-            <div style={{ fontSize: 12, color: muted }}>Coming soon — scan or search {GAME_DISPLAY_NAME[activeGame]} cards</div>
+            <div style={{ fontSize: 12, color: muted }}>Scan or search {GAME_DISPLAY_NAME[activeGame]} cards</div>
+          </button>
+          <button onClick={() => { setTcgScanIntent("collect"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 4 }}>Scan to Collection</div>
+            <div style={{ fontSize: 12, color: muted }}>Log {GAME_DISPLAY_NAME[activeGame]} cards you own</div>
           </button>
 
           {/* Recent Checks */}
@@ -233,6 +241,28 @@ export default function Home() {
       </Shell>
       {bottomNav}
     </>
+  );
+
+  // ─── TCG SCAN ───
+  if (screen === "tcgScan") return (
+    <><TcgScanScreen
+      game={activeGame}
+      scanIntent={tcgScanIntent}
+      onBack={() => setScreen("tcgHome")}
+      onResult={(result, intent) => { setTcgRecognizeResult(result); setTcgScanIntent(intent); setScreen("tcgResult"); }}
+    />{bottomNav}</>
+  );
+
+  // ─── TCG RESULT ───
+  if (screen === "tcgResult" && tcgRecognizeResult) return (
+    <><TcgResultScreen
+      result={tcgRecognizeResult}
+      scanIntent={tcgScanIntent}
+      onBack={() => setScreen("tcgScan")}
+      onSaved={() => setScreen("tcgHome")}
+      onScanAnother={() => { setTcgRecognizeResult(null); setScreen("tcgScan"); }}
+      userId={user?.id || ""}
+    />{bottomNav}</>
   );
 
   if (screen === "scanChooser") return (
