@@ -138,6 +138,9 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{ fontSize: 20, fontWeight: 700, color: text }}>{selected?.name}</div>
           <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{selected?.setName} · #{selected?.cardNumber} · {selected?.rarity}</div>
+          {result.method === "vision" && result.visionResult?.name && (
+            <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Read: {result.visionResult.name}{result.visionResult.number ? ` · #${result.visionResult.number}` : ""}</div>
+          )}
         </div>
 
         {/* Pricing */}

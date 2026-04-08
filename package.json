@@ -15,6 +15,7 @@
     "recognize": "tsx scripts/recognize.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.85.0",
     "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
     "cardsightai": "^3.4.0",

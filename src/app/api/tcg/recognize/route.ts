@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import {
   preprocessImage,
@@ -9,192 +10,196 @@ import {
   getOrLoadCache,
   CacheLoadError,
 } from "@/lib/recognition";
-import type { ConfidenceBand } from "@/lib/recognition";
 
-// ─── Supabase client (anon key — catalog tables have no RLS) ───
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
-
-// ─── Response type ───
-
-export interface RecognizeResponse {
-  ok: boolean;
-  latencyMs: number;
-  timing: { preprocessMs: number; hashMs: number; cacheMs: number; matchMs: number };
-  cache: { game: string; catalogVersion: string; totalEntries: number; loadedAt: number };
-  query: { phash: string; dhash: string; whash: string };
-  result: {
-    confidenceBand: ConfidenceBand;
-    topDistance: number;
-    candidates: Array<{
-      rank: number;
-      catalogCardId: string;
-      name: string;
-      setName: string;
-      setCode: string;
-      cardNumber: string | null;
-      rarity: string | null;
-      imageSmallUrl: string | null;
-      imageLargeUrl: string | null;
-      weightedDistance: number;
-      distanceBreakdown: { phash: number; dhash: number; whash: number };
-    }>;
-  };
-}
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   try {
-    // a. Parse JSON
     let body: any;
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
+    try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-    // b. Validate game
     const { game, imageBase64 } = body;
-    if (game === "mtg" || game === "one_piece") {
-      return NextResponse.json({ error: "Game not yet supported" }, { status: 501 });
-    }
-    if (game !== "pokemon") {
-      return NextResponse.json({ error: "Invalid game" }, { status: 400 });
-    }
-
-    // c. Validate imageBase64
     if (!imageBase64 || typeof imageBase64 !== "string") {
       return NextResponse.json({ error: "imageBase64 required" }, { status: 400 });
     }
+    if (game !== "pokemon") {
+      return NextResponse.json({ error: game === "mtg" || game === "one_piece" ? "Game not yet supported" : "Invalid game" }, { status: game === "mtg" || game === "one_piece" ? 501 : 400 });
+    }
 
-    // d. Strip data URL prefix if present
     const rawB64 = imageBase64.replace(/^data:image\/[^;]+;base64,/, "");
 
-    // e. Decode base64
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(rawB64, "base64");
-    } catch {
-      return NextResponse.json({ error: "Invalid base64" }, { status: 400 });
-    }
-
-    // f. Size check
-    if (buffer.byteLength > MAX_IMAGE_BYTES) {
-      return NextResponse.json({ error: "Image too large (max 5MB)" }, { status: 413 });
-    }
-
-    const t0 = performance.now();
-
-    // g-h. Preprocess
-    let data: Uint8Array, width: number, height: number;
-    try {
-      const result = await preprocessImage(buffer);
-      data = result.data;
-      width = result.width;
-      height = result.height;
-    } catch {
-      return NextResponse.json({ error: "Invalid image format" }, { status: 400 });
-    }
-    const preprocessMs = Math.round(performance.now() - t0);
-
-    // i. Compute hashes
-    const t1 = performance.now();
-    let queryPhash: bigint, queryDhash: bigint, queryWhash: bigint;
-    try {
-      queryPhash = phash(data, width, height);
-      queryDhash = dhash(data, width, height);
-      queryWhash = whash(data, width, height);
-    } catch (err) {
-      console.error("[recognize] Hash computation error:", err);
-      return NextResponse.json({ error: "Internal error" }, { status: 500 });
-    }
-    const hashMs = Math.round(performance.now() - t1);
-
-    // j. Get cache
-    const t2 = performance.now();
-    let cache;
-    try {
-      cache = await getOrLoadCache(game, supabase);
-    } catch (err) {
-      if (err instanceof CacheLoadError) {
-        return NextResponse.json({ error: err.message }, { status: 503 });
-      }
-      throw err;
-    }
-    const cacheMs = Math.round(performance.now() - t2);
-
-    // k. Score all entries
-    const t3 = performance.now();
-    const scored = cache.entries.map((entry) => {
-      const phashDist = hamming64(queryPhash, entry.phash);
-      const dhashDist = hamming64(queryDhash, entry.dhash);
-      const whashDist = hamming64(queryWhash, entry.whash);
-      const distance =
-        phashDist * HASH_WEIGHTS.phash +
-        dhashDist * HASH_WEIGHTS.dhash +
-        whashDist * HASH_WEIGHTS.whash;
-      return { entry, distance, phashDist, dhashDist, whashDist };
-    });
-
-    // l. Sort and slice top 5
-    scored.sort((a, b) => a.distance - b.distance);
-    const top = scored.slice(0, 5);
-    const matchMs = Math.round(performance.now() - t3);
-
-    const totalMs = Math.round(performance.now() - t0);
-
-    // n. Log summary
-    const band = top.length > 0 ? bandFromDistance(top[0].distance) : "unclear";
-    console.log(
-      `[recognize] game=${game} band=${band} topDist=${top[0]?.distance?.toFixed(1) ?? "N/A"} candidates=${top.length} latencyMs=${totalMs}`
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
     );
 
-    // m. Build response
-    const response: RecognizeResponse = {
-      ok: true,
-      latencyMs: totalMs,
-      timing: { preprocessMs, hashMs, cacheMs, matchMs },
-      cache: {
-        game,
-        catalogVersion: cache.catalogVersion,
-        totalEntries: cache.entries.length,
-        loadedAt: cache.loadedAt,
-      },
-      query: {
-        phash: queryPhash.toString(16).padStart(16, "0"),
-        dhash: queryDhash.toString(16).padStart(16, "0"),
-        whash: queryWhash.toString(16).padStart(16, "0"),
-      },
-      result: {
-        confidenceBand: band,
-        topDistance: top[0]?.distance ?? 64,
-        candidates: top.map((r, i) => ({
-          rank: i + 1,
-          catalogCardId: r.entry.catalogCardId,
-          name: r.entry.name,
-          setName: r.entry.setName,
-          setCode: r.entry.setCode,
-          cardNumber: r.entry.cardNumber,
-          rarity: r.entry.rarity,
-          imageSmallUrl: r.entry.imageSmallUrl,
-          imageLargeUrl: r.entry.imageLargeUrl,
-          weightedDistance: r.distance,
-          distanceBreakdown: {
-            phash: r.phashDist,
-            dhash: r.dhashDist,
-            whash: r.whashDist,
-          },
-        })),
-      },
-    };
+    // ── STEP 1: Claude Vision reads card text ──
+    let visionResult: { name: string | null; number: string | null; set: string | null; confidence: "high" | "medium" | "low" } = { name: null, number: null, set: null, confidence: "low" };
 
-    return NextResponse.json(response);
-  } catch (err) {
-    console.error("[recognize] Unexpected error:", err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    if (anthropic) {
+      try {
+        const msg = await anthropic.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 256,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: rawB64 } },
+              { type: "text", text: `Examine this Pokemon card image carefully.
+
+Extract these fields:
+1. name: The Pokemon or card name printed at the top (e.g. "Charizard", "Pikachu VMAX", "Iono", "Professor's Research")
+2. number: The card number at the bottom right (e.g. "4/102", "025/185", "SWSH146", "TG01/TG30")
+3. set: The set name if visible (e.g. "Base Set", "Scarlet & Violet", "Sword & Shield")
+4. confidence: "high" if text is clearly readable, "medium" if partially readable, "low" if unclear
+
+Return ONLY a JSON object, no markdown, no explanation:
+{"name":"...","number":"...","set":"...","confidence":"high"}
+
+If this is not a Pokemon card or the text is completely unreadable:
+{"name":null,"number":null,"set":null,"confidence":"low"}` }
+            ]
+          }]
+        });
+
+        const raw = (msg.content[0] as any).text?.trim() || "";
+        const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed && typeof parsed.name !== "undefined") visionResult = parsed;
+      } catch (err) {
+        console.error("[vision] Claude error:", err);
+      }
+    }
+
+    // ── STEP 2: Catalog lookup ──
+    let cards: any[] = [];
+
+    if (visionResult.name && visionResult.confidence !== "low") {
+      // Primary: exact name + exact card number
+      if (visionResult.number) {
+        const { data } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
+        cards = data || [];
+
+        // Retry with short number: "4/102" → "4"
+        if (!cards.length && visionResult.number.includes("/")) {
+          const shortNum = visionResult.number.split("/")[0];
+          const { data: d2 } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", shortNum).limit(5);
+          cards = d2 || [];
+        }
+
+        // Retry with zero-padded: "25" → "025"
+        if (!cards.length && visionResult.number && !visionResult.number.includes("/")) {
+          const padded = visionResult.number.padStart(3, "0");
+          if (padded !== visionResult.number) {
+            const { data: d3 } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).limit(5);
+            cards = d3 || [];
+          }
+        }
+      }
+
+      // Fallback: name only
+      if (!cards.length) {
+        const { data } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_name", { ascending: true }).limit(10);
+        cards = data || [];
+      }
+    }
+
+    // ── STEP 3: Fall back to hash if vision got nothing ──
+    if (!cards.length) {
+      console.log("[recognize] vision got no match, falling back to hash");
+      const hashResult = await recognizeByHash(rawB64, game, supabase);
+      return NextResponse.json({ ...hashResult, method: "hash", visionResult });
+    }
+
+    // ── STEP 4: Build response ──
+    const confidenceBand = cards.length === 1 && visionResult.confidence === "high" ? "exact" : cards.length === 1 ? "likely" : visionResult.confidence === "high" ? "choose_version" : "unclear";
+
+    const candidates = cards.map((card: any, i: number) => ({
+      rank: i + 1,
+      catalogCardId: `${card.set_code}-${card.card_number}`,
+      name: card.name,
+      setName: card.set_name,
+      setCode: card.set_code,
+      cardNumber: card.card_number,
+      rarity: card.rarity,
+      imageSmallUrl: `https://images.pokemontcg.io/${card.set_code}/${card.card_number}.png`,
+      imageLargeUrl: `https://images.pokemontcg.io/${card.set_code}/${card.card_number}_hires.png`,
+      weightedDistance: i === 0 ? 0 : i * 5,
+      distanceBreakdown: { phash: 0, dhash: 0, whash: 0 },
+    }));
+
+    console.log(`[recognize] vision: "${visionResult.name}" #${visionResult.number} → ${confidenceBand}, ${candidates.length} candidates`);
+
+    return NextResponse.json({
+      ok: true,
+      method: "vision",
+      visionResult,
+      result: { confidenceBand, topDistance: 0, candidates },
+    });
+  } catch (err: any) {
+    console.error("[recognize] unhandled error:", err);
+    return NextResponse.json({ error: "Recognition failed: " + err.message }, { status: 500 });
   }
+}
+
+// ── HASH FALLBACK ──
+
+async function recognizeByHash(imageBase64: string, game: string, supabase: any): Promise<any> {
+  const buffer = Buffer.from(imageBase64, "base64");
+  if (buffer.byteLength > MAX_IMAGE_BYTES) return { ok: false, error: "Image too large" };
+
+  const t0 = performance.now();
+  let data: Uint8Array, width: number, height: number;
+  try {
+    const r = await preprocessImage(buffer);
+    data = r.data; width = r.width; height = r.height;
+  } catch { return { ok: false, error: "Invalid image format" }; }
+  const preprocessMs = Math.round(performance.now() - t0);
+
+  const t1 = performance.now();
+  const queryPhash = phash(data, width, height);
+  const queryDhash = dhash(data, width, height);
+  const queryWhash = whash(data, width, height);
+  const hashMs = Math.round(performance.now() - t1);
+
+  const t2 = performance.now();
+  let cache;
+  try { cache = await getOrLoadCache(game, supabase); } catch (err) {
+    if (err instanceof CacheLoadError) return { ok: false, error: err.message };
+    throw err;
+  }
+  const cacheMs = Math.round(performance.now() - t2);
+
+  const t3 = performance.now();
+  const scored = cache.entries.map(entry => {
+    const phashDist = hamming64(queryPhash, entry.phash);
+    const dhashDist = hamming64(queryDhash, entry.dhash);
+    const whashDist = hamming64(queryWhash, entry.whash);
+    return { entry, distance: phashDist * HASH_WEIGHTS.phash + dhashDist * HASH_WEIGHTS.dhash + whashDist * HASH_WEIGHTS.whash, phashDist, dhashDist, whashDist };
+  });
+  scored.sort((a, b) => a.distance - b.distance);
+  const top = scored.slice(0, 5);
+  const matchMs = Math.round(performance.now() - t3);
+
+  const band = top.length > 0 ? bandFromDistance(top[0].distance) : "unclear";
+  return {
+    ok: true,
+    latencyMs: Math.round(performance.now() - t0),
+    timing: { preprocessMs, hashMs, cacheMs, matchMs },
+    result: {
+      confidenceBand: band,
+      topDistance: top[0]?.distance ?? 64,
+      candidates: top.map((r, i) => ({
+        rank: i + 1, catalogCardId: r.entry.catalogCardId, name: r.entry.name,
+        setName: r.entry.setName, setCode: r.entry.setCode, cardNumber: r.entry.cardNumber,
+        rarity: r.entry.rarity, imageSmallUrl: r.entry.imageSmallUrl, imageLargeUrl: r.entry.imageLargeUrl,
+        weightedDistance: r.distance, distanceBreakdown: { phash: r.phashDist, dhash: r.dhashDist, whash: r.whashDist },
+      })),
+    },
+  };
 }
