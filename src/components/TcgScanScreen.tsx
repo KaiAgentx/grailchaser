@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { createClient } from "@/lib/supabase";
 import { Shell } from "./Shell";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
 
@@ -99,10 +100,15 @@ export function TcgScanScreen({ game, scanIntent, onBack, onResult }: Props) {
     setScanning(true);
     setError("");
     try {
+      const supabase = createClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData?.session?.access_token;
+      if (!jwt) { setError("Not signed in"); setScanning(false); return; }
+
       const base64 = await compressImage(file, 800);
       const res = await fetch("/api/tcg/recognize", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` },
         body: JSON.stringify({ game, imageBase64: base64 }),
       });
       const data = await res.json();

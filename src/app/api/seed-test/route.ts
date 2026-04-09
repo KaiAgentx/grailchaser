@@ -25,6 +25,9 @@ const testCards = [
 ];
 
 export async function POST(request: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "not_found", details: "Route not available" }, { status: 404 });
+  }
   try {
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

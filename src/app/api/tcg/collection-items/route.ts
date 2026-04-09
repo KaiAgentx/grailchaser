@@ -1,74 +1,65 @@
 /**
  * POST /api/tcg/collection-items
- * Idempotent, JWT-authenticated endpoint to add a TCG card to a user's collection.
+ * Idempotent, JWT-authenticated, rate-limited endpoint to add a TCG card.
  */
 import { NextRequest, NextResponse } from "next/server";
-import {
-  extractUserId, isValidUuid, canonicalHash,
-  checkIdempotency, writeIdempotency,
-  serviceRoleClient, TCG_GAME_VALUES,
-} from "@/lib/collectionItemsApi";
+import { extractUserId, isValidUuid, canonicalHash, checkIdempotency, writeIdempotency, serviceRoleClient, TCG_GAME_VALUES } from "@/lib/collectionItemsApi";
+import { ErrorCode, errorResponse } from "@/lib/errors";
+import { getOrCreateRequestId, logRequest } from "@/lib/logging";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const ROUTE = "/api/tcg/collection-items";
+const ECOSYSTEM = "tcg";
 
 export async function POST(req: NextRequest) {
+  const requestId = getOrCreateRequestId(req.headers);
+  const startedAt = Date.now();
+  let userId: string | null = null;
+
+  const respond = (resp: NextResponse): NextResponse => {
+    resp.headers.set("X-Request-ID", requestId);
+    logRequest({ requestId, route: ROUTE, method: "POST", userId, ecosystem: ECOSYSTEM, status: resp.status, latencyMs: Date.now() - startedAt, errorCode: resp.headers.get("x-error-code") });
+    return resp;
+  };
+
   try {
-    // 1. Auth
-    const userId = await extractUserId(req.headers.get("authorization"));
-    if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    userId = await extractUserId(req.headers.get("authorization"));
+    if (!userId) return respond(errorResponse({ code: ErrorCode.UNAUTHORIZED, requestId }));
 
-    // 2. Idempotency key
+    const limit = checkRateLimit(userId, "save");
+    if (!limit.allowed) return respond(errorResponse({ code: ErrorCode.RATE_LIMITED, details: `Rate limit exceeded (${limit.limit}/min). Retry in ${limit.retryAfterSeconds}s.`, requestId, headers: { "Retry-After": String(limit.retryAfterSeconds) } }));
+
     const idemKey = req.headers.get("idempotency-key");
-    if (!idemKey || !isValidUuid(idemKey)) {
-      return NextResponse.json({ error: "missing_idempotency" }, { status: 400 });
-    }
+    if (!idemKey || !isValidUuid(idemKey)) return respond(errorResponse({ code: ErrorCode.MISSING_IDEMPOTENCY, requestId }));
 
-    // 3. Body validation
     let body: any;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid_body", details: "Invalid JSON" }, { status: 400 }); }
+    try { body = await req.json(); } catch { return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "Invalid JSON", requestId })); }
 
     const missing: string[] = [];
     if (!body.catalogCardId) missing.push("catalogCardId");
     if (!body.game) missing.push("game");
     if (!body.player) missing.push("player");
-    if (missing.length > 0) return NextResponse.json({ error: "invalid_body", details: `Missing: ${missing.join(", ")}` }, { status: 400 });
-    if (!TCG_GAME_VALUES.includes(body.game)) return NextResponse.json({ error: "invalid_body", details: `game must be one of: ${TCG_GAME_VALUES.join(", ")}` }, { status: 400 });
+    if (missing.length > 0) return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: `Missing: ${missing.join(", ")}`, requestId }));
+    if (!TCG_GAME_VALUES.includes(body.game)) return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: `game must be one of: ${TCG_GAME_VALUES.join(", ")}`, requestId }));
 
-    // 4. Request hash
     const reqHash = canonicalHash(body);
-
-    // 5. Idempotency check
     const idem = await checkIdempotency(userId, idemKey, ROUTE, reqHash);
     if (idem.found && !idem.expired) {
-      if (idem.match) return NextResponse.json({ ...idem.responseBody, replay: true }, { status: 200 });
-      return NextResponse.json({ error: "idempotency_mismatch" }, { status: 409 });
+      if (idem.match) return respond(NextResponse.json({ ...idem.responseBody, replay: true }, { status: 200 }));
+      return respond(errorResponse({ code: ErrorCode.IDEMPOTENCY_MISMATCH, requestId }));
     }
 
-    // 6. Build card_data — preserve sports-first NOT NULL defaults
     const cardData: Record<string, any> = {
-      game: body.game,
-      player: body.player,
-      sport: "Pokemon",
-      year: new Date().getFullYear(),
-      brand: body.brand || "Pokémon TCG",
-      set: body.set || body.set_name || "",
-      card_number: body.card_number || "",
-      team: "",
-      parallel: "Base",
-      is_rc: false,
-      is_auto: false,
-      is_numbered: false,
-      watchlist: false,
-      grade_candidate: false,
-      gem_probability: 0.15,
-      graded_values: { "10": 0, "9": 0, "8": 0, "7": 0 },
-      status: "raw",
+      game: body.game, player: body.player, sport: "Pokemon",
+      year: new Date().getFullYear(), brand: body.brand || "Pokémon TCG",
+      set: body.set || body.set_name || "", card_number: body.card_number || "",
+      team: "", parallel: "Base", is_rc: false, is_auto: false, is_numbered: false,
+      watchlist: false, grade_candidate: false, gem_probability: 0.15,
+      graded_values: { "10": 0, "9": 0, "8": 0, "7": 0 }, status: "raw",
       tier: (body.raw_value || 0) >= 100 ? "Gem" : (body.raw_value || 0) >= 25 ? "Star" : (body.raw_value || 0) >= 5 ? "Core" : "Bulk",
-      condition: "NM",
-      date_added: new Date().toISOString().slice(0, 10),
+      condition: "NM", date_added: new Date().toISOString().slice(0, 10),
       notes: `TCG: ${body.game}`,
     };
-    // Optional fields
     if (body.rarity != null) cardData.rarity = body.rarity;
     if (body.raw_value != null) cardData.raw_value = body.raw_value;
     if (body.cost_basis != null) cardData.cost_basis = body.cost_basis;
@@ -82,26 +73,15 @@ export async function POST(req: NextRequest) {
     if (body.canonical_card_id) cardData.canonical_card_id = body.canonical_card_id;
     if (body.printing_id) cardData.printing_id = body.printing_id;
 
-    // 7. RPC call
     const svc = serviceRoleClient();
-    const { data, error } = await svc.rpc("insert_collection_item", {
-      p_user_id: userId,
-      p_storage_box: body.storage_box || "PENDING",
-      p_card_data: cardData,
-    });
+    const { data, error } = await svc.rpc("insert_collection_item", { p_user_id: userId, p_storage_box: body.storage_box || "PENDING", p_card_data: cardData });
+    if (error) { console.error(`[${ROUTE}] RPC error:`, error.message); return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: error.message, requestId })); }
 
-    // 8. RPC error
-    if (error) {
-      console.error("[tcg/collection-items] RPC error:", error.message);
-      return NextResponse.json({ error: "server_error", details: error.message }, { status: 500 });
-    }
-
-    // 9. Success
     const responseBody = { card: data };
     await writeIdempotency(userId, idemKey, ROUTE, reqHash, 201, responseBody);
-    return NextResponse.json(responseBody, { status: 201 });
+    return respond(NextResponse.json(responseBody, { status: 201 }));
   } catch (err: any) {
-    console.error("[tcg/collection-items] unhandled:", err.message);
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
+    console.error(`[${ROUTE}] unhandled:`, err?.message);
+    return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));
   }
 }
