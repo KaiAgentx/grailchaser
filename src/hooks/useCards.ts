@@ -24,61 +24,55 @@ export function useCards(userId?: string) {
   useEffect(() => { fetchCards(); }, [fetchCards]);
 
   const addCard = async (card: Partial<NewCard>) => {
-    const tier = calcTier(card.raw_value || 0);
-    const gemProb = card.gem_probability || Math.random() * 0.6 + 0.1;
-    const rawVal = card.raw_value || 0;
-    const newCard: any = {
-      ...(userId ? { user_id: userId } : {}),
-      player: card.player || "Unknown",
-      sport: card.sport || "Baseball",
-      team: card.team || "",
-      year: card.year || new Date().getFullYear(),
-      brand: card.brand || "Topps",
-      set: card.set || "Base",
-      parallel: card.parallel || "Base",
-      card_number: card.card_number || "#1",
-      is_rc: card.is_rc || false,
-      is_auto: card.is_auto || false,
-      is_numbered: card.is_numbered || false,
-      numbered_to: card.numbered_to || null,
-      condition: card.condition || "NM",
-      raw_value: rawVal,
-      cost_basis: card.cost_basis || 0,
-      purchase_source: card.purchase_source || null,
-      purchase_date: card.purchase_date || null,
-      purchase_intent: card.purchase_intent || null,
-      tier,
-      gem_probability: +gemProb.toFixed(2),
-      graded_values: card.graded_values || {
-        "10": +(rawVal * (2.5 + Math.random() * 3)).toFixed(2),
-        "9": +(rawVal * (1.5 + Math.random())).toFixed(2),
-        "8": +(rawVal * (1.1 + Math.random() * 0.3)).toFixed(2),
-        "7": +(rawVal * (0.9 + Math.random() * 0.2)).toFixed(2),
-      },
-      status: "raw" as CardStatus,
-      watchlist: card.watchlist || false,
-      grade_candidate: shouldFlagForGrading(rawVal, gemProb),
-      storage_box: card.storage_box || "PENDING",
-      storage_row: card.storage_row || 1,
-      storage_position: card.storage_position || 1,
-      scan_image_url: card.scan_image_url || null,
-      scan_image_back_url: card.scan_image_back_url || null,
-      notes: card.notes || "",
-      date_added: today(),
-      ebay_listing_id: null, ebay_offer_id: null, ebay_sku: null, ebay_url: null, ebay_price: null, ebay_listed_date: null,
-      shopify_product_id: null, shopify_variant_id: null, shopify_url: null, shopify_price: null, shopify_listed_date: null,
-      whatnot_listing_id: null, whatnot_url: null,
-      mercari_listed: false, mercari_url: null, facebook_listed: false,
-      tcgplayer_listed: false, tcgplayer_url: null,
-      listed_platform: null, listed_price: null, listed_date: null,
-      sold: false, sold_price: null, sold_date: null, sold_platform: null,
-      shipped_date: null, tracking_number: null,
-      grading_company: null, grading_submit_date: null, grading_return_date: null,
-      graded_grade: null, grading_cost: null, grading_cert: null,
-    };
-    const { data, error } = await supabase.from("cards").insert(newCard).select().single();
-    if (!error && data) setCards(prev => [data, ...prev]);
-    return { data, error };
+    // Use the server-validated /api/sports/collection-items endpoint
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData?.session?.access_token;
+      if (!jwt) return { data: null, error: { message: "Not authenticated" } };
+
+      const idemKey = crypto.randomUUID();
+      const res = await fetch("/api/sports/collection-items", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${jwt}`,
+          "Idempotency-Key": idemKey,
+        },
+        body: JSON.stringify({
+          player: card.player || "Unknown",
+          sport: card.sport || "Baseball",
+          team: card.team,
+          year: card.year,
+          brand: card.brand,
+          set: card.set,
+          parallel: card.parallel,
+          card_number: card.card_number,
+          is_rc: card.is_rc,
+          is_auto: card.is_auto,
+          is_numbered: card.is_numbered,
+          numbered_to: card.numbered_to,
+          condition: card.condition,
+          raw_value: card.raw_value,
+          cost_basis: card.cost_basis,
+          storage_box: card.storage_box,
+          notes: card.notes,
+          purchase_source: card.purchase_source,
+          purchase_intent: card.purchase_intent,
+          graded_values: card.graded_values,
+          gem_probability: card.gem_probability,
+          scan_image_url: card.scan_image_url,
+          game: "sports",
+        }),
+      });
+      const result = await res.json();
+      if (res.ok && result.card) {
+        setCards(prev => [result.card, ...prev]);
+        return { data: result.card, error: null };
+      }
+      return { data: null, error: { message: result.error || result.details || "Save failed" } };
+    } catch (err: any) {
+      return { data: null, error: { message: err.message } };
+    }
   };
 
   const addCards = async (cardData: Partial<NewCard>[]) => {

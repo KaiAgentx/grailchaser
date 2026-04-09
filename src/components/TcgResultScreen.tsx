@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase";
 import { Shell } from "./Shell";
 import { bg, surface, surface2, border, accent, green, red, amber, muted, secondary, text, font, mono } from "./styles";
 import type { TcgCondition } from "@/lib/types";
@@ -124,17 +125,36 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
     if (!selected) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/tcg/save", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+      const supabase = createClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwt = sessionData?.session?.access_token;
+      if (!jwt) { setSaving(false); return; }
+
+      const idemKey = crypto.randomUUID();
+      const res = await fetch("/api/tcg/collection-items", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${jwt}`,
+          "Idempotency-Key": idemKey,
+        },
         body: JSON.stringify({
-          user_id: userId, game: "pokemon", player: selected.name, brand: "Pokémon TCG",
-          set: selected.setName, card_number: selected.cardNumber, rarity: selected.rarity,
-          condition, tcg_card_id: selected.catalogCardId, raw_value: displayMarket ?? 0,
+          catalogCardId: selected.catalogCardId,
+          game: "pokemon",
+          player: selected.name,
+          brand: "Pokémon TCG",
+          set: selected.setName,
+          set_name: selected.setName,
+          set_code: selected.setCode,
+          card_number: selected.cardNumber,
+          rarity: selected.rarity,
+          raw_value: displayMarket ?? 0,
           scan_image_url: selected.imageLargeUrl || selected.imageSmallUrl,
+          storage_box: "PENDING",
         }),
       });
       const data = await res.json();
-      if (data.success) { setSaved(true); navigator.vibrate?.(80); if (scanIntent !== "collect") setTimeout(onSaved, 1500); }
+      if (res.ok && (data.card || data.replay)) { setSaved(true); navigator.vibrate?.(80); if (scanIntent !== "collect") setTimeout(onSaved, 1500); }
     } catch {}
     setSaving(false);
   };
