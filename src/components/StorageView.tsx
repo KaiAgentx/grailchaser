@@ -16,6 +16,7 @@ type Screen = "list" | "create" | "detail" | "edit";
 interface Props {
   cards: Card[];
   boxes: Box[];
+  ecosystemMode?: "sports" | "tcg" | null;
   onBack: () => void;
   addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
   updateBox: (id: string, updates: Partial<Pick<Box, "name" | "num_rows" | "divider_size" | "box_type">>) => Promise<any>;
@@ -28,7 +29,7 @@ interface Props {
   getBoxCards: (boxName: string) => Card[];
 }
 
-export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
+export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
   const initBox = initialBoxName ? boxes.find(b => b.name === initialBoxName) || null : null;
   const [screen, setScreen] = useState<Screen>(initBox ? "detail" : "list");
   const [selectedBox, setSelectedBox] = useState<Box | null>(initBox);
@@ -42,7 +43,12 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const unassigned = cards.filter(c => !c.storage_box || c.storage_box === "PENDING");
+  // Filter boxes and cards by ecosystem: TCG = game in [pokemon, mtg, one_piece]. Sports = everything else.
+  const TCG_GAME_VALUES = ["pokemon", "mtg", "one_piece"];
+  const isTcgItem = (item: any) => item.game && TCG_GAME_VALUES.includes(item.game);
+  const ecoBoxes = ecosystemMode === "tcg" ? boxes.filter(isTcgItem) : ecosystemMode === "sports" ? boxes.filter(b => !isTcgItem(b)) : boxes;
+  const ecoCards = ecosystemMode === "tcg" ? cards.filter(isTcgItem) : ecosystemMode === "sports" ? cards.filter(c => !isTcgItem(c)) : cards;
+  const unassigned = ecoCards.filter(c => !c.storage_box || c.storage_box === "PENDING");
 
   // ─── BOX LIST ───
   if (screen === "list") return (
@@ -55,7 +61,7 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
           </div>
         )}
 
-        {boxes.map(box => {
+        {ecoBoxes.map(box => {
           const count = box.card_count || 0;
           const typeLabel = BOX_TYPE_LABELS[box.box_type || "singles"]?.label || box.box_type;
           const typeColor = typeColors[box.box_type || "singles"] || text;
@@ -76,7 +82,7 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
           );
         })}
 
-        {boxes.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>No boxes yet — create one to start organizing</div>}
+        {ecoBoxes.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>{ecosystemMode === "tcg" ? "No TCG boxes yet. Create one to get started." : "No boxes yet — create one to start organizing"}</div>}
 
         <button onClick={() => { setNewName(""); setNewRows(1); setNewDivider(50); setNewType("singles"); setScreen("create"); }} style={{ width: "100%", ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green, marginTop: 8 }}>+ Create New Box</button>
       </div>

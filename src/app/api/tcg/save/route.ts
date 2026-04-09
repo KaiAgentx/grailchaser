@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase.from("cards").insert({
       user_id,
+      game: game, // TCG ecosystem discriminator
       player,
-      sport: "Pokemon" as any, // Maps to existing sport column for TCG cards
+      sport: "Pokemon" as any, // Required NOT NULL column — sports-first default
       brand: brand || "Pokémon TCG",
       set: set || "",
       card_number: card_number || "",

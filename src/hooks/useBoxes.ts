@@ -52,11 +52,13 @@ export function useBoxes(userId?: string, cards?: any[]) {
     card_count: cards ? cards.filter(c => c.storage_box === b.name).length : 0,
   }));
 
-  const addBox = async (name: string, num_rows: number, divider_size: number, box_type: BoxType) => {
+  const addBox = async (name: string, num_rows: number, divider_size: number, box_type: BoxType, game?: string) => {
     if (!userId) return { error: { message: "Not logged in" } };
+    const row: any = { user_id: userId, name, num_rows, divider_size, box_type };
+    if (game) row.game = game;
     const { data, error } = await supabase
       .from("boxes")
-      .insert({ user_id: userId, name, num_rows, divider_size, box_type })
+      .insert(row)
       .select()
       .single();
     if (error) console.error("addBox error:", error);

@@ -68,16 +68,18 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("home");
   const [initialScreenSet, setInitialScreenSet] = useState(false);
 
-  // Set initial screen based on streak after hydration
+  // Set initial screen based on activeGame after hydration
   useEffect(() => {
     if (!gameHydrated || initialScreenSet || authLoading || !user) return;
-    if (modeStreak.count >= 5) {
-      setScreen(modeStreak.mode === "tcg" ? "tcgHome" : "home");
-    } else {
+    if (activeGame === null) {
       setScreen("modeSelector");
+    } else if (mode === "tcg") {
+      setScreen("tcgHome");
+    } else {
+      setScreen("home");
     }
     setInitialScreenSet(true);
-  }, [gameHydrated, initialScreenSet, authLoading, user, modeStreak]);
+  }, [gameHydrated, initialScreenSet, authLoading, user, activeGame, mode]);
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [prevScreen, setPrevScreen] = useState<string>("home");
   const [prevScreenData, setPrevScreenData] = useState<any>(null);
@@ -119,8 +121,13 @@ export default function Home() {
   const unsold = cards.filter(c => !c.sold);
   const listed = cards.filter(c => c.status === "listed");
   const grading = cards.filter(c => c.status === "grading");
-  const filteredCards = (statusFilter === "pending" ? cards.filter(c => !c.storage_box || c.storage_box === "PENDING") : statusFilter === "stale" ? listed.filter(c => c.listed_date && (Date.now() - new Date(c.listed_date).getTime()) / 86400000 > 14) : statusFilter ? cards.filter(c => c.status === statusFilter) : unsold).filter(c => filterSport === "All" || c.sport === filterSport).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase())).sort((a, b) => sortBy === "value" ? b.raw_value - a.raw_value : sortBy === "recent" ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime() : sortBy === "name" ? a.player.localeCompare(b.player) : (a.storage_box || "ZZZ").localeCompare(b.storage_box || "ZZZ") || (a.storage_position || 0) - (b.storage_position || 0));
-  const sports = ["All", ...Array.from(new Set(cards.map(c => c.sport)))];
+  // Ecosystem filter: TCG = game in [pokemon, mtg, one_piece]. Sports = everything else (game='sports', null, etc).
+  const TCG_GAME_VALUES = ["pokemon", "mtg", "one_piece"];
+  const isTcgCard = (c: any) => c.game && TCG_GAME_VALUES.includes(c.game);
+  const ecosystemCards = mode === "tcg" ? cards.filter(isTcgCard) : cards.filter(c => !isTcgCard(c));
+  const ecosystemUnsold = ecosystemCards.filter(c => !c.sold);
+  const filteredCards = (statusFilter === "pending" ? ecosystemCards.filter(c => !c.storage_box || c.storage_box === "PENDING") : statusFilter === "stale" ? ecosystemCards.filter(c => c.status === "listed" && c.listed_date && (Date.now() - new Date(c.listed_date).getTime()) / 86400000 > 14) : statusFilter ? ecosystemCards.filter(c => c.status === statusFilter) : ecosystemUnsold).filter(c => filterSport === "All" || (mode === "tcg" ? (c as any).game === filterSport : c.sport === filterSport)).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase())).sort((a, b) => sortBy === "value" ? b.raw_value - a.raw_value : sortBy === "recent" ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime() : sortBy === "name" ? a.player.localeCompare(b.player) : (a.storage_box || "ZZZ").localeCompare(b.storage_box || "ZZZ") || (a.storage_position || 0) - (b.storage_position || 0));
+  const sports = mode === "tcg" ? ["All", "pokemon", "mtg", "one_piece"] : ["All", ...Array.from(new Set(ecosystemCards.map(c => c.sport)))];
 
   const handleScan = async (file: File) => {
     setScanning(true);
@@ -181,7 +188,7 @@ export default function Home() {
     else setScreen(s as Screen);
   };
 
-  const bottomNav = <BottomNav currentScreen={screen} prevScreen={prevScreen} onNavigate={handleBottomNav} />;
+  const bottomNav = <BottomNav currentScreen={screen} prevScreen={prevScreen} onNavigate={handleBottomNav} onSwitchWorld={() => { setActiveGame(null); setScreen("modeSelector"); }} currentMode={mode} />;
 
   // ─── MODE SELECTOR ───
   if (screen === "modeSelector") return (
@@ -202,7 +209,7 @@ export default function Home() {
   // ─── TCG HOME ───
   if (screen === "tcgHome") return (
     <>
-      <Shell title={GAME_DISPLAY_NAME[activeGame] || "TCG"}>
+      <Shell title={activeGame ? GAME_DISPLAY_NAME[activeGame] || "TCG" : "TCG"}>
         <div style={{ paddingTop: 16 }}>
           {/* Mode pill */}
           <div style={{ textAlign: "center", marginBottom: 16 }}>
@@ -219,11 +226,11 @@ export default function Home() {
           {/* Scan CTAs */}
           <button onClick={() => { setTcgScanIntent("check"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 8, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
-            <div style={{ fontSize: 12, color: muted }}>Scan or search {GAME_DISPLAY_NAME[activeGame]} cards</div>
+            <div style={{ fontSize: 12, color: muted }}>Scan or search {activeGame ? GAME_DISPLAY_NAME[activeGame] : "TCG"} cards</div>
           </button>
           <button onClick={() => { setTcgScanIntent("collect"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 4 }}>Scan to Collection</div>
-            <div style={{ fontSize: 12, color: muted }}>Log {GAME_DISPLAY_NAME[activeGame]} cards you own</div>
+            <div style={{ fontSize: 12, color: muted }}>Log {activeGame ? GAME_DISPLAY_NAME[activeGame] : "TCG"} cards you own</div>
           </button>
 
           {/* Recent Checks */}
@@ -246,7 +253,7 @@ export default function Home() {
   // ─── TCG SCAN ───
   if (screen === "tcgScan") return (
     <><TcgScanScreen
-      game={activeGame}
+      game={activeGame || "pokemon"}
       scanIntent={tcgScanIntent}
       onBack={() => setScreen("tcgHome")}
       onResult={(result, intent) => { setTcgRecognizeResult(result); setTcgScanIntent(intent); setScreen("tcgResult"); }}
@@ -350,7 +357,7 @@ export default function Home() {
   );
 
   if (screen === "myCards") return (<>
-    <Shell title={"My Cards (" + filteredCards.length + ")"} back={() => { setStatusFilter(""); setScreen("home"); }}>
+    <Shell title={"My Cards (" + filteredCards.length + ")"} back={() => { setStatusFilter(""); setFilterSport("All"); setScreen(mode === "tcg" ? "tcgHome" : "home"); }}>
       <div style={{ paddingTop: 12 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input placeholder="Search player, brand..." value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
@@ -362,11 +369,11 @@ export default function Home() {
           </select>
         </div>
         <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
-          {sports.map(s => (<button key={s} onClick={() => { setFilterSport(s); if (statusFilter === "pending") setStatusFilter(""); }} style={{ padding: "6px 14px", background: filterSport === s ? accent + "20" : surface2, border: "1px solid " + (filterSport === s ? accent + "50" : border), borderRadius: 20, color: filterSport === s ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{s}</button>))}
+          {sports.map(s => { const chipLabel = mode === "tcg" ? (s === "All" ? "All" : GAME_DISPLAY_NAME[s as Game] || s) : s; return (<button key={s} onClick={() => { setFilterSport(s); if (statusFilter === "pending") setStatusFilter(""); }} style={{ padding: "6px 14px", background: filterSport === s ? accent + "20" : surface2, border: "1px solid " + (filterSport === s ? accent + "50" : border), borderRadius: 20, color: filterSport === s ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{chipLabel}</button>); })}
           <button onClick={() => setStatusFilter(statusFilter === "pending" ? "" : "pending")} style={{ padding: "6px 14px", background: statusFilter === "pending" ? red + "20" : surface2, border: "1px solid " + (statusFilter === "pending" ? red + "50" : border), borderRadius: 20, color: statusFilter === "pending" ? red : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Unassigned</button>
         </div>
         {loading && <div style={{ textAlign: "center", color: muted, padding: 40 }}>Loading...</div>}
-        {!loading && filteredCards.length === 0 && (<div style={{ textAlign: "center", color: muted, padding: 40 }}><div style={{ fontSize: 36, marginBottom: 12 }}>📦</div><div style={{ fontSize: 14 }}>No cards yet</div></div>)}
+        {!loading && filteredCards.length === 0 && (<div style={{ textAlign: "center", color: muted, padding: 40 }}><div style={{ fontSize: 36, marginBottom: 12 }}>{mode === "tcg" ? "🎴" : "📦"}</div><div style={{ fontSize: 14 }}>{mode === "tcg" ? "No TCG cards yet. Tap Scan to add your first card." : "No cards yet"}</div></div>)}
         {filteredCards.map(card => (
           <button key={card.id} onClick={() => goToCardDetail(card, "myCards")} style={{ width: "100%", background: surface, borderLeft: "3px solid " + (sportColors[card.sport] || muted), borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 12, padding: "14px 16px", marginBottom: 6, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div>
@@ -400,7 +407,7 @@ export default function Home() {
 
   if (screen === "smartPull" && smartPullBoxName) return <><SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.boxName) setLotBuilderBoxName(t.boxName); if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
-  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
+  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} ecosystemMode={mode} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;

@@ -23,7 +23,7 @@ export function useActiveGame() {
     if (stored && ["sports", "pokemon", "mtg", "one_piece"].includes(stored)) {
       setActiveGameState(stored as Game);
     } else {
-      setActiveGameState("sports");
+      setActiveGameState(null); // null = chooser not yet answered
     }
 
     const streakStr = localStorage.getItem(STREAK_KEY);
@@ -44,11 +44,12 @@ export function useActiveGame() {
     setHydrated(true);
   }, []);
 
-  const setActiveGame = useCallback((game: Game) => {
+  const setActiveGame = useCallback((game: Game | null) => {
     setActiveGameState(game);
-    localStorage.setItem(GAME_KEY, game);
+    if (game) localStorage.setItem(GAME_KEY, game);
+    else localStorage.removeItem(GAME_KEY);
     // Also persist last-used TCG game separately so returning to TCG remembers it
-    if (isTcgGame(game)) {
+    if (game && isTcgGame(game)) {
       localStorage.setItem("grailchaser:lastTcgGame", game);
       setLastTcgGameState(game);
     }
@@ -62,10 +63,10 @@ export function useActiveGame() {
     });
   }, []);
 
-  const mode: Mode = activeGame ? gameToMode(activeGame) : "sports";
+  const mode: Mode | null = activeGame ? gameToMode(activeGame) : null;
 
   return {
-    activeGame: activeGame || "sports",
+    activeGame,
     setActiveGame,
     mode,
     modeStreak,

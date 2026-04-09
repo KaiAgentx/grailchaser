@@ -16,9 +16,11 @@ interface Props {
   currentScreen: string;
   prevScreen: string;
   onNavigate: (screen: string) => void;
+  onSwitchWorld?: () => void;
+  currentMode?: string | null;
 }
 
-export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
+export function BottomNav({ currentScreen, prevScreen, onNavigate, onSwitchWorld, currentMode }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   // Determine active tab — use prevScreen context for detail screens
@@ -52,6 +54,12 @@ export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
           <div onClick={() => setMoreOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 98 }} />
           <div style={{ position: "fixed", bottom: 56, left: 0, right: 0, zIndex: 99, display: "flex", justifyContent: "center" }}>
             <div style={{ maxWidth: 500, width: "100%", background: "#111318", borderTop: "1px solid " + border, borderRadius: "16px 16px 0 0", padding: "8px 0", animation: "scaleIn 0.15s ease" }}>
+              {onSwitchWorld && (
+                <button onClick={() => { setMoreOpen(false); onSwitchWorld(); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderBottom: "1px solid " + border, color: text, fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>
+                  <div>Switch World</div>
+                  <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Currently: {currentMode === "tcg" ? "TCG" : "Sports Cards"}</div>
+                </button>
+              )}
               {[
                 { label: "Lot Builder", screen: "lotBuilder" },
                 { label: "Import CSV", screen: "csvImport" },
