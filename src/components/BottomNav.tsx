@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { createClient } from "@/lib/supabase";
 import { bg, border, accent, muted, secondary, text, font, mono, red } from "./styles";
 
 type Tab = "home" | "myCards" | "scanChooser" | "storage" | "more";
@@ -22,6 +23,12 @@ interface Props {
 
 export function BottomNav({ currentScreen, prevScreen, onNavigate, onSwitchWorld, currentMode }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  };
 
   // Determine active tab — use prevScreen context for detail screens
   let activeTab: Tab = tabScreenMap[currentScreen] || "home";
@@ -66,6 +73,7 @@ export function BottomNav({ currentScreen, prevScreen, onNavigate, onSwitchWorld
               ].map(item => (
                 <button key={item.screen} onClick={() => { setMoreOpen(false); onNavigate(item.screen); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderBottom: "1px solid " + border, color: text, fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>{item.label}</button>
               ))}
+              <button onClick={() => { setMoreOpen(false); handleSignOut(); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderTop: "1px solid " + border, color: "#ef4444", fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48, marginTop: 8 }}>Sign Out</button>
             </div>
           </div>
         </>
