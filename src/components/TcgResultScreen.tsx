@@ -30,6 +30,22 @@ function autoSelectVariant(pricing: any, visionResult: any): string {
   return pricing?.priceType || available[0];
 }
 
+const SPARKLES = [
+  { top: "8%", left: "10%", size: 3, dur: 2.5, delay: 0, color: "#ffd700" },
+  { top: "12%", right: "8%", size: 2, dur: 3, delay: 0.5, color: "#fff8dc" },
+  { top: "55%", right: "4%", size: 4, dur: 2.8, delay: 1.2, color: "#ffd700" },
+  { bottom: "15%", right: "12%", size: 2, dur: 3.2, delay: 0.8, color: "#fff8dc" },
+  { bottom: "18%", left: "8%", size: 3, dur: 2.6, delay: 1.5, color: "#ffd700" },
+  { top: "50%", left: "4%", size: 2, dur: 3.5, delay: 0.3, color: "#fff8dc" },
+];
+
+const fmtPrice = (v: number | null) => v != null ? `$${v.toFixed(2)}` : "—";
+
+function fmtDate(s: string): string {
+  const d = new Date(s.replace(/\//g, "-"));
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 interface Candidate {
   rank: number; catalogCardId: string; name: string; setName: string; setCode: string;
   cardNumber: string | null; rarity: string | null; imageSmallUrl: string | null; imageLargeUrl: string | null;
@@ -114,21 +130,13 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
     return () => clearInterval(iv);
   }, [saved, scanIntent]);
 
-  // Computed prices from selected variant
+  // Computed prices (USD only)
   const activePrice = pricing?.allPrices?.[selectedVariant];
   const displayMarket = activePrice?.market ?? pricing?.market ?? null;
   const displayLow = activePrice?.low ?? pricing?.low ?? null;
-  const displayMid = activePrice?.mid ?? pricing?.mid ?? null;
   const displayHigh = activePrice?.high ?? pricing?.high ?? null;
-  const isReverseHolo = selectedVariant === "reverseHolofoil";
-  const displayAvg7 = isReverseHolo ? pricing?.reverseHoloCardmarket?.avg7 : pricing?.avg7;
-  const displayAvg30 = isReverseHolo ? pricing?.reverseHoloCardmarket?.avg30 : pricing?.avg30;
-  const trendDir = displayAvg7 && displayAvg30 ? (displayAvg7 > displayAvg30 * 1.1 ? "up" : displayAvg7 < displayAvg30 * 0.9 ? "down" : "stable") : null;
-  const hasPrice = displayMarket || displayAvg7 || displayAvg30;
-
-  const variantKeys = Object.keys(pricing?.allPrices || {});
-  const showVariantPicker = variantKeys.length > 1;
-  const autoDetected = visionResult && ((visionResult.edition === "1st" && selectedVariant.includes("1stEdition")) || (visionResult.finish === "reverse_holo" && selectedVariant === "reverseHolofoil") || (visionResult.finish === "non_holo" && (selectedVariant.includes("Normal") || selectedVariant === "normal")));
+  const displayDirectLow = (activePrice as any)?.directLow ?? null;
+  const hasPrice = displayMarket != null;
 
   const handleSave = async () => {
     if (!selected) return;
@@ -185,6 +193,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
 
   const imgSrc = imgError ? null : (selected?.imageLargeUrl || selected?.imageSmallUrl);
   const bStyle = bandStyles[band] || bandStyles.unclear;
+  const updatedDate = pricing?.updatedAt ? fmtDate(pricing.updatedAt) : null;
 
   // ─── Zero candidates ───
   if (candidates.length === 0) {
@@ -192,7 +201,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
       <Shell title="Result" back={onBack}>
         <div style={{ paddingTop: 60, textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12, color: muted }}>🎴</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: text, marginBottom: 8 }}>Couldn't identify this card</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: text, marginBottom: 8 }}>Couldn{"'"}t identify this card</div>
           <button onClick={onScanAnother} style={{ padding: "14px 28px", minHeight: 48, background: green, border: "none", borderRadius: 12, color: "#fff", fontFamily: font, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Try scanning again</button>
         </div>
       </Shell>
@@ -200,41 +209,125 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   }
 
   return (
-    <Shell title="Result" back={onBack}>
-      <div style={{ paddingTop: 16, paddingBottom: 140 }}>
+    <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 500, margin: "0 auto" }}>
+      <style>{`
+        @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+        @keyframes glow { 0%, 100% { opacity: 0.6; transform: scale(0.95); } 50% { opacity: 1; transform: scale(1.05); } }
+        @keyframes sparkle { 0%, 100% { opacity: 0; transform: scale(0.5); } 50% { opacity: 1; transform: scale(1); } }
+      `}</style>
 
-        {/* Card image */}
-        <div style={{ textAlign: "center", marginBottom: 8 }}>
-          {imgSrc ? <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ width: 180, borderRadius: 12, boxShadow: "0 4px 24px rgba(0,0,0,0.5)" }} /> : <div style={{ width: 180, height: 252, margin: "0 auto", background: surface2, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, color: muted }}>🎴</div>}
+      {/* ─── Custom header ─── */}
+      <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(8,9,13,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: "1px solid " + border, padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={onBack} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", padding: "8px 4px", lineHeight: 1 }}>←</button>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: 0.5 }}>Pokémon</span>
+        </div>
+        <button onClick={onScanAnother} style={{ background: "rgba(53,99,233,0.12)", border: "1px solid rgba(53,99,233,0.25)", borderRadius: 8, padding: "8px 14px", color: "#5B8DEF", fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Scan Another</button>
+      </div>
+
+      {/* ─── Content ─── */}
+      <div style={{ padding: "0 20px 80px", animation: "fadeIn 0.3s ease" }}>
+
+        {/* Card image with gold sparkle effect */}
+        <div style={{ position: "relative", textAlign: "center", padding: "28px 0 20px" }}>
+          {/* Radial glow */}
+          <div style={{ position: "absolute", top: "50%", left: "50%", width: 280, height: 360, transform: "translate(-50%, -50%)", background: "radial-gradient(circle, rgba(212,168,67,0.3) 0%, rgba(212,168,67,0.08) 40%, transparent 70%)", animation: "glow 4s ease-in-out infinite", pointerEvents: "none" }} />
+          {/* Sparkle dots */}
+          {SPARKLES.map((s, i) => (
+            <div key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, width: s.size, height: s.size, borderRadius: "50%", background: s.color, animation: `sparkle ${s.dur}s ease-in-out ${s.delay}s infinite`, pointerEvents: "none" }} />
+          ))}
+          {/* Card */}
+          {imgSrc ? (
+            <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ position: "relative", width: 200, height: 280, objectFit: "contain", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }} />
+          ) : (
+            <div style={{ position: "relative", width: 200, height: 280, margin: "0 auto", background: surface2, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, color: muted }}>🎴</div>
+          )}
         </div>
 
         {/* Confidence badge */}
-        <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
           <span style={{ display: "inline-block", padding: "4px 14px", borderRadius: 9999, background: bStyle.bg, border: "1px solid " + bStyle.border, color: bStyle.color, fontSize: 12, fontWeight: 600 }}>{bStyle.label}</span>
         </div>
 
-        {/* Card info */}
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: text }}>{selected?.name}</div>
-          <div style={{ fontSize: 12, color: muted, marginTop: 4 }}>{selected?.setName} · #{selected?.cardNumber} · {selected?.rarity}</div>
-          {result.method === "vision" && visionResult?.name && (
-            <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Vision read: {visionResult.name}{visionResult.number ? ` #${visionResult.number}` : ""}</div>
-          )}
+        {/* ─── Split layout: name left, price right ─── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
+          {/* Left — card info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: "#ffffff", lineHeight: 1.2 }}>{selected?.name}</div>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginTop: 5 }}>{selected?.setName} · #{selected?.cardNumber}</div>
+            {selected?.rarity && (
+              <span style={{ display: "inline-block", marginTop: 8, background: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.2)", borderRadius: 6, padding: "3px 10px", color: "#D4A843", fontSize: 11, fontWeight: 600 }}>{selected.rarity}</span>
+            )}
+          </div>
+          {/* Right — market price */}
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.35)", fontWeight: 600, marginBottom: 4 }}>Market</div>
+            {pricingLoading ? (
+              <div style={{ fontSize: 32, fontWeight: 700, color: muted }}>—</div>
+            ) : hasPrice ? (
+              <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, background: "linear-gradient(105deg, #B8860B 0%, #D4A843 20%, #FFD700 35%, #FFF8DC 42%, #FFD700 48%, #D4A843 60%, #B8860B 80%, #D4A843 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", lineHeight: 1.1 }}>{fmtPrice(displayMarket)}</div>
+            ) : (
+              <div style={{ fontSize: 16, fontWeight: 600, color: muted }}>No price</div>
+            )}
+            {!pricingLoading && (displayLow != null || displayHigh != null) && (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>{fmtPrice(displayLow)} – {fmtPrice(displayHigh)}</div>
+            )}
+          </div>
         </div>
 
-        {/* ─── Candidate picker (horizontal scroll) ─── */}
+        {/* ─── Pricing detail card ─── */}
+        {!pricingLoading && (
+          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ display: "flex", gap: 24 }}>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Low</div>
+                  <div style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayLow)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>High</div>
+                  <div style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayHigh)}</div>
+                </div>
+                {displayDirectLow != null && (
+                  <div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Direct</div>
+                    <div style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayDirectLow)}</div>
+                  </div>
+                )}
+              </div>
+              {pricing?.tcgplayerUrl && (
+                <a href={pricing.tcgplayerUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#5B8DEF", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap", paddingTop: 2 }}>View on TCGPlayer →</a>
+              )}
+            </div>
+            {updatedDate && (
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 8 }}>Updated {updatedDate}</div>
+            )}
+            {!hasPrice && (
+              <div style={{ fontSize: 12, color: muted, textAlign: "center", padding: "4px 0" }}>No pricing available</div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Candidate picker — "PICK YOUR VERSION" ─── */}
         {candidates.length >= 2 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, marginBottom: 8 }}>Which card is this?</div>
-            <div style={{ display: "flex", gap: 10, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", fontWeight: 600, marginBottom: 10 }}>Pick Your Version</div>
+            <div style={{ display: "flex", gap: 10, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 6, WebkitOverflowScrolling: "touch" }}>
               {candidates.map(c => {
                 const isSel = c.catalogCardId === selectedCardId;
                 return (
-                  <button key={c.catalogCardId} onClick={() => setSelectedCardId(c.catalogCardId)} style={{ flex: "0 0 auto", width: 90, scrollSnapAlign: "start", background: surface, border: isSel ? "2px solid " + accent : "1px solid " + border, borderRadius: 10, padding: 6, cursor: "pointer", textAlign: "center", minHeight: 44 }}>
-                    {c.imageSmallUrl ? <img src={c.imageSmallUrl} alt="" loading="lazy" onError={e => (e.currentTarget.style.display = "none")} style={{ width: 72, height: 100, objectFit: "cover", borderRadius: 6, marginBottom: 4 }} /> : <div style={{ width: 72, height: 100, background: surface2, borderRadius: 6, marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: muted, margin: "0 auto" }}>🎴</div>}
-                    <div style={{ fontSize: 10, fontWeight: 600, color: isSel ? accent : text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                    <div style={{ fontSize: 9, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.setName}</div>
-                    <div style={{ fontSize: 9, color: muted }}>{c.rarity}</div>
+                  <button key={c.catalogCardId} onClick={() => setSelectedCardId(c.catalogCardId)} style={{ position: "relative", flex: "0 0 auto", minWidth: 135, scrollSnapAlign: "start", background: isSel ? "rgba(212,168,67,0.06)" : "rgba(255,255,255,0.02)", border: isSel ? "2px solid #D4A843" : "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 8, cursor: "pointer", textAlign: "center" }}>
+                    {isSel && (
+                      <div style={{ position: "absolute", top: 0, right: 0, background: "#D4A843", color: "#0a0a12", fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: "0 10px 0 8px" }}>SELECTED</div>
+                    )}
+                    {(c.imageLargeUrl || c.imageSmallUrl) ? (
+                      <img src={c.imageLargeUrl || c.imageSmallUrl || ""} alt="" loading="lazy" onError={e => (e.currentTarget.style.display = "none")} style={{ width: 119, height: 167, objectFit: "contain", borderRadius: 7, marginBottom: 6 }} />
+                    ) : (
+                      <div style={{ width: 119, height: 167, background: surface2, borderRadius: 7, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: muted, margin: "0 auto" }}>🎴</div>
+                    )}
+                    <div style={{ fontSize: 13, fontWeight: 600, color: isSel ? "#D4A843" : "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                    <div style={{ fontSize: 10, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{c.setName}</div>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{c.rarity}</div>
                   </button>
                 );
               })}
@@ -242,97 +335,35 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           </div>
         )}
 
-        {/* Variant picker */}
-        {!pricingLoading && showVariantPicker && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
-              Variant{autoDetected && <span style={{ marginLeft: 8, color: green, fontSize: 10, textTransform: "none", letterSpacing: 0 }}>· Auto-detected</span>}
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {variantKeys.map(key => {
-                const isSel = key === selectedVariant;
-                const vm = pricing?.allPrices?.[key]?.market;
-                return (
-                  <button key={key} onClick={() => setSelectedVariant(key)} style={{ padding: "8px 14px", borderRadius: 20, border: isSel ? "1px solid " + accent : "1px solid " + border, background: isSel ? accent : surface2, color: isSel ? "#000" : text, fontSize: 13, fontWeight: isSel ? 600 : 400, cursor: "pointer", minHeight: 44, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <span>{VARIANT_LABELS[key] || key}</span>
-                    {vm != null && <span style={{ fontSize: 11, color: isSel ? "#000" : muted, fontWeight: 400 }}>${vm.toLocaleString()}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Pricing */}
-        <div style={{ background: surface, borderRadius: 14, padding: 16, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <span style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Pricing</span>
-            {!pricingLoading && trendDir && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: trendDir === "up" ? green : trendDir === "down" ? red : muted }}>
-                {trendDir === "up" ? "↑ Rising" : trendDir === "down" ? "↓ Falling" : "→ Stable"}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-            {[
-              { label: "TCGPlayer", val: displayMarket, pre: "$" },
-              { label: "7-Day Avg", val: displayAvg7, pre: "€" },
-              { label: "30-Day Avg", val: displayAvg30, pre: "€" },
-            ].map(p => (
-              <div key={p.label} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: muted, marginBottom: 2 }}>{p.label}</div>
-                <div style={{ fontFamily: mono, fontSize: 18, fontWeight: 700, color: pricingLoading ? muted : (p.val ? green : muted) }}>
-                  {pricingLoading ? "—" : p.val ? `${p.pre}${p.val.toLocaleString()}` : "—"}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {!pricingLoading && (displayLow || displayMid || displayHigh) && (
-            <div style={{ fontSize: 11, color: muted, textAlign: "center", marginBottom: 6 }}>
-              {displayLow != null && `Low: $${displayLow}`}{displayMid != null && ` · Mid: $${displayMid}`}{displayHigh != null && ` · High: $${displayHigh}`}
-            </div>
-          )}
-
-          {!pricingLoading && !hasPrice && <div style={{ fontSize: 12, color: muted, textAlign: "center" }}>No pricing data available</div>}
-
-          {!pricingLoading && hasPrice && pricing?.tcgplayerUrl && (
-            <a href={pricing.tcgplayerUrl} target="_blank" rel="noopener noreferrer" style={{ display: "block", fontSize: 10, color: muted, textAlign: "center", textDecoration: "none", marginTop: 4 }}>TCGPlayer & CardMarket · Updated daily →</a>
-          )}
-        </div>
-      </div>
-
-      {/* Sticky bottom */}
-      <div style={{ position: "sticky", bottom: 64, zIndex: 50 }}>
-        <div style={{ background: `linear-gradient(transparent, ${bg})`, height: 20 }} />
-        <div style={{ background: bg, padding: "0 0 8px" }}>
+        {/* ─── Action buttons (in flow, not sticky) ─── */}
+        <div style={{ marginTop: 8, paddingBottom: 20 }}>
           {saved && scanIntent === "collect" ? (
             <>
               <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 14, color: green, fontWeight: 600, marginBottom: 8 }}>✓ {selected?.name} added</div>
-              <button onClick={onScanAnother} style={{ width: "100%", padding: "14px", minHeight: 52, background: green, border: "none", borderRadius: 12, color: "#fff", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>Scan Next Card ({countdown}...)</button>
+              <button onClick={onScanAnother} style={{ width: "100%", height: 56, background: "#3563E9", border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 17, fontWeight: 600, cursor: "pointer" }}>Scan Next Card ({countdown}...)</button>
             </>
           ) : saved ? (
             <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 14, color: green, fontWeight: 600 }}>✓ {selected?.name} added to collection</div>
           ) : (
             <>
               {scanIntent === "collect" && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, color: muted, marginBottom: 4, fontWeight: 600 }}>Condition</div>
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Condition</div>
                   <div style={{ display: "flex", gap: 4 }}>
                     {CONDITIONS.map(c => (
-                      <button key={c} onClick={() => setCondition(c)} style={{ flex: 1, padding: "8px 4px", minHeight: 44, background: condition === c ? green + "20" : surface2, border: "1px solid " + (condition === c ? green + "50" : border), borderRadius: 8, color: condition === c ? green : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{c}</button>
+                      <button key={c} onClick={() => setCondition(c)} style={{ flex: 1, padding: "8px 4px", minHeight: 44, background: condition === c ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.03)", border: "1px solid " + (condition === c ? "rgba(212,168,67,0.3)" : "rgba(255,255,255,0.06)"), borderRadius: 8, color: condition === c ? "#D4A843" : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{c}</button>
                     ))}
                   </div>
                 </div>
               )}
-              <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", padding: "14px", minHeight: 52, background: green, border: "none", borderRadius: 12, color: "#fff", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving..." : "Add to Collection"}</button>
-              {scanIntent === "check" && <button onClick={onBack} style={{ width: "100%", padding: "12px", minHeight: 44, background: surface, border: "1px solid " + border, borderRadius: 12, color: secondary, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Skip</button>}
-              <button onClick={onScanAnother} style={{ width: "100%", background: "none", border: "none", color: muted, fontFamily: font, fontSize: 13, cursor: "pointer", padding: "10px 0", marginTop: 4 }}>Scan Another</button>
+              <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", height: 56, background: "#3563E9", border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 17, fontWeight: 600, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving..." : "Add to Collection"}</button>
+              {scanIntent === "check" && (
+                <button onClick={onBack} style={{ width: "100%", height: 56, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, color: "rgba(255,255,255,0.6)", fontFamily: font, fontSize: 16, fontWeight: 500, cursor: "pointer", marginTop: 8 }}>Skip</button>
+              )}
             </>
           )}
         </div>
       </div>
-    </Shell>
+    </div>
   );
 }
