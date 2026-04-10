@@ -126,6 +126,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   const displayMarket = activePrice?.market ?? pricing?.market ?? null;
   const displayLow = activePrice?.low ?? pricing?.low ?? null;
   const displayHigh = activePrice?.high ?? pricing?.high ?? null;
+  const displayMid = activePrice?.mid ?? pricing?.mid ?? null;
   const displayDirectLow = (activePrice as any)?.directLow ?? null;
   const hasPrice = displayMarket != null;
 
@@ -253,8 +254,8 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
             ) : (
               <div style={{ fontSize: 16, fontWeight: 600, color: muted }}>No price</div>
             )}
-            {!pricingLoading && (displayLow != null || displayHigh != null) && (
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>{fmtPrice(displayLow)} – {fmtPrice(displayHigh)}</div>
+            {!pricingLoading && (displayLow != null || displayMid != null) && (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>{fmtPrice(displayLow)} – {fmtPrice(displayMid)}</div>
             )}
           </div>
         </div>
@@ -269,8 +270,8 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
                   <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayLow)}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>High</div>
-                  <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayHigh)}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Mid</div>
+                  <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayMid)}</div>
                 </div>
                 {displayDirectLow != null && (
                   <div>
