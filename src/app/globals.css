@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Cormorant+Garamond:wght@600;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -36,7 +36,18 @@
 
   --background: #08090d;
   --foreground: #f1f5f9;
+
+  --bg-base: #060606;
+  --bg-input: #151a21;
+  --text-primary: #f4f1ea;
+  --gold-light: #e1c46d;
+  --gold-base: #c89a2b;
+  --gold-deep: #9a7421;
+  --gold-accent: #d4af52;
 }
+
+.premium-input::placeholder { color: #8a847d; opacity: 1; }
+.premium-input:focus { border-color: rgba(212,175,82,0.65) !important; box-shadow: 0 0 0 3px rgba(200,154,43,0.14) !important; }
 
 @theme inline {
   --color-background: var(--background);
