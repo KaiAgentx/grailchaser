@@ -325,14 +325,14 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           {saved && scanIntent === "collect" ? (
             <>
               <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 14, color: green, fontWeight: 600, marginBottom: 8 }}>✓ {selected?.name} added</div>
-              <button onClick={onScanAnother} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: "pointer", position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <button onClick={onScanAnother} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: "pointer", position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10, paddingBottom: 8 }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "#CC0000" }} />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "#ffffff" }} />
                 <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 2 }} />
                 <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
                 </div>
-                <span style={{ position: "relative", zIndex: 4, fontSize: 17, fontWeight: 700, letterSpacing: 0.3, color: "#1a1a2e", background: "linear-gradient(105deg, #0a0a12 0%, #1a1a2e 20%, #444 35%, #666 42%, #444 48%, #1a1a2e 60%, #0a0a12 80%, #1a1a2e 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", textShadow: "none" }}>Scan Next Card ({countdown}...)</span>
+                <span style={{ position: "relative", zIndex: 4, fontSize: 18, fontWeight: 800, letterSpacing: 0.3, color: "#000000" }}>Scan Next Card ({countdown}...)</span>
               </button>
             </>
           ) : saved ? (
@@ -349,14 +349,14 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
                   </div>
                 </div>
               )}
-              <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+              <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10, paddingBottom: 8 }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "#CC0000" }} />
                 <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "#ffffff" }} />
                 <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 2 }} />
                 <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
                 </div>
-                <span style={{ position: "relative", zIndex: 4, fontSize: 17, fontWeight: 700, letterSpacing: 0.3, color: "#1a1a2e", background: "linear-gradient(105deg, #0a0a12 0%, #1a1a2e 20%, #444 35%, #666 42%, #444 48%, #1a1a2e 60%, #0a0a12 80%, #1a1a2e 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", textShadow: "none" }}>{saving ? "Saving..." : "Add to Collection"}</span>
+                <span style={{ position: "relative", zIndex: 4, fontSize: 18, fontWeight: 800, letterSpacing: 0.3, color: "#000000" }}>{saving ? "Saving..." : "Add to Collection"}</span>
               </button>
               {scanIntent === "check" && (
                 <button onClick={onBack} style={{ width: "100%", height: 56, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, color: "rgba(255,255,255,0.6)", fontFamily: font, fontSize: 16, fontWeight: 500, cursor: "pointer", marginTop: 8 }}>Skip</button>
