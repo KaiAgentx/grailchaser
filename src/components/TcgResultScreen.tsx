@@ -342,7 +342,15 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           {saved && scanIntent === "collect" ? (
             <>
               <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 14, color: green, fontWeight: 600, marginBottom: 8 }}>✓ {selected?.name} added</div>
-              <button onClick={onScanAnother} style={{ width: "100%", height: 56, background: "#3563E9", border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 17, fontWeight: 600, cursor: "pointer" }}>Scan Next Card ({countdown}...)</button>
+              <button onClick={onScanAnother} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: "pointer", position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "#CC0000" }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "#ffffff" }} />
+                <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 2 }} />
+                <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
+                </div>
+                <span style={{ position: "relative", zIndex: 4, color: "#FFCB05", textShadow: "0 1px 3px rgba(0,0,0,0.5)", letterSpacing: 0.3 }}>Scan Next Card ({countdown}...)</span>
+              </button>
             </>
           ) : saved ? (
             <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 14, color: green, fontWeight: 600 }}>✓ {selected?.name} added to collection</div>
@@ -358,7 +366,15 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
                   </div>
                 </div>
               )}
-              <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", height: 56, background: "#3563E9", border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 17, fontWeight: 600, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving..." : "Add to Collection"}</button>
+              <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "#CC0000" }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "#ffffff" }} />
+                <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 2 }} />
+                <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
+                </div>
+                <span style={{ position: "relative", zIndex: 4, color: "#FFCB05", textShadow: "0 1px 3px rgba(0,0,0,0.5)", letterSpacing: 0.3 }}>{saving ? "Saving..." : "Add to Collection"}</span>
+              </button>
               {scanIntent === "check" && (
                 <button onClick={onBack} style={{ width: "100%", height: 56, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, color: "rgba(255,255,255,0.6)", fontFamily: font, fontSize: 16, fontWeight: 500, cursor: "pointer", marginTop: 8 }}>Skip</button>
               )}
