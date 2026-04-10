@@ -83,18 +83,25 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
     setSelectedVariant("");
     const gen = ++fetchGen.current;
 
-    fetch(`/api/tcg/price?cardId=${encodeURIComponent(selected.catalogCardId)}`)
-      .then(r => r.json())
-      .then(d => {
-        if (gen !== fetchGen.current) return; // stale
-        if (!d.error) {
-          priceCache.current.set(selected.catalogCardId, d);
-          setPricing(d);
-          setSelectedVariant(autoSelectVariant(d, visionResult));
-        }
-        setPricingLoading(false);
+    const supabasePrice = createClient();
+    supabasePrice.auth.getSession().then(({ data: sd }) => {
+      const jwt = sd?.session?.access_token;
+      if (!jwt) { if (gen === fetchGen.current) setPricingLoading(false); return; }
+      fetch(`/api/tcg/price?cardId=${encodeURIComponent(selected.catalogCardId)}`, {
+        headers: { "Authorization": `Bearer ${jwt}` },
       })
-      .catch(() => { if (gen === fetchGen.current) setPricingLoading(false); });
+        .then(r => r.json())
+        .then(d => {
+          if (gen !== fetchGen.current) return; // stale
+          if (!d.error) {
+            priceCache.current.set(selected.catalogCardId, d);
+            setPricing(d);
+            setSelectedVariant(autoSelectVariant(d, visionResult));
+          }
+          setPricingLoading(false);
+        })
+        .catch(() => { if (gen === fetchGen.current) setPricingLoading(false); });
+    });
   }, [selected?.catalogCardId]);
 
   // Haptic on mount

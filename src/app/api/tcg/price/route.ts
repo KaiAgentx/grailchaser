@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { extractUserId } from "@/lib/collectionItemsApi";
+import { ErrorCode, errorResponse } from "@/lib/errors";
+import { getOrCreateRequestId, logRequest } from "@/lib/logging";
+import { checkRateLimit } from "@/lib/rateLimit";
+
+const ROUTE = "/api/tcg/price";
+const ECOSYSTEM = "tcg";
 
 // ─── In-memory price cache (1 hour TTL per cardId) ───
 const priceCache = new Map<string, { data: any; ts: number }>();
@@ -14,30 +21,44 @@ const PRICE_TYPE_PRIORITY = [
 ];
 
 export async function GET(req: NextRequest) {
-  const cardId = req.nextUrl.searchParams.get("cardId");
-  if (!cardId) {
-    return NextResponse.json({ error: "cardId required" }, { status: 400 });
-  }
+  const requestId = getOrCreateRequestId(req.headers);
+  const startedAt = Date.now();
+  let userId: string | null = null;
 
-  // Check cache
-  const cached = priceCache.get(cardId);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) {
-    return NextResponse.json(cached.data);
-  }
-
-  const apiKey = process.env.POKEMONTCG_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "POKEMONTCG_API_KEY not configured" }, { status: 500 });
-  }
+  const respond = (resp: NextResponse): NextResponse => {
+    resp.headers.set("X-Request-ID", requestId);
+    logRequest({ requestId, route: ROUTE, method: "GET", userId, ecosystem: ECOSYSTEM, status: resp.status, latencyMs: Date.now() - startedAt, errorCode: resp.headers.get("x-error-code") });
+    return resp;
+  };
 
   try {
+    userId = await extractUserId(req.headers.get("authorization"));
+    if (!userId) return respond(errorResponse({ code: ErrorCode.UNAUTHORIZED, requestId }));
+
+    const limit = checkRateLimit(userId, "default");
+    if (!limit.allowed) return respond(errorResponse({ code: ErrorCode.RATE_LIMITED, details: `Rate limit exceeded (${limit.limit}/min). Retry in ${limit.retryAfterSeconds}s.`, requestId, headers: { "Retry-After": String(limit.retryAfterSeconds) } }));
+
+    const cardId = req.nextUrl.searchParams.get("cardId");
+    if (!cardId) return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "cardId required", requestId }));
+
+    // Check cache
+    const cached = priceCache.get(cardId);
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      return respond(NextResponse.json(cached.data));
+    }
+
+    const apiKey = process.env.POKEMONTCG_API_KEY;
+    if (!apiKey) {
+      return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: "POKEMONTCG_API_KEY not configured", requestId }));
+    }
+
     const res = await fetch(`https://api.pokemontcg.io/v2/cards/${cardId}`, {
       headers: { "X-Api-Key": apiKey },
     });
 
     if (!res.ok) {
       console.log(`[tcg/price] Pokemon API ${res.status} for ${cardId}`);
-      return NextResponse.json({ error: `Card not found: ${cardId}` }, { status: 404 });
+      return respond(errorResponse({ code: ErrorCode.NOT_FOUND, details: `Card not found: ${cardId}`, requestId }));
     }
 
     const { data: card } = await res.json();
@@ -94,11 +115,9 @@ export async function GET(req: NextRequest) {
     // Cache the result
     priceCache.set(cardId, { data: result, ts: Date.now() });
 
-    console.log(`[tcg/price] ${cardId}: market=$${result.market} type=${result.priceType}`);
-
-    return NextResponse.json(result);
+    return respond(NextResponse.json(result));
   } catch (err: any) {
     console.error("[tcg/price] Error:", err.message);
-    return NextResponse.json({ error: "Price lookup failed" }, { status: 500 });
+    return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));
   }
 }
