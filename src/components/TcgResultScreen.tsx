@@ -30,15 +30,6 @@ function autoSelectVariant(pricing: any, visionResult: any): string {
   return pricing?.priceType || available[0];
 }
 
-const SPARKLES = [
-  { top: "8%", left: "10%", size: 4, dur: 2.5, delay: 0, color: "#ffd700" },
-  { top: "12%", right: "8%", size: 3, dur: 3, delay: 0.5, color: "#fff8dc" },
-  { top: "55%", right: "4%", size: 5, dur: 2.8, delay: 1.2, color: "#ffd700" },
-  { bottom: "15%", right: "12%", size: 3, dur: 3.2, delay: 0.8, color: "#fff8dc" },
-  { bottom: "18%", left: "8%", size: 4, dur: 2.6, delay: 1.5, color: "#ffd700" },
-  { top: "50%", left: "4%", size: 3, dur: 3.5, delay: 0.3, color: "#fff8dc" },
-];
-
 const fmtPrice = (v: number | null) => v != null ? `$${v.toFixed(2)}` : "—";
 
 function fmtDate(s: string): string {
@@ -212,8 +203,6 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 500, margin: "0 auto" }}>
       <style>{`
         @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
-        @keyframes glow { 0%, 100% { opacity: 0.6; transform: scale(0.95); } 50% { opacity: 1; transform: scale(1.05); } }
-        @keyframes sparkle { 0%, 100% { opacity: 0; transform: scale(0.5); } 50% { opacity: 1; transform: scale(1); } }
       `}</style>
 
       {/* ─── Custom header ─── */}
@@ -230,19 +219,12 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
       {/* ─── Content ─── */}
       <div style={{ padding: "0 20px 80px", animation: "fadeIn 0.3s ease" }}>
 
-        {/* Card image with gold sparkle effect */}
-        <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 0 20px" }}>
-          {/* Radial glow */}
-          <div style={{ position: "absolute", top: "50%", left: "50%", width: 320, height: 400, transform: "translate(-50%, -50%)", background: "radial-gradient(circle, rgba(212,168,67,0.5) 0%, rgba(212,168,67,0.15) 40%, transparent 70%)", animation: "glow 4s ease-in-out infinite", pointerEvents: "none" }} />
-          {/* Sparkle dots */}
-          {SPARKLES.map((s, i) => (
-            <div key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, width: s.size, height: s.size, borderRadius: "50%", background: s.color, animation: `sparkle ${s.dur}s ease-in-out ${s.delay}s infinite`, pointerEvents: "none" }} />
-          ))}
-          {/* Card */}
+        {/* Card image */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 0 20px" }}>
           {imgSrc ? (
-            <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ position: "relative", width: 200, height: 280, objectFit: "contain", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }} />
+            <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ width: 200, height: 280, objectFit: "contain", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }} />
           ) : (
-            <div style={{ position: "relative", width: 200, height: 280, background: surface2, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, color: muted }}>🎴</div>
+            <div style={{ width: 200, height: 280, background: surface2, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, color: muted }}>🎴</div>
           )}
         </div>
 
