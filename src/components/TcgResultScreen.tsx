@@ -31,12 +31,12 @@ function autoSelectVariant(pricing: any, visionResult: any): string {
 }
 
 const SPARKLES = [
-  { top: "8%", left: "10%", size: 3, dur: 2.5, delay: 0, color: "#ffd700" },
-  { top: "12%", right: "8%", size: 2, dur: 3, delay: 0.5, color: "#fff8dc" },
-  { top: "55%", right: "4%", size: 4, dur: 2.8, delay: 1.2, color: "#ffd700" },
-  { bottom: "15%", right: "12%", size: 2, dur: 3.2, delay: 0.8, color: "#fff8dc" },
-  { bottom: "18%", left: "8%", size: 3, dur: 2.6, delay: 1.5, color: "#ffd700" },
-  { top: "50%", left: "4%", size: 2, dur: 3.5, delay: 0.3, color: "#fff8dc" },
+  { top: "8%", left: "10%", size: 4, dur: 2.5, delay: 0, color: "#ffd700" },
+  { top: "12%", right: "8%", size: 3, dur: 3, delay: 0.5, color: "#fff8dc" },
+  { top: "55%", right: "4%", size: 5, dur: 2.8, delay: 1.2, color: "#ffd700" },
+  { bottom: "15%", right: "12%", size: 3, dur: 3.2, delay: 0.8, color: "#fff8dc" },
+  { bottom: "18%", left: "8%", size: 4, dur: 2.6, delay: 1.5, color: "#ffd700" },
+  { top: "50%", left: "4%", size: 3, dur: 3.5, delay: 0.3, color: "#fff8dc" },
 ];
 
 const fmtPrice = (v: number | null) => v != null ? `$${v.toFixed(2)}` : "—";
@@ -219,8 +219,10 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
       {/* ─── Custom header ─── */}
       <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(8,9,13,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: "1px solid " + border, padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={onBack} style={{ background: "none", border: "none", color: muted, fontSize: 18, cursor: "pointer", padding: "8px 4px", lineHeight: 1 }}>←</button>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: 0.5 }}>Pokémon</span>
+          <button onClick={onBack} style={{ background: "none", border: "none", color: muted, cursor: "pointer", padding: "8px 4px", lineHeight: 1, display: "flex", alignItems: "center" }} aria-label="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#D4A843", textTransform: "uppercase", letterSpacing: 1.5 }}>Pokémon</span>
         </div>
         <button onClick={onScanAnother} style={{ background: "rgba(53,99,233,0.12)", border: "1px solid rgba(53,99,233,0.25)", borderRadius: 8, padding: "8px 14px", color: "#5B8DEF", fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Scan Another</button>
       </div>
@@ -229,9 +231,9 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
       <div style={{ padding: "0 20px 80px", animation: "fadeIn 0.3s ease" }}>
 
         {/* Card image with gold sparkle effect */}
-        <div style={{ position: "relative", textAlign: "center", padding: "28px 0 20px" }}>
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 0 20px" }}>
           {/* Radial glow */}
-          <div style={{ position: "absolute", top: "50%", left: "50%", width: 280, height: 360, transform: "translate(-50%, -50%)", background: "radial-gradient(circle, rgba(212,168,67,0.3) 0%, rgba(212,168,67,0.08) 40%, transparent 70%)", animation: "glow 4s ease-in-out infinite", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", top: "50%", left: "50%", width: 320, height: 400, transform: "translate(-50%, -50%)", background: "radial-gradient(circle, rgba(212,168,67,0.5) 0%, rgba(212,168,67,0.15) 40%, transparent 70%)", animation: "glow 4s ease-in-out infinite", pointerEvents: "none" }} />
           {/* Sparkle dots */}
           {SPARKLES.map((s, i) => (
             <div key={i} style={{ position: "absolute", top: s.top, left: (s as any).left, right: (s as any).right, bottom: (s as any).bottom, width: s.size, height: s.size, borderRadius: "50%", background: s.color, animation: `sparkle ${s.dur}s ease-in-out ${s.delay}s infinite`, pointerEvents: "none" }} />
@@ -240,7 +242,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           {imgSrc ? (
             <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ position: "relative", width: 200, height: 280, objectFit: "contain", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }} />
           ) : (
-            <div style={{ position: "relative", width: 200, height: 280, margin: "0 auto", background: surface2, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, color: muted }}>🎴</div>
+            <div style={{ position: "relative", width: 200, height: 280, background: surface2, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, color: muted }}>🎴</div>
           )}
         </div>
 
@@ -261,11 +263,11 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           </div>
           {/* Right — market price */}
           <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1, color: "rgba(255,255,255,0.35)", fontWeight: 600, marginBottom: 4 }}>Market</div>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#D4A843", fontWeight: 600, marginBottom: 4 }}>Market</div>
             {pricingLoading ? (
               <div style={{ fontSize: 32, fontWeight: 700, color: muted }}>—</div>
             ) : hasPrice ? (
-              <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, background: "linear-gradient(105deg, #B8860B 0%, #D4A843 20%, #FFD700 35%, #FFF8DC 42%, #FFD700 48%, #D4A843 60%, #B8860B 80%, #D4A843 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", lineHeight: 1.1 }}>{fmtPrice(displayMarket)}</div>
+              <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, color: "#D4A843", background: "linear-gradient(105deg, #B8860B 0%, #D4A843 20%, #FFD700 35%, #FFF8DC 42%, #FFD700 48%, #D4A843 60%, #B8860B 80%, #D4A843 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", lineHeight: 1.1 }}>{fmtPrice(displayMarket)}</div>
             ) : (
               <div style={{ fontSize: 16, fontWeight: 600, color: muted }}>No price</div>
             )}
@@ -281,17 +283,17 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div style={{ display: "flex", gap: 24 }}>
                 <div>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Low</div>
-                  <div style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayLow)}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Low</div>
+                  <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayLow)}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>High</div>
-                  <div style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayHigh)}</div>
+                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>High</div>
+                  <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayHigh)}</div>
                 </div>
                 {displayDirectLow != null && (
                   <div>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Direct</div>
-                    <div style={{ fontSize: 16, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayDirectLow)}</div>
+                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Direct</div>
+                    <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayDirectLow)}</div>
                   </div>
                 )}
               </div>
