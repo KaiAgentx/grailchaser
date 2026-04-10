@@ -332,7 +332,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
                 <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
                 </div>
-                <span style={{ position: "relative", zIndex: 4, color: "#FFCB05", textShadow: "0 1px 3px rgba(0,0,0,0.5)", letterSpacing: 0.3 }}>Scan Next Card ({countdown}...)</span>
+                <span style={{ position: "relative", zIndex: 4, fontSize: 17, fontWeight: 700, letterSpacing: 0.3, color: "#1a1a2e", background: "linear-gradient(105deg, #0a0a12 0%, #1a1a2e 20%, #444 35%, #666 42%, #444 48%, #1a1a2e 60%, #0a0a12 80%, #1a1a2e 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", textShadow: "none" }}>Scan Next Card ({countdown}...)</span>
               </button>
             </>
           ) : saved ? (
@@ -356,7 +356,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
                 <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
                 </div>
-                <span style={{ position: "relative", zIndex: 4, color: "#FFCB05", textShadow: "0 1px 3px rgba(0,0,0,0.5)", letterSpacing: 0.3 }}>{saving ? "Saving..." : "Add to Collection"}</span>
+                <span style={{ position: "relative", zIndex: 4, fontSize: 17, fontWeight: 700, letterSpacing: 0.3, color: "#1a1a2e", background: "linear-gradient(105deg, #0a0a12 0%, #1a1a2e 20%, #444 35%, #666 42%, #444 48%, #1a1a2e 60%, #0a0a12 80%, #1a1a2e 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", textShadow: "none" }}>{saving ? "Saving..." : "Add to Collection"}</span>
               </button>
               {scanIntent === "check" && (
                 <button onClick={onBack} style={{ width: "100%", height: 56, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, color: "rgba(255,255,255,0.6)", fontFamily: font, fontSize: 16, fontWeight: 500, cursor: "pointer", marginTop: 8 }}>Skip</button>
