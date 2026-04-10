@@ -93,6 +93,7 @@ export function TcgScanScreen({ game, scanIntent, onBack, onResult }: Props) {
   const libraryRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
+  const [scanSessionId, setScanSessionId] = useState<string | null>(null);
 
   useEffect(() => { fetch("/api/tcg/recognize/warmup").catch(() => {}); }, []);
 
@@ -106,12 +107,11 @@ export function TcgScanScreen({ game, scanIntent, onBack, onResult }: Props) {
       if (!jwt) { setError("Not signed in"); setScanning(false); return; }
 
       const base64 = await compressImage(file, 800);
-      const res = await fetch("/api/tcg/recognize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` },
-        body: JSON.stringify({ game, imageBase64: base64 }),
-      });
+      const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` };
+      if (scanSessionId) headers["X-Scan-Session-ID"] = scanSessionId;
+      const res = await fetch("/api/tcg/recognize", { method: "POST", headers, body: JSON.stringify({ game, imageBase64: base64 }) });
       const data = await res.json();
+      if (data.scan_session_id) setScanSessionId(data.scan_session_id);
       if (data.ok && data.result?.candidates?.length > 0) {
         onResult(data, scanIntent);
       } else {

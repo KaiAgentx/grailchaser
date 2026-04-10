@@ -269,6 +269,8 @@ export default function Home() {
       onSaved={() => setScreen("tcgHome")}
       onScanAnother={() => { setTcgRecognizeResult(null); setScreen("tcgScan"); }}
       userId={user?.id || ""}
+      scanResultId={tcgRecognizeResult?.scan_result_id}
+      rank1CatalogCardId={tcgRecognizeResult?.result?.candidates?.[0]?.catalogCardId}
     />{bottomNav}</>
   );
 

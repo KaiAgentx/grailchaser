@@ -9,6 +9,7 @@ import { extractUserId } from "@/lib/collectionItemsApi";
 import { ErrorCode, errorResponse } from "@/lib/errors";
 import { getOrCreateRequestId, logRequest } from "@/lib/logging";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { getOrCreateScanSession, writeScanResult } from "@/lib/scanTelemetry";
 
 const ROUTE = "/api/tcg/recognize";
 const ECOSYSTEM = "tcg";
@@ -38,11 +39,9 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    // Auth
     userId = await extractUserId(req.headers.get("authorization"));
     if (!userId) return respond(errorResponse({ code: ErrorCode.UNAUTHORIZED, requestId }));
 
-    // Rate limit
     const limit = checkRateLimit(userId, "recognize");
     if (!limit.allowed) return respond(errorResponse({ code: ErrorCode.RATE_LIMITED, details: `Rate limit exceeded (${limit.limit}/min). Retry in ${limit.retryAfterSeconds}s.`, requestId, headers: { "Retry-After": String(limit.retryAfterSeconds) } }));
 
@@ -62,6 +61,13 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } }
     );
+
+    // ── Telemetry: session ──
+    // TODO: distinguish quick_check vs collection_save when scanIntent
+    // is threaded through from the client in a future PR.
+    const sessionIdHeader = req.headers.get("x-scan-session-id");
+    const sessionId = await getOrCreateScanSession(userId, game, "quick_check", sessionIdHeader);
+    let visionValidated = false;
 
     // ── STEP 1: Claude Vision ──
     let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low" } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
@@ -91,6 +97,9 @@ export async function POST(req: NextRequest) {
       if (visionResult.number) {
         const { data } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
         cards = data || [];
+        // Vision validated = exact match on first query
+        if (cards.length > 0) visionValidated = true;
+
         if (!cards.length && visionResult.number.includes("/")) {
           const { data: d2 } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number.split("/")[0]).limit(5);
           cards = d2 || [];
@@ -112,7 +121,23 @@ export async function POST(req: NextRequest) {
     // ── STEP 3: Hash fallback ──
     if (!cards.length) {
       const hashResult = await recognizeByHash(rawB64, game, supabase);
-      return respond(NextResponse.json({ ...hashResult, method: "hash", visionResult }));
+
+      // Telemetry: hash fallback
+      let scanResultId: string | null = null;
+      if (sessionId) {
+        scanResultId = await writeScanResult({
+          sessionId, userId: userId!, game: game as any, method: "hash",
+          visionOutput: visionResult, visionValidated: false,
+          catalogMatchId: hashResult.result?.candidates?.[0]?.catalogCardId ?? null,
+          catalogMatchName: hashResult.result?.candidates?.[0]?.name ?? null,
+          candidateCount: hashResult.result?.candidates?.length ?? 0,
+          confidenceBand: hashResult.result?.confidenceBand ?? null,
+          topDistance: hashResult.result?.topDistance != null ? Math.round(hashResult.result.topDistance) : null,
+          latencyMs: Date.now() - startedAt,
+        });
+      }
+
+      return respond(NextResponse.json({ ...hashResult, method: "hash", visionResult, scan_session_id: sessionId, scan_result_id: scanResultId }));
     }
 
     // ── STEP 4: Build response ──
@@ -124,7 +149,21 @@ export async function POST(req: NextRequest) {
       weightedDistance: i === 0 ? 0 : i * 5, distanceBreakdown: { phash: 0, dhash: 0, whash: 0 },
     }));
 
-    return respond(NextResponse.json({ ok: true, method: "vision", visionResult, result: { confidenceBand, topDistance: 0, candidates } }));
+    // Telemetry: vision success
+    let scanResultId: string | null = null;
+    if (sessionId) {
+      scanResultId = await writeScanResult({
+        sessionId, userId: userId!, game: game as any, method: "vision",
+        visionOutput: visionResult, visionValidated,
+        catalogMatchId: candidates[0]?.catalogCardId ?? null,
+        catalogMatchName: candidates[0]?.name ?? null,
+        candidateCount: candidates.length,
+        confidenceBand, topDistance: 0,
+        latencyMs: Date.now() - startedAt,
+      });
+    }
+
+    return respond(NextResponse.json({ ok: true, method: "vision", visionResult, result: { confidenceBand, topDistance: 0, candidates }, scan_session_id: sessionId, scan_result_id: scanResultId }));
   } catch (err: any) {
     console.error(`[${ROUTE}] unhandled:`, err?.message);
     return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));

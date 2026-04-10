@@ -38,9 +38,11 @@ interface Candidate {
 
 interface Props {
   result: any; scanIntent: "check" | "collect"; onBack: () => void; onSaved: () => void; onScanAnother: () => void; userId: string;
+  scanResultId?: string | null;
+  rank1CatalogCardId?: string | null;
 }
 
-export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAnother, userId }: Props) {
+export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAnother, userId, scanResultId, rank1CatalogCardId }: Props) {
   const candidates: Candidate[] = result.result?.candidates || [];
   const band: string = result.result?.confidenceBand || "unclear";
   const visionResult = result.visionResult || null;
@@ -124,6 +126,21 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   const handleSave = async () => {
     if (!selected) return;
     setSaving(true);
+
+    // Fire correction telemetry if user picked a non-rank-1 variant
+    if (scanResultId && rank1CatalogCardId && selected.catalogCardId !== rank1CatalogCardId) {
+      const supabaseCorr = createClient();
+      supabaseCorr.auth.getSession().then(({ data: sd }) => {
+        const t = sd?.session?.access_token;
+        if (!t) return;
+        void fetch(`/api/tcg/scan-results/${scanResultId}/correct`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
+          body: JSON.stringify({ final_catalog_id: selected.catalogCardId, final_catalog_name: selected.name }),
+        }).catch(() => {});
+      });
+    }
+
     try {
       const supabase = createClient();
       const { data: sessionData } = await supabase.auth.getSession();
