@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { Card } from "@/lib/types";
+import { isTcgGame } from "@/lib/games";
 import { Box } from "@/hooks/useBoxes";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 import { Shell } from "./Shell";
@@ -64,6 +65,10 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
     return Math.max(...data.map((c: any) => c.storage_position || 0)) + 1;
   }
   const [sellOptExpanded, setSellOptExpanded] = useState(false);
+
+  // Filter box pickers to match the card's ecosystem
+  const cardMode = (card as any).game && isTcgGame((card as any).game) ? "tcg" : "sports";
+  const modeBoxes = boxes.filter(b => b.mode === cardMode);
 
   const val = (field: keyof Card) => (edits as any)[field] ?? (card as any)[field];
 
@@ -165,7 +170,7 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
             <div style={{ marginBottom: 12 }}>
               <div style={labelStyle}>Storage Box</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {["PENDING", ...boxes.map(b => b.name)].map(b => <button key={b} onClick={async () => {
+                {["PENDING", ...modeBoxes.map(b => b.name)].map(b => <button key={b} onClick={async () => {
                   try {
                     const pos = await getFreshNextPosition(b);
                     setEdits({ ...edits, storage_box: b, storage_row: 1, storage_position: pos });
@@ -207,7 +212,7 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
             {showMoveBox && (
               <div>
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {boxes.map(b => (
+                  {modeBoxes.map(b => (
                     <button key={b.id} onClick={async () => {
                       try {
                         const pos = await getFreshNextPosition(b.name);

@@ -20,7 +20,7 @@ interface Props {
   boxes: Box[];
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
   returnFromGrading: (id: string, grade: string) => Promise<any>;
-  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType, mode?: "sports" | "tcg") => Promise<any>;
   getNextPosition: (boxName: string) => number;
   onNavigate: (target: { screen: string }) => void;
 }

@@ -82,7 +82,7 @@ interface Props {
   boxes: Box[];
   getNextPosition: (boxName: string) => number;
   addCard: (card: Partial<NewCard>) => Promise<{ data: any; error: any }>;
-  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType, mode?: "sports" | "tcg") => Promise<any>;
   onDone: () => void;
   onCancel: () => void;
 }

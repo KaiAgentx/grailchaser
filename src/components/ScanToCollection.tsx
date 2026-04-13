@@ -39,7 +39,7 @@ interface SavedCard { player: string; position: number; rawValue: number; gradeC
 interface Props {
   boxes: Box[];
   addCard: (card: Partial<NewCard>) => Promise<{ data: any; error: any }>;
-  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType, mode?: "sports" | "tcg") => Promise<any>;
   getNextPosition: (boxName: string) => number;
   onNavigate: (target: { screen: string }) => void;
 }

@@ -28,7 +28,7 @@ interface Props {
   cards: Card[];
   boxes: Box[];
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
-  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType, mode?: "sports" | "tcg") => Promise<any>;
   getNextPosition: (boxName: string) => number;
   renumberBox: (boxName: string) => Promise<number>;
   fetchCards: () => Promise<void>;

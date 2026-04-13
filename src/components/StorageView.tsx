@@ -19,7 +19,7 @@ interface Props {
   boxes: Box[];
   ecosystemMode?: "sports" | "tcg" | null;
   onBack: () => void;
-  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType, mode?: "sports" | "tcg") => Promise<any>;
   updateBox: (id: string, updates: Partial<Pick<Box, "name" | "num_rows" | "divider_size" | "box_type">>) => Promise<any>;
   deleteBox: (id: string) => Promise<any>;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
@@ -44,10 +44,10 @@ export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBac
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  // Filter boxes and cards by ecosystem.
-  const isTcgItem = (item: any) => item.game && isTcgGame(item.game);
-  const ecoBoxes = ecosystemMode === "tcg" ? boxes.filter(isTcgItem) : ecosystemMode === "sports" ? boxes.filter(b => !isTcgItem(b)) : boxes;
-  const ecoCards = ecosystemMode === "tcg" ? cards.filter(isTcgItem) : ecosystemMode === "sports" ? cards.filter(c => !isTcgItem(c)) : cards;
+  // Filter boxes by mode column, cards by game column.
+  const isTcgCard = (c: any) => c.game && isTcgGame(c.game);
+  const ecoBoxes = ecosystemMode === "tcg" ? boxes.filter(b => b.mode === "tcg") : ecosystemMode === "sports" ? boxes.filter(b => b.mode !== "tcg") : boxes;
+  const ecoCards = ecosystemMode === "tcg" ? cards.filter(isTcgCard) : ecosystemMode === "sports" ? cards.filter(c => !isTcgCard(c)) : cards;
   const unassigned = ecoCards.filter(c => !c.storage_box || c.storage_box === "PENDING");
 
   // ─── BOX LIST ───
@@ -125,7 +125,7 @@ export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBac
           </div>
         </div>
         {createError && <div style={{ fontSize: 12, color: red, textAlign: "center", marginBottom: 8 }}>{createError}</div>}
-        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider, newType); setSaving(false); if (error) setCreateError(error.message || "Failed to create box"); else setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
+        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider, newType, ecosystemMode === "tcg" ? "tcg" : "sports"); setSaving(false); if (error) setCreateError(error.message || "Failed to create box"); else setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
       </div>
     </Shell>
   );

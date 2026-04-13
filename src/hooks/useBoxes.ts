@@ -15,6 +15,8 @@ export const BOX_TYPE_LABELS: Record<BoxType, { label: string; desc: string }> =
   sorted: { label: "Sorted", desc: "Sorted and organized cards" },
 };
 
+export type BoxMode = "sports" | "tcg";
+
 export interface Box {
   id: string;
   user_id: string;
@@ -22,6 +24,7 @@ export interface Box {
   num_rows: number;
   divider_size: number;
   box_type: BoxType;
+  mode: BoxMode;
   created_at: string;
   card_count?: number;
 }
@@ -52,10 +55,9 @@ export function useBoxes(userId?: string, cards?: any[]) {
     card_count: cards ? cards.filter(c => c.storage_box === b.name).length : 0,
   }));
 
-  const addBox = async (name: string, num_rows: number, divider_size: number, box_type: BoxType, game?: string) => {
+  const addBox = async (name: string, num_rows: number, divider_size: number, box_type: BoxType, mode: BoxMode = "sports") => {
     if (!userId) return { error: { message: "Not logged in" } };
-    const row: any = { user_id: userId, name, num_rows, divider_size, box_type };
-    if (game) row.game = game;
+    const row: any = { user_id: userId, name, num_rows, divider_size, box_type, mode };
     const { data, error } = await supabase
       .from("boxes")
       .insert(row)

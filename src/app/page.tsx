@@ -138,6 +138,16 @@ export default function Home() {
     })();
     return () => { cancelled = true; };
   }, [screen, activeGame, user?.id]);
+
+  // Auto-create default TCG box if none exist
+  const [tcgBoxCreated, setTcgBoxCreated] = useState(false);
+  useEffect(() => {
+    if (screen !== "tcgHome" || !user || !gameHydrated || tcgBoxCreated) return;
+    if (boxes.some(b => b.mode === "tcg")) return;
+    setTcgBoxCreated(true);
+    addBox("Pokémon Unsorted", 1, 100, "singles", "tcg");
+  }, [screen, user, gameHydrated, boxes, tcgBoxCreated]);
+
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [prevScreen, setPrevScreen] = useState<string>("home");
   const [prevScreenData, setPrevScreenData] = useState<any>(null);
