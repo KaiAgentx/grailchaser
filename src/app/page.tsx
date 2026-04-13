@@ -934,7 +934,7 @@ export default function Home() {
         {loading && <div style={{ textAlign: "center", color: muted, padding: 40 }}>Loading...</div>}
         {!loading && filteredCards.length === 0 && (<div style={{ textAlign: "center", color: muted, padding: 40 }}><div style={{ fontSize: 36, marginBottom: 12 }}>{mode === "tcg" ? "🎴" : "📦"}</div><div style={{ fontSize: 14 }}>{mode === "tcg" ? "No TCG cards yet. Tap Scan to add your first card." : "No cards yet"}</div></div>)}
         {filteredCards.map(card => (
-          <button key={card.id} onClick={() => goToCardDetail(card, "myCards")} style={{ width: "100%", background: surface, borderLeft: "3px solid " + (sportColors[card.sport] || muted), borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 12, padding: "14px 16px", marginBottom: 6, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+          <button key={card.id} onClick={() => goToCardDetail(card, "myCards")} style={{ width: "100%", background: surface, borderLeft: "3px solid " + (mode === "tcg" ? accent : (sportColors[card.sport] || muted)), borderTop: "none", borderRight: "none", borderBottom: "none", borderRadius: 12, padding: "14px 16px", marginBottom: 6, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: text }}>{card.player}</div>
               <div style={{ fontSize: 12, color: secondary, marginTop: 2 }}>{card.year} {card.brand} {card.parallel !== "Base" ? card.parallel : ""} {card.card_number}</div>

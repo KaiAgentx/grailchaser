@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { createClient } from "@/lib/supabase";
 import { Card } from "@/lib/types";
 import { Box } from "@/hooks/useBoxes";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
@@ -39,6 +40,29 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
   const [saved, setSaved] = useState(false);
   const [showMoveBox, setShowMoveBox] = useState(false);
   const [moveConfirm, setMoveConfirm] = useState("");
+
+  // TODO: This reduces but doesn't eliminate race conditions — two rapid moves
+  // can both read the same MAX. For full safety, migrate to a server-side RPC
+  // with an advisory lock (like insert_collection_item).
+  async function getFreshNextPosition(boxName: string): Promise<number> {
+    if (boxName === "PENDING") return 1;
+    const supabase = createClient();
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !sessionData?.session?.user?.id) {
+      throw new Error("Auth session expired. Please sign in again.");
+    }
+    const userId = sessionData.session.user.id;
+    const { data, error } = await supabase
+      .from("cards")
+      .select("storage_position")
+      .eq("user_id", userId)
+      .eq("storage_box", boxName);
+    if (error) {
+      throw new Error(`Position lookup failed: ${error.message}`);
+    }
+    if (!data || data.length === 0) return 1;
+    return Math.max(...data.map((c: any) => c.storage_position || 0)) + 1;
+  }
   const [sellOptExpanded, setSellOptExpanded] = useState(false);
 
   const val = (field: keyof Card) => (edits as any)[field] ?? (card as any)[field];
@@ -141,9 +165,14 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
             <div style={{ marginBottom: 12 }}>
               <div style={labelStyle}>Storage Box</div>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                {["PENDING", ...boxes.map(b => b.name)].map(b => <button key={b} onClick={() => {
-                  if (b === "PENDING") { setEdits({ ...edits, storage_box: "PENDING", storage_row: 1, storage_position: 1 }); }
-                  else { const pos = getNextPosition(b); setEdits({ ...edits, storage_box: b, storage_row: 1, storage_position: pos }); }
+                {["PENDING", ...boxes.map(b => b.name)].map(b => <button key={b} onClick={async () => {
+                  try {
+                    const pos = await getFreshNextPosition(b);
+                    setEdits({ ...edits, storage_box: b, storage_row: 1, storage_position: pos });
+                  } catch (err: any) {
+                    setMoveConfirm(`Move failed: ${err.message}`);
+                    setTimeout(() => setMoveConfirm(""), 3000);
+                  }
                 }} style={{ ...btnSmall, padding: "8px 12px", background: val("storage_box") === b ? cyan + "20" : surface2, border: "1px solid " + (val("storage_box") === b ? cyan + "50" : border), color: val("storage_box") === b ? cyan : muted, fontSize: 11 }}>{b}</button>)}
               </div>
             </div>
@@ -180,10 +209,14 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                   {boxes.map(b => (
                     <button key={b.id} onClick={async () => {
-                      const pos = getNextPosition(b.name);
-                      await updateCard(card.id, { storage_box: b.name, storage_row: 1, storage_position: pos });
-                      setMoveConfirm(`Moved to ${b.name} — Position ${pos}`);
-                      setShowMoveBox(false);
+                      try {
+                        const pos = await getFreshNextPosition(b.name);
+                        await updateCard(card.id, { storage_box: b.name, storage_row: 1, storage_position: pos });
+                        setMoveConfirm(`Moved to ${b.name} — Position ${pos}`);
+                        setShowMoveBox(false);
+                      } catch (err: any) {
+                        setMoveConfirm(`Move failed: ${err.message}`);
+                      }
                       setTimeout(() => setMoveConfirm(""), 2500);
                     }} style={{ ...btnSmall, padding: "8px 10px", background: surface2, border: "1px solid " + border, color: text, fontSize: 11 }}>{b.name}</button>
                   ))}
