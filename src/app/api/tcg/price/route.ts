@@ -7,9 +7,10 @@ import { checkRateLimit } from "@/lib/rateLimit";
 const ROUTE = "/api/tcg/price";
 const ECOSYSTEM = "tcg";
 
-// ─── In-memory price cache (1 hour TTL per cardId) ───
+// ─── In-memory price cache ───
+// 15min balances TCGPlayer API rate limits against stale pricing during volatile market moves
 const priceCache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 // Price type priority — pick the first one that has data
 const PRICE_TYPE_PRIORITY = [
@@ -52,16 +53,22 @@ export async function GET(req: NextRequest) {
       return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: "POKEMONTCG_API_KEY not configured", requestId }));
     }
 
-    const res = await fetch(`https://api.pokemontcg.io/v2/cards/${cardId}`, {
-      headers: { "X-Api-Key": apiKey },
-    });
-
-    if (!res.ok) {
-      console.log(`[tcg/price] Pokemon API ${res.status} for ${cardId}`);
-      return respond(errorResponse({ code: ErrorCode.NOT_FOUND, details: `Card not found: ${cardId}`, requestId }));
+    let apiRes: Response;
+    try {
+      apiRes = await fetch(`https://api.pokemontcg.io/v2/cards/${cardId}`, {
+        headers: { "X-Api-Key": apiKey },
+      });
+    } catch (fetchErr: any) {
+      console.error(`[tcg/price] Pokemon API fetch failed for ${cardId}:`, fetchErr.message);
+      return respond(NextResponse.json({ ok: false, error: "price_fetch_failed", message: "Could not fetch pricing data" }, { status: 502 }));
     }
 
-    const { data: card } = await res.json();
+    if (!apiRes.ok) {
+      console.log(`[tcg/price] Pokemon API ${apiRes.status} for ${cardId}`);
+      return respond(NextResponse.json({ ok: false, error: "card_not_found", message: `Card not found: ${cardId}` }, { status: 404 }));
+    }
+
+    const { data: card } = await apiRes.json();
 
     // Extract TCGPlayer prices — pick best available price type
     const tcgPrices = card?.tcgplayer?.prices || {};
@@ -95,7 +102,15 @@ export async function GET(req: NextRequest) {
       trend: cm.reverseHoloTrend || null,
     } : null;
 
+    // No pricing data at all — card exists but has no market info
+    if (Object.keys(allPrices).length === 0 && !cm.avg7 && !cm.avg30) {
+      const notFoundResult = { ok: true, pricing: null, reason: "not_found" as const };
+      priceCache.set(cardId, { data: notFoundResult, ts: Date.now() });
+      return respond(NextResponse.json(notFoundResult));
+    }
+
     const result = {
+      ok: true as const,
       market: tcgData?.market ?? null,
       low: tcgData?.low ?? null,
       mid: tcgData?.mid ?? null,
@@ -118,6 +133,6 @@ export async function GET(req: NextRequest) {
     return respond(NextResponse.json(result));
   } catch (err: any) {
     console.error("[tcg/price] Error:", err.message);
-    return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));
+    return respond(NextResponse.json({ ok: false, error: "price_fetch_failed", message: "Could not fetch pricing data" }, { status: 502 }));
   }
 }

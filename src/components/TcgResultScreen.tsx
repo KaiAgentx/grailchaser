@@ -58,6 +58,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [imgError, setImgError] = useState(false);
 
@@ -83,6 +84,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
 
     setPricingLoading(true);
     setPricing(null);
+    setPriceError(null);
     setSelectedVariant("");
     const gen = ++fetchGen.current;
 
@@ -96,14 +98,23 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
         .then(r => r.json())
         .then(d => {
           if (gen !== fetchGen.current) return; // stale
-          if (!d.error) {
+          if (d.error === "price_fetch_failed") {
+            setPriceError("fetch_failed");
+          } else if (d.ok === true && d.pricing === null && d.reason === "not_found") {
+            setPriceError("not_found");
+          } else if (!d.error) {
             priceCache.current.set(selected.catalogCardId, d);
             setPricing(d);
             setSelectedVariant(autoSelectVariant(d, visionResult));
           }
           setPricingLoading(false);
         })
-        .catch(() => { if (gen === fetchGen.current) setPricingLoading(false); });
+        .catch(() => {
+          if (gen === fetchGen.current) {
+            setPriceError("fetch_failed");
+            setPricingLoading(false);
+          }
+        });
     });
   }, [selected?.catalogCardId]);
 
@@ -116,6 +127,32 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
     const iv = setInterval(() => { setCountdown(c => { if (c <= 1) { clearInterval(iv); onScanAnother(); return 0; } return c - 1; }); }, 1000);
     return () => clearInterval(iv);
   }, [saved, scanIntent]);
+
+  // Retry price lookup (invalidates cache, re-fetches)
+  const retryPriceFetch = () => {
+    if (!selected?.catalogCardId) return;
+    priceCache.current.delete(selected.catalogCardId);
+    setPriceError(null);
+    setPricingLoading(true);
+    setPricing(null);
+    setSelectedVariant("");
+    const gen = ++fetchGen.current;
+    const sb = createClient();
+    sb.auth.getSession().then(({ data: sd }) => {
+      const jwt = sd?.session?.access_token;
+      if (!jwt) { if (gen === fetchGen.current) setPricingLoading(false); return; }
+      fetch(`/api/tcg/price?cardId=${encodeURIComponent(selected.catalogCardId)}`, { headers: { "Authorization": `Bearer ${jwt}` } })
+        .then(r => r.json())
+        .then(d => {
+          if (gen !== fetchGen.current) return;
+          if (d.error === "price_fetch_failed") { setPriceError("fetch_failed"); }
+          else if (d.ok === true && d.pricing === null && d.reason === "not_found") { setPriceError("not_found"); }
+          else if (!d.error) { priceCache.current.set(selected.catalogCardId, d); setPricing(d); setSelectedVariant(autoSelectVariant(d, visionResult)); }
+          setPricingLoading(false);
+        })
+        .catch(() => { if (gen === fetchGen.current) { setPriceError("fetch_failed"); setPricingLoading(false); } });
+    });
+  };
 
   // Computed prices (USD only)
   const activePrice = pricing?.allPrices?.[selectedVariant];
@@ -266,10 +303,14 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
             <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#D4A843", fontWeight: 600, marginBottom: 4 }}>Market</div>
             {pricingLoading ? (
               <div style={{ fontSize: 32, fontWeight: 700, color: muted }}>—</div>
+            ) : priceError === "fetch_failed" ? (
+              <div style={{ fontSize: 14, fontWeight: 600, color: red }}>Lookup failed</div>
+            ) : priceError === "not_found" ? (
+              <div style={{ fontSize: 14, fontWeight: 500, color: muted }}>No data</div>
             ) : hasPrice ? (
               <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, color: "#D4A843", background: "linear-gradient(105deg, #B8860B 0%, #D4A843 20%, #FFD700 35%, #FFF8DC 42%, #FFD700 48%, #D4A843 60%, #B8860B 80%, #D4A843 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", lineHeight: 1.1 }}>{fmtPrice(displayMarket)}</div>
             ) : (
-              <div style={{ fontSize: 16, fontWeight: 600, color: muted }}>No price</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: muted }}>No data</div>
             )}
             {!pricingLoading && (displayLow != null || displayMid != null) && (
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>{fmtPrice(displayLow)} – {fmtPrice(displayMid)}</div>
@@ -279,33 +320,44 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
 
         {/* ─── Pricing detail card ─── */}
         {!pricingLoading && (
-          <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ display: "flex", gap: 24 }}>
-                <div>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Low</div>
-                  <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayLow)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Mid</div>
-                  <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayMid)}</div>
-                </div>
-                {displayDirectLow != null && (
-                  <div>
-                    <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Direct</div>
-                    <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayDirectLow)}</div>
-                  </div>
-                )}
+          <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${priceError === "fetch_failed" ? "rgba(248,113,113,0.2)" : "rgba(255,255,255,0.06)"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
+            {priceError === "fetch_failed" ? (
+              <div style={{ textAlign: "center", padding: "8px 0" }}>
+                <div style={{ fontSize: 13, color: red, marginBottom: 8 }}>Price lookup failed</div>
+                <button onClick={retryPriceFetch} style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 8, padding: "8px 18px", color: red, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Retry</button>
               </div>
-              {pricing?.tcgplayerUrl && (
-                <a href={pricing.tcgplayerUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#5B8DEF", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap", paddingTop: 2 }}>View on TCGPlayer →</a>
-              )}
-            </div>
-            {updatedDate && (
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 8 }}>Updated {updatedDate}</div>
-            )}
-            {!hasPrice && (
-              <div style={{ fontSize: 12, color: muted, textAlign: "center", padding: "4px 0" }}>No pricing available</div>
+            ) : priceError === "not_found" ? (
+              <div style={{ fontSize: 13, color: muted, textAlign: "center", padding: "8px 0" }}>No market data available for this variant</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", gap: 24 }}>
+                    <div>
+                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Low</div>
+                      <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayLow)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Mid</div>
+                      <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayMid)}</div>
+                    </div>
+                    {displayDirectLow != null && (
+                      <div>
+                        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Direct</div>
+                        <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayDirectLow)}</div>
+                      </div>
+                    )}
+                  </div>
+                  {pricing?.tcgplayerUrl && (
+                    <a href={pricing.tcgplayerUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#5B8DEF", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap", paddingTop: 2 }}>View on TCGPlayer →</a>
+                  )}
+                </div>
+                {updatedDate && (
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 8 }}>Updated {updatedDate}</div>
+                )}
+                {!hasPrice && (
+                  <div style={{ fontSize: 13, color: muted, textAlign: "center", padding: "4px 0" }}>No market data available for this variant</div>
+                )}
+              </>
             )}
           </div>
         )}

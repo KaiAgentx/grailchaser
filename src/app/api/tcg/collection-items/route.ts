@@ -11,6 +11,12 @@ import { checkRateLimit } from "@/lib/rateLimit";
 const ROUTE = "/api/tcg/collection-items";
 const ECOSYSTEM = "tcg";
 
+const GAME_TO_SPORT: Record<string, string> = {
+  pokemon: "Pokemon",
+  mtg: "Magic",
+  one_piece: "One Piece",
+};
+
 export async function POST(req: NextRequest) {
   const requestId = getOrCreateRequestId(req.headers);
   const startedAt = Date.now();
@@ -49,8 +55,11 @@ export async function POST(req: NextRequest) {
       return respond(errorResponse({ code: ErrorCode.IDEMPOTENCY_MISMATCH, requestId }));
     }
 
+    const sportValue = GAME_TO_SPORT[body.game];
+    if (!sportValue) return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: `Unsupported game: ${body.game}`, requestId }));
+
     const cardData: Record<string, any> = {
-      game: body.game, player: body.player, sport: "Pokemon",
+      game: body.game, player: body.player, sport: sportValue,
       year: new Date().getFullYear(), brand: body.brand || "Pokémon TCG",
       set: body.set || body.set_name || "", card_number: body.card_number || "",
       team: "", parallel: "Base", is_rc: false, is_auto: false, is_numbered: false,
@@ -72,6 +81,19 @@ export async function POST(req: NextRequest) {
     if (body.catalogCardId) cardData.catalog_card_id = body.catalogCardId;
     if (body.canonical_card_id) cardData.canonical_card_id = body.canonical_card_id;
     if (body.printing_id) cardData.printing_id = body.printing_id;
+
+    // Validate catalog_card_id exists in catalog
+    if (body.catalogCardId) {
+      const [setCode, ...numParts] = body.catalogCardId.split("-");
+      const cardNumber = numParts.join("-");
+      if (!setCode || !cardNumber) return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "Invalid catalog_card_id format", requestId }));
+      const svcCheck = serviceRoleClient();
+      const { data: catalogRow } = await svcCheck.from("catalog_cards").select("id").eq("set_code", setCode).eq("card_number", cardNumber).limit(1).maybeSingle();
+      if (!catalogRow) {
+        console.warn(`[TcgAPI] catalog_card_id not found: ${body.catalogCardId} (userId: ${userId})`);
+        return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "Card not found in catalog", requestId }));
+      }
+    }
 
     const svc = serviceRoleClient();
     console.log("[TcgAPI] Inserting — userId:", userId, "game:", cardData.game, "catalogCardId:", cardData.catalog_card_id);
