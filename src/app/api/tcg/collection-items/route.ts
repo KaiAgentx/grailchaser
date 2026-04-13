@@ -81,9 +81,8 @@ export async function POST(req: NextRequest) {
       p_card_data: cardData,
     });
     if (rpcError) {
-      console.error("[TcgAPI] RPC FAILED:", rpcError);
-      console.error(`[${ROUTE}] RPC error:`, rpcError.message);
-      return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: rpcError.message, requestId }));
+      console.error("[TcgAPI] RPC FAILED:", { requestId, userId, game: cardData.game, catalogCardId: cardData.catalog_card_id, error: rpcError });
+      return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: "Could not save card to collection. Please try again.", requestId }));
     }
     console.log("[TcgAPI] RPC SUCCESS — rowId:", rpcData?.id, "game:", rpcData?.game);
 

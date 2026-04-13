@@ -73,6 +73,8 @@ export async function POST(req: NextRequest) {
     let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low" } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
 
     if (anthropic) {
+      const visionController = new AbortController();
+      const visionTimeout = setTimeout(() => visionController.abort(), 30000);
       try {
         const mediaType = detectMediaType(rawB64);
         const msg = await anthropic.messages.create({
@@ -81,13 +83,19 @@ export async function POST(req: NextRequest) {
             { type: "image", source: { type: "base64", media_type: mediaType, data: rawB64 } },
             { type: "text", text: `Examine this Pokémon card image carefully.\n\nExtract these fields:\n1. name: The Pokémon or card name at the top (e.g. "Charizard", "M Charizard-EX", "Iono")\n2. number: The card number at the BOTTOM LEFT corner (e.g. "4/102", "025/185", "SWSH146")\n3. set: The set name if visible (e.g. "Base Set", "Scarlet & Violet")\n4. edition: Look for an oval "Edition 1" or "1st Edition" stamp near the bottom left of the card artwork. If you see it return "1st", otherwise return "unlimited"\n5. finish: Look at the card surface:\n   - If the artwork/illustration area has a rainbow sparkle or holographic shine: "holo"\n   - If the card border/background (outside the artwork) has a sparkle pattern but the artwork itself is flat: "reverse_holo"\n   - If the entire card is flat with no sparkle anywhere: "non_holo"\n6. confidence: "high" if text is clearly readable, "medium" if partial, "low" if unclear\n\nReturn ONLY valid JSON, no markdown:\n{"name":"...","number":"...","set":"...","edition":"1st|unlimited","finish":"holo|reverse_holo|non_holo","confidence":"high|medium|low"}\n\nIf not a Pokémon card or completely unreadable:\n{"name":null,"number":null,"set":null,"edition":"unlimited","finish":"holo","confidence":"low"}` }
           ] }]
-        });
+        }, { signal: visionController.signal });
         const raw = (msg.content[0] as any).text?.trim() || "";
         const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
         const parsed = JSON.parse(cleaned);
         if (parsed && typeof parsed.name !== "undefined") visionResult = parsed;
       } catch (err) {
+        if ((err as any)?.name === "AbortError" || visionController.signal.aborted) {
+          console.error("[vision] Claude timed out after 30s");
+          return respond(NextResponse.json({ ok: false, error: "recognition_timeout", message: "Vision recognition took too long. Please try again." }, { status: 504 }));
+        }
         console.error("[vision] Claude error:", (err as any)?.message || (err as any)?.status || JSON.stringify(err));
+      } finally {
+        clearTimeout(visionTimeout);
       }
     }
 
