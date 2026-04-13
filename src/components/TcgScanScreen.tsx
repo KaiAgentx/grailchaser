@@ -51,7 +51,8 @@ function compressImage(file: File, maxWidth = 800): Promise<string> {
     reader.onload = (e) => {
       try {
         const arrayBuffer = e.target?.result as ArrayBuffer;
-        const orientation = getExifOrientation(arrayBuffer);
+        let orientation = 1;
+        try { orientation = getExifOrientation(arrayBuffer); } catch (exifErr) { console.warn("[scan] EXIF parse failed:", exifErr instanceof Error ? exifErr.message : exifErr); }
         const blob = new Blob([arrayBuffer], { type: file.type });
         const url = URL.createObjectURL(blob);
         const img = new window.Image();
@@ -96,6 +97,17 @@ export function TcgScanScreen({ game, scanIntent, onBack, onResult }: Props) {
   const [scanSessionId, setScanSessionId] = useState<string | null>(null);
 
   useEffect(() => { fetch("/api/tcg/recognize/warmup").catch(() => {}); }, []);
+
+  // Close scan session on unmount (best-effort, fire-and-forget)
+  useEffect(() => {
+    const sid = scanSessionId;
+    return () => {
+      if (sid) {
+        const supabase = createClient();
+        (async () => { try { await supabase.from("scan_sessions").update({ ended_at: new Date().toISOString() }).eq("id", sid); } catch {} })();
+      }
+    };
+  }, [scanSessionId]);
 
   const handleFile = async (file: File) => {
     setScanning(true);

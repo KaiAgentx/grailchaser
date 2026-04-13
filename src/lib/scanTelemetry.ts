@@ -68,6 +68,22 @@ export async function getOrCreateScanSession(
   }
 }
 
+/**
+ * Closes a scan session by setting ended_at. Best-effort — no-op on null.
+ */
+export async function closeScanSession(sessionId: string | null): Promise<void> {
+  if (!sessionId) return;
+  try {
+    const svc = serviceRoleClient();
+    await svc
+      .from("scan_sessions")
+      .update({ ended_at: new Date().toISOString() })
+      .eq("id", sessionId);
+  } catch (err) {
+    console.error("[scanTelemetry] closeScanSession failed:", err);
+  }
+}
+
 export interface ScanResultRow {
   sessionId: string;
   userId: string;

@@ -2,7 +2,25 @@
  * Hash distance and weighted scoring for perceptual hash matching.
  */
 
-/** Weights for combining the three hash distances. Tunable. */
+/**
+ * Weights for combining the three hash distances into a single score.
+ *
+ * - phash (0.4): Perceptual hash — captures structural similarity via a
+ *   reduced DCT. Most robust to resize and minor color shifts. Weighted
+ *   equally with dhash because card art structure is the primary signal.
+ *
+ * - dhash (0.4): Difference hash — gradient-based, compares adjacent pixel
+ *   brightness. Tolerant to overall brightness/contrast changes (phone
+ *   cameras in varying light). Weighted equally with phash for a balanced
+ *   structural + gradient signal.
+ *
+ * - whash (0.2): Wavelet hash — frequency-domain decomposition, best at
+ *   capturing color/texture patterns. Lower weight because Pokémon cards
+ *   share many texture patterns (holofoil, borders), making this noisier
+ *   than the structural hashes for card identification.
+ *
+ * Sum = 1.0. Output range: 0 (identical) to 64 (completely different).
+ */
 export const HASH_WEIGHTS = { phash: 0.4, dhash: 0.4, whash: 0.2 } as const;
 
 /**
