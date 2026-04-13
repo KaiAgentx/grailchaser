@@ -62,6 +62,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
   const [selectedVariant, setSelectedVariant] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [imgError, setImgError] = useState(false);
 
@@ -148,13 +149,34 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
       });
     }
 
+    setSaveError(null);
     try {
       const supabase = createClient();
       const { data: sessionData } = await supabase.auth.getSession();
       const jwt = sessionData?.session?.access_token;
-      if (!jwt) { setSaving(false); return; }
+      if (!jwt) {
+        console.error("[TcgSave] no JWT — user not authenticated");
+        setSaveError("Not authenticated. Please sign in again.");
+        setSaving(false);
+        return;
+      }
 
       const idemKey = crypto.randomUUID();
+      const payload = {
+        catalogCardId: selected.catalogCardId,
+        game: "pokemon",
+        player: selected.name,
+        brand: "Pokémon TCG",
+        set: selected.setName,
+        set_name: selected.setName,
+        set_code: selected.setCode,
+        card_number: selected.cardNumber,
+        rarity: selected.rarity,
+        raw_value: displayMarket ?? 0,
+        scan_image_url: selected.imageLargeUrl || selected.imageSmallUrl,
+        storage_box: "PENDING",
+      };
+
       const res = await fetch("/api/tcg/collection-items", {
         method: "POST",
         headers: {
@@ -162,24 +184,24 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
           "Authorization": `Bearer ${jwt}`,
           "Idempotency-Key": idemKey,
         },
-        body: JSON.stringify({
-          catalogCardId: selected.catalogCardId,
-          game: "pokemon",
-          player: selected.name,
-          brand: "Pokémon TCG",
-          set: selected.setName,
-          set_name: selected.setName,
-          set_code: selected.setCode,
-          card_number: selected.cardNumber,
-          rarity: selected.rarity,
-          raw_value: displayMarket ?? 0,
-          scan_image_url: selected.imageLargeUrl || selected.imageSmallUrl,
-          storage_box: "PENDING",
-        }),
+        body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      if (res.ok && (data.card || data.replay)) { setSaved(true); navigator.vibrate?.(80); if (scanIntent !== "collect") setTimeout(onSaved, 1500); }
-    } catch {}
+
+      const data = await res.json().catch(e => ({ _parseError: String(e) }));
+
+      if (res.ok && (data.card || data.replay)) {
+        setSaveError(null);
+        setSaved(true);
+        navigator.vibrate?.(80);
+        if (scanIntent !== "collect") setTimeout(onSaved, 1500);
+      } else {
+        console.error("[TcgSave] failed — status:", res.status, "body:", data);
+        setSaveError(`Save failed (${res.status}): ${data.error || data.details || "Unknown error"}`);
+      }
+    } catch (err) {
+      console.error("[TcgSave] threw:", err);
+      setSaveError(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
     setSaving(false);
   };
 
@@ -348,6 +370,9 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
                     ))}
                   </div>
                 </div>
+              )}
+              {saveError && (
+                <div style={{ background: "rgba(80,20,20,0.25)", border: "1px solid rgba(180,80,80,0.35)", color: "#e8c4c4", fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{saveError}</div>
               )}
               <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10, paddingBottom: 8 }}>
                 <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "#CC0000" }} />

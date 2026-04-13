@@ -74,10 +74,20 @@ export async function POST(req: NextRequest) {
     if (body.printing_id) cardData.printing_id = body.printing_id;
 
     const svc = serviceRoleClient();
-    const { data, error } = await svc.rpc("insert_collection_item", { p_user_id: userId, p_storage_box: body.storage_box || "PENDING", p_card_data: cardData });
-    if (error) { console.error(`[${ROUTE}] RPC error:`, error.message); return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: error.message, requestId })); }
+    console.log("[TcgAPI] Inserting — userId:", userId, "game:", cardData.game, "catalogCardId:", cardData.catalog_card_id);
+    const { data: rpcData, error: rpcError } = await svc.rpc("insert_collection_item", {
+      p_user_id: userId,
+      p_storage_box: body.storage_box || "PENDING",
+      p_card_data: cardData,
+    });
+    if (rpcError) {
+      console.error("[TcgAPI] RPC FAILED:", rpcError);
+      console.error(`[${ROUTE}] RPC error:`, rpcError.message);
+      return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: rpcError.message, requestId }));
+    }
+    console.log("[TcgAPI] RPC SUCCESS — rowId:", rpcData?.id, "game:", rpcData?.game);
 
-    const responseBody = { card: data };
+    const responseBody = { card: rpcData };
     await writeIdempotency(userId, idemKey, ROUTE, reqHash, 201, responseBody);
     return respond(NextResponse.json(responseBody, { status: 201 }));
   } catch (err: any) {

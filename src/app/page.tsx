@@ -24,6 +24,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { TcgScanScreen } from "@/components/TcgScanScreen";
 import { TcgResultScreen } from "@/components/TcgResultScreen";
 import { useBoxes } from "@/hooks/useBoxes";
+import { createClient } from "@/lib/supabase";
 import { bg, surface, surface2, border, borderMed, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "@/components/styles";
 
 type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser" | "modeSelector" | "tcgHome" | "tcgScan" | "tcgResult";
@@ -61,6 +62,11 @@ export default function Home() {
   const [lotBuilderBoxName, setLotBuilderBoxName] = useState("");
   const [tcgScanIntent, setTcgScanIntent] = useState<"check" | "collect">("check");
   const [tcgRecognizeResult, setTcgRecognizeResult] = useState<any>(null);
+  const [tcgCardCount, setTcgCardCount] = useState<number | null>(null);
+  const [tcgTotalValue, setTcgTotalValue] = useState<number>(0);
+  const [tcgRecentActivity, setTcgRecentActivity] = useState<any[]>([]);
+  const [tcgRecentlyAdded, setTcgRecentlyAdded] = useState<any[]>([]);
+  const [tcgHomeLoading, setTcgHomeLoading] = useState(true);
   const [buyConfirm, setBuyConfirm] = useState("");
   const [showBuyFlow, setShowBuyFlow] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
@@ -80,6 +86,58 @@ export default function Home() {
     }
     setInitialScreenSet(true);
   }, [gameHydrated, initialScreenSet, authLoading, user, activeGame, mode]);
+
+  // ─── TCG home data fetch ───
+  useEffect(() => {
+    if (screen !== "tcgHome" || !user || !activeGame || !isTcgGame(activeGame)) return;
+    let cancelled = false;
+    setTcgHomeLoading(true);
+    const supabase = createClient();
+    (async () => {
+      try {
+        const [statsRes, recentlyAddedRes, activityRes] = await Promise.allSettled([
+          supabase.from("cards").select("id, raw_value", { count: "exact" }).eq("user_id", user.id).eq("game", activeGame),
+          supabase.from("cards").select("id, player, set, card_number, raw_value, scan_image_url, created_at").eq("user_id", user.id).eq("game", activeGame).order("created_at", { ascending: false }).limit(5),
+          supabase.from("scan_results").select("id, catalog_match_name, final_catalog_name, created_at").eq("user_id", user.id).eq("game", activeGame).order("created_at", { ascending: false }).limit(5),
+        ]);
+        if (cancelled) return;
+
+        if (statsRes.status === "fulfilled") {
+          const statsRows: any[] = statsRes.value.data || [];
+          setTcgCardCount(statsRes.value.count ?? statsRows.length);
+          setTcgTotalValue(statsRows.reduce((s, r) => s + (Number(r.raw_value) || 0), 0));
+        } else {
+          console.error("[tcgHome] stats query failed:", statsRes.reason);
+          setTcgCardCount(0);
+          setTcgTotalValue(0);
+        }
+
+        if (recentlyAddedRes.status === "fulfilled") {
+          setTcgRecentlyAdded(recentlyAddedRes.value.data || []);
+        } else {
+          console.error("[tcgHome] recently added query failed:", recentlyAddedRes.reason);
+          setTcgRecentlyAdded([]);
+        }
+
+        if (activityRes.status === "fulfilled") {
+          setTcgRecentActivity(activityRes.value.data || []);
+        } else {
+          console.error("[tcgHome] activity query failed:", activityRes.reason);
+          setTcgRecentActivity([]);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error("[tcgHome] data fetch threw:", err);
+        setTcgCardCount(0);
+        setTcgTotalValue(0);
+        setTcgRecentlyAdded([]);
+        setTcgRecentActivity([]);
+      } finally {
+        if (!cancelled) setTcgHomeLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [screen, activeGame, user?.id]);
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [prevScreen, setPrevScreen] = useState<string>("home");
   const [prevScreenData, setPrevScreenData] = useState<any>(null);
@@ -179,10 +237,14 @@ export default function Home() {
     </div>
   );
 
+  // Mode-aware "back to home" target — used by every back button that
+  // returns to the dashboard. Sports → "home", TCG → "tcgHome".
+  const homeScreenForMode = (): Screen => mode === "tcg" ? "tcgHome" : "home";
+
   // Bottom nav handler
   const handleBottomNav = (s: string) => {
     if (s === "scanChooser") setScreen("scanChooser");
-    else if (s === "home") setScreen(mode === "tcg" ? "tcgHome" : "home");
+    else if (s === "home") setScreen(homeScreenForMode());
     else if (s === "myCards") { setStatusFilter(""); setScreen("myCards"); }
     else if (s === "storage") { setStorageInitialBox(""); setScreen("storage"); }
     else setScreen(s as Screen);
@@ -191,64 +253,560 @@ export default function Home() {
   const bottomNav = <BottomNav currentScreen={screen} prevScreen={prevScreen} onNavigate={handleBottomNav} onSwitchWorld={() => { setActiveGame(null); setScreen("modeSelector"); }} currentMode={mode} />;
 
   // ─── MODE SELECTOR ───
-  if (screen === "modeSelector") return (
-    <Shell title="Choose Mode">
-      <div style={{ paddingTop: 32 }}>
-        <button onClick={() => { setActiveGame("sports"); recordModeSelection("sports"); setScreen("home"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "28px 20px", cursor: "pointer", textAlign: "left", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
-          <div style={{ fontSize: 19, fontWeight: 700, color: text, marginBottom: 4 }}>Sports Cards</div>
-          <div style={{ fontSize: 13, color: secondary }}>Baseball, Football, Basketball, Hockey, Soccer</div>
-        </button>
-        <button onClick={() => { setActiveGame(lastTcgGame); recordModeSelection("tcg"); setScreen("tcgHome"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "28px 20px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
-          <div style={{ fontSize: 19, fontWeight: 700, color: text, marginBottom: 4 }}>TCG</div>
-          <div style={{ fontSize: 13, color: secondary }}>Pokémon, Magic: The Gathering, One Piece</div>
-        </button>
-      </div>
-    </Shell>
-  );
+  if (screen === "modeSelector") {
+    const CARD_BG = "linear-gradient(180deg, rgba(18,22,28,0.92) 0%, rgba(10,13,18,0.92) 100%)";
+    const CARD_BG_HOVER = "linear-gradient(180deg, rgba(24,28,36,0.95) 0%, rgba(14,18,24,0.95) 100%)";
+    const CARD_BORDER_DEFAULT = "rgba(255,255,255,0.07)";
+    const CARD_BORDER_HOVER = "rgba(212,175,82,0.5)";
+    const CARD_SHADOW = "0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 1px rgba(255,255,255,0.02)";
+    const CARD_SHADOW_HOVER = "0 24px 60px rgba(0,0,0,0.6), 0 0 40px rgba(212,175,82,0.08), inset 0 1px 0 rgba(212,175,82,0.15), inset 0 0 0 1px rgba(212,175,82,0.1)";
+    const cardStyle: React.CSSProperties = {
+      width: "100%",
+      textAlign: "left",
+      cursor: "pointer",
+      position: "relative",
+      background: CARD_BG,
+      border: `1px solid ${CARD_BORDER_DEFAULT}`,
+      borderRadius: 20,
+      padding: "40px 36px",
+      minHeight: 240,
+      boxShadow: CARD_SHADOW,
+      color: "#f4f1ea",
+      fontFamily: font,
+      transition: "transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease, background 220ms ease",
+      display: "flex",
+      flexDirection: "column",
+      gap: 18,
+    };
+    const iconBoxStyle: React.CSSProperties = {
+      width: 52, height: 52, borderRadius: 12,
+      background: "linear-gradient(180deg, rgba(212,175,82,0.12) 0%, rgba(212,175,82,0.04) 100%)",
+      border: "1px solid rgba(212,175,82,0.25)",
+      boxShadow: "inset 0 1px 0 rgba(212,175,82,0.2), 0 4px 12px rgba(0,0,0,0.3)",
+      display: "flex", alignItems: "center", justifyContent: "center", color: "#d4af52", flexShrink: 0,
+    };
+    const titleStyle: React.CSSProperties = {
+      fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 700, fontSize: 32, color: "#f8f5ed", margin: 0, lineHeight: 1.1,
+    };
+    const categoryStyle: React.CSSProperties = {
+      fontSize: 14, color: "#b8b2a8", fontFamily: font, letterSpacing: "0.02em",
+    };
+    const valuePropStyle: React.CSSProperties = {
+      fontSize: 14, color: "#cfc9bf", lineHeight: 1.6, marginTop: 4,
+    };
+    const enterRowStyle: React.CSSProperties = {
+      marginTop: "auto", display: "flex", justifyContent: "space-between", alignItems: "center",
+    };
+    const enterLabelStyle: React.CSSProperties = {
+      fontSize: 12, fontWeight: 600, letterSpacing: "0.28em", color: "#d1aa48", textTransform: "uppercase", transition: "color 220ms ease",
+    };
+    const cardMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.transform = "translateY(-4px)";
+      e.currentTarget.style.background = CARD_BG_HOVER;
+      e.currentTarget.style.borderColor = CARD_BORDER_HOVER;
+      e.currentTarget.style.boxShadow = CARD_SHADOW_HOVER;
+    };
+    const cardMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.transform = "translateY(0)";
+      e.currentTarget.style.background = CARD_BG;
+      e.currentTarget.style.borderColor = CARD_BORDER_DEFAULT;
+      e.currentTarget.style.boxShadow = CARD_SHADOW;
+    };
+    const cardFocus = (e: React.FocusEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.outline = "2px solid rgba(212,175,82,0.6)";
+      e.currentTarget.style.outlineOffset = "2px";
+    };
+    const cardBlur = (e: React.FocusEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.outline = "none";
+    };
+    return (
+      <div style={{ background: "#060606", color: "#f4f1ea", fontFamily: font, minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden" }}>
+        <style>{`
+          .market-card .card-arrow { transition: transform 220ms ease; }
+          .market-card:hover .card-arrow { transform: translateX(4px); }
+          .market-card:hover .card-cta { color: #e1c46d; }
 
-  // ─── TCG HOME ───
-  if (screen === "tcgHome") return (
-    <>
-      <Shell title={activeGame ? GAME_DISPLAY_NAME[activeGame] || "TCG" : "TCG"}>
-        <div style={{ paddingTop: 16 }}>
-          {/* Mode pill */}
-          <div style={{ textAlign: "center", marginBottom: 16 }}>
-            <button onClick={() => setScreen("modeSelector")} style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 9999, padding: "4px 14px", color: purple, fontFamily: font, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>TCG ▾</button>
+          .desc-mobile { display: none; }
+
+          @media (max-width: 720px) {
+            .market-wrapper { padding: 56px 20px 32px !important; }
+            .market-header { margin-bottom: 36px !important; }
+            .market-overline { font-size: 9px !important; letter-spacing: 0.36em !important; margin-bottom: 12px !important; }
+            .market-title { font-size: 32px !important; line-height: 1.05 !important; }
+            .market-subtitle { font-size: 14px !important; max-width: 320px !important; margin-top: 12px !important; }
+            .market-grid { grid-template-columns: 1fr !important; gap: 16px !important; max-width: 100% !important; }
+            .market-card { padding: 24px 22px !important; min-height: 170px !important; gap: 14px !important; }
+            .market-card-icon { width: 46px !important; height: 46px !important; }
+            .market-card-title { font-size: 24px !important; }
+            .market-card-categories { font-size: 13px !important; }
+            .market-card-cta { font-size: 11px !important; }
+            .desc-desktop { display: none !important; }
+            .desc-mobile { display: inline !important; font-size: 14px !important; line-height: 1.55 !important; }
+          }
+
+          @media (hover: none) {
+            .market-card:hover {
+              transform: none !important;
+              border-color: rgba(255,255,255,0.07) !important;
+              box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 1px rgba(255,255,255,0.02) !important;
+              background: linear-gradient(180deg, rgba(18,22,28,0.92) 0%, rgba(10,13,18,0.92) 100%) !important;
+            }
+            .market-card:active {
+              transform: scale(0.985) !important;
+              transition: transform 120ms ease !important;
+            }
+          }
+        `}</style>
+        <div className="market-wrapper" style={{ position: "relative", width: "100%", maxWidth: 1040, margin: "0 auto", padding: "8vh 24px 6vh", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          {/* Atmosphere layer 1 — warm gold core */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse 80% 50% at 50% 30%, rgba(212,175,82,0.09) 0%, transparent 60%)" }} />
+          {/* Atmosphere layer 2 — warm shadow grounding */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at 50% 50%, rgba(20,15,8,0.4) 0%, transparent 70%)" }} />
+          {/* Atmosphere layer 3 — edge vignette */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.6) 100%)" }} />
+
+          {/* Header block */}
+          <div className="market-header" style={{ position: "relative", zIndex: 1, textAlign: "center", marginBottom: 64 }}>
+            <div className="market-overline" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.42em", color: "#8a7a4a", textTransform: "uppercase", marginBottom: 16 }}>Market Selection</div>
+            <h1 className="market-title" style={{
+              fontFamily: "'Cormorant Garamond', Georgia, serif",
+              fontWeight: 700,
+              fontSize: "clamp(36px, 5.5vw, 52px)",
+              letterSpacing: "0.01em",
+              lineHeight: 1.05,
+              background: "linear-gradient(180deg, #f4f1ea 0%, #c4bfb8 100%)",
+              WebkitBackgroundClip: "text",
+              backgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              color: "#f4f1ea",
+              margin: 0,
+            }}>Choose Your Market</h1>
+            <div className="market-subtitle" style={{ fontFamily: font, fontSize: 16, fontWeight: 400, color: "#b5afa6", maxWidth: 560, textAlign: "center", lineHeight: 1.5, margin: "16px auto 0" }}>
+              Access specialized recognition, pricing, and portfolio tools tailored to your category.
+            </div>
           </div>
 
-          {/* Game pills */}
-          <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 24 }}>
-            {TCG_GAMES.map(g => (
-              <button key={g} onClick={() => setActiveGame(g)} style={{ padding: "6px 14px", background: activeGame === g ? accent + "20" : surface2, border: "1px solid " + (activeGame === g ? accent + "50" : border), borderRadius: 9999, color: activeGame === g ? accent : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{GAME_DISPLAY_NAME[g]}</button>
-            ))}
-          </div>
+          {/* Cards grid */}
+          <div className="market-grid" style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20, width: "100%", maxWidth: 920 }}>
+            {/* Sports Cards */}
+            <button
+              className="market-card"
+              onClick={() => { setActiveGame("sports"); recordModeSelection("sports"); setScreen("home"); }}
+              onMouseEnter={cardMouseEnter}
+              onMouseLeave={cardMouseLeave}
+              onFocus={cardFocus}
+              onBlur={cardBlur}
+              style={cardStyle}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div className="market-card-icon" style={iconBoxStyle}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="6" width="12" height="16" rx="2" />
+                    <rect x="6" y="4" width="12" height="16" rx="2" />
+                    <rect x="9" y="2" width="12" height="16" rx="2" />
+                  </svg>
+                </div>
+                <h2 className="market-card-title" style={titleStyle}>Sports Cards</h2>
+              </div>
+              <div className="market-card-categories" style={categoryStyle}>Baseball · Football · Basketball · Hockey · Soccer</div>
+              <div style={valuePropStyle}>
+                <span className="desc-desktop">Recognition, comps, grading insight, and portfolio intelligence for sports collectors.</span>
+                <span className="desc-mobile">Recognition, comps, grading, and portfolio tools.</span>
+              </div>
+              <div style={enterRowStyle}>
+                <span className="card-cta market-card-cta" style={enterLabelStyle}>Enter Market</span>
+                <svg className="card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1aa48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </div>
+            </button>
 
-          {/* Scan CTAs */}
-          <button onClick={() => { setTcgScanIntent("check"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 8, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: green, marginBottom: 4 }}>Check a Card</div>
-            <div style={{ fontSize: 12, color: muted }}>Scan or search {activeGame ? GAME_DISPLAY_NAME[activeGame] : "TCG"} cards</div>
-          </button>
-          <button onClick={() => { setTcgScanIntent("collect"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "20px", cursor: "pointer", textAlign: "left", marginBottom: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: accent, marginBottom: 4 }}>Scan to Collection</div>
-            <div style={{ fontSize: 12, color: muted }}>Log {activeGame ? GAME_DISPLAY_NAME[activeGame] : "TCG"} cards you own</div>
-          </button>
-
-          {/* Recent Checks */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700 }}>Recent Checks</div>
-            <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "20px 0" }}>No checks yet</div>
-          </div>
-
-          {/* Recently Added */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 2, marginBottom: 12, fontWeight: 700 }}>Recently Added</div>
-            <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "20px 0" }}>No cards yet</div>
+            {/* TCG */}
+            <button
+              className="market-card"
+              onClick={() => { setActiveGame(lastTcgGame); recordModeSelection("tcg"); setScreen("tcgHome"); }}
+              onMouseEnter={cardMouseEnter}
+              onMouseLeave={cardMouseLeave}
+              onFocus={cardFocus}
+              onBlur={cardBlur}
+              style={cardStyle}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div className="market-card-icon" style={iconBoxStyle}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="5" width="12" height="16" rx="2" />
+                    <rect x="9" y="3" width="12" height="16" rx="2" />
+                    <polygon points="17 6 18 8.5 20.5 9 18.5 10.8 19 13.5 17 12.2 15 13.5 15.5 10.8 13.5 9 16 8.5" fill="currentColor" stroke="none" />
+                  </svg>
+                </div>
+                <h2 className="market-card-title" style={titleStyle}>TCG</h2>
+              </div>
+              <div className="market-card-categories" style={categoryStyle}>Pokémon · Magic: The Gathering · One Piece</div>
+              <div style={valuePropStyle}>
+                <span className="desc-desktop">Set recognition, rarity context, pricing, and collection intelligence for modern TCG.</span>
+                <span className="desc-mobile">Set recognition, rarity, pricing, and collection tools.</span>
+              </div>
+              <div style={enterRowStyle}>
+                <span className="card-cta market-card-cta" style={enterLabelStyle}>Enter Market</span>
+                <svg className="card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d1aa48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </div>
+            </button>
           </div>
         </div>
-      </Shell>
-      {bottomNav}
-    </>
-  );
+      </div>
+    );
+  }
+
+  // ─── TCG HOME ───
+  if (screen === "tcgHome") {
+    const gameDisplayName = activeGame ? GAME_DISPLAY_NAME[activeGame] || "TCG" : "TCG";
+    const hasData = (tcgCardCount ?? 0) > 0;
+    const fmtMoney = (v: number) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtRelative = (iso: string) => {
+      const ms = Date.now() - new Date(iso).getTime();
+      const m = Math.floor(ms / 60000);
+      if (m < 1) return "just now";
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      const d = Math.floor(h / 24);
+      if (d < 7) return `${d}d ago`;
+      return new Date(iso).toLocaleDateString();
+    };
+    const PANEL_BG = "linear-gradient(180deg, rgba(18,22,28,0.92) 0%, rgba(10,13,18,0.92) 100%)";
+    const PANEL_BORDER = "1px solid rgba(255,255,255,0.07)";
+    const PANEL_SHADOW = "0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 1px rgba(255,255,255,0.02)";
+    const sectionLabelStyle: React.CSSProperties = {
+      fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 600, fontSize: 18, color: "#b5afa6", marginBottom: 14,
+    };
+    const TCG_GAME_LIST: Game[] = ["pokemon", "mtg", "one_piece"];
+    const isComingSoon = (g: Game) => g === "mtg" || g === "one_piece";
+
+    return (
+      <>
+        <div style={{ background: "#060606", minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden", color: "#f4f1ea", fontFamily: font }}>
+          <style>{`
+            .tcg-action-btn { transition: border-color 220ms ease, color 220ms ease, background 220ms ease; }
+            .tcg-action-btn:hover { border-color: rgba(212,175,82,0.4) !important; color: #e1c46d !important; }
+            .tcg-mode-pill { transition: background 220ms ease, border-color 220ms ease; }
+            .tcg-mode-pill:hover { background: rgba(212,175,82,0.18) !important; border-color: rgba(212,175,82,0.55) !important; }
+            .tcg-activity-row { transition: background 220ms ease; }
+            .tcg-activity-row:hover { background: rgba(255,255,255,0.025) !important; }
+            .tcg-thumb-card { transition: transform 220ms ease, border-color 220ms ease; cursor: pointer; }
+            .tcg-thumb-card:hover { transform: translateY(-2px); border-color: rgba(212,175,82,0.4) !important; }
+            .tcg-zero-cta { transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease; }
+            .tcg-zero-cta:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 14px 32px rgba(146,107,23,0.32), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.10) !important; }
+            .tcg-thumbs-row { scrollbar-width: none; -ms-overflow-style: none; }
+            .tcg-thumbs-row::-webkit-scrollbar { display: none; }
+            .tcg-game-pills::-webkit-scrollbar { display: none; }
+
+            @media (max-width: 720px) {
+              .tcg-home-wrapper { padding: 40px 20px 80px !important; }
+              .tcg-title { font-size: 30px !important; }
+              .tcg-overline { font-size: 9px !important; letter-spacing: 0.36em !important; }
+              .tcg-quick-actions { gap: 10px !important; }
+              .tcg-action-btn { padding: 14px 8px !important; }
+              .tcg-action-label { font-size: 9px !important; }
+              .tcg-hero { padding: 24px 22px !important; }
+              .tcg-hero-number { font-size: 44px !important; }
+              .tcg-hero-value { font-size: 22px !important; }
+            }
+
+            @media (hover: none) {
+              .tcg-action-btn:hover, .tcg-mode-pill:hover,
+              .tcg-activity-row:hover, .tcg-thumb-card:hover, .tcg-zero-cta:hover {
+                background: revert !important;
+                border-color: revert !important;
+                color: revert !important;
+                transform: none !important;
+                box-shadow: revert !important;
+                filter: none !important;
+              }
+              .tcg-action-btn:active, .tcg-mode-pill:active, .tcg-thumb-card:active, .tcg-zero-cta:active {
+                transform: scale(0.985) !important;
+                transition: transform 120ms ease !important;
+              }
+            }
+          `}</style>
+
+          <div className="tcg-home-wrapper" style={{ maxWidth: 1040, margin: "0 auto", padding: "6vh 24px 100px", position: "relative", display: "flex", flexDirection: "column" }}>
+            {/* Atmosphere layers */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse 80% 50% at 50% 25%, rgba(212,175,82,0.07) 0%, transparent 60%)" }} />
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at 50% 50%, rgba(20,15,8,0.35) 0%, transparent 70%)" }} />
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.55) 100%)" }} />
+
+            {/* ─── Header ─── */}
+            <div style={{ position: "relative", zIndex: 1, marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
+                <h1 className="tcg-title" style={{
+                  margin: 0,
+                  fontFamily: "'Cormorant Garamond', Georgia, serif",
+                  fontWeight: 700,
+                  fontSize: "clamp(32px, 5vw, 44px)",
+                  letterSpacing: "0.01em",
+                  lineHeight: 1.05,
+                  background: "linear-gradient(180deg, #f4f1ea 0%, #c4bfb8 100%)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  color: "#f4f1ea",
+                }}>{gameDisplayName}</h1>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  <span aria-hidden="true" title="Search coming soon" style={{ color: "#6a655e", padding: 6, display: "flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                  </span>
+                  <button
+                    className="tcg-mode-pill"
+                    onClick={() => setScreen("modeSelector")}
+                    style={{ background: "rgba(212,175,82,0.12)", border: "1px solid rgba(212,175,82,0.3)", borderRadius: 9999, padding: "5px 14px", color: "#d1aa48", fontFamily: font, fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", cursor: "pointer" }}
+                  >TCG ▾</button>
+                </div>
+              </div>
+
+              {/* Game pills */}
+              <div className="tcg-game-pills" style={{ display: "flex", gap: 8, marginTop: 18, marginBottom: 28, flexWrap: "nowrap", paddingTop: 12, paddingBottom: 4 }}>
+                {TCG_GAME_LIST.map(g => {
+                  const isActive = activeGame === g;
+                  const dimmed = isComingSoon(g);
+                  return (
+                    <button
+                      key={g}
+                      onClick={() => { if (!dimmed) setActiveGame(g); }}
+                      disabled={dimmed}
+                      style={{
+                        position: "relative",
+                        flexShrink: 0,
+                        padding: "7px 16px",
+                        background: dimmed ? "rgba(255,255,255,0.03)" : isActive ? "rgba(212,175,82,0.15)" : "rgba(255,255,255,0.04)",
+                        border: `1px solid ${dimmed ? "rgba(255,255,255,0.08)" : isActive ? "rgba(212,175,82,0.5)" : "rgba(255,255,255,0.1)"}`,
+                        borderRadius: 9999,
+                        color: dimmed ? "#5a5a5a" : isActive ? "#e1c46d" : "#a7a19a",
+                        fontFamily: font,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        letterSpacing: "0.04em",
+                        cursor: dimmed ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {GAME_DISPLAY_NAME[g]}
+                      {dimmed && (
+                        <span style={{ position: "absolute", top: -6, right: -8, fontSize: 7, fontWeight: 700, letterSpacing: "0.1em", color: "#d1aa48", background: "#060606", border: "1px solid rgba(212,175,82,0.4)", borderRadius: 4, padding: "2px 5px", pointerEvents: "none", textTransform: "uppercase" }}>Soon</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ─── Quick Actions ─── */}
+            <div className="tcg-quick-actions" style={{ position: "relative", zIndex: 1, display: "flex", gap: 12, marginBottom: 32 }}>
+              {[
+                { label: "Quick Check", onClick: () => { setTcgScanIntent("check"); setScreen("tcgScan"); }, icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                ) },
+                { label: "Add Card", onClick: () => { setTcgScanIntent("collect"); setScreen("tcgScan"); }, icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                    <line x1="8" y1="12" x2="16" y2="12" />
+                  </svg>
+                ) },
+                { label: "Search", onClick: () => console.log("search"), icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                ) },
+              ].map((a, i) => (
+                <button
+                  key={i}
+                  className="tcg-action-btn"
+                  onClick={a.onClick}
+                  style={{
+                    flex: 1,
+                    minHeight: 96,
+                    background: "rgba(12,15,20,0.85)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: 14,
+                    color: "#c4bfb8",
+                    fontFamily: font,
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 0,
+                    padding: "16px 12px",
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    background: "linear-gradient(180deg, rgba(212,175,82,0.12) 0%, rgba(212,175,82,0.04) 100%)",
+                    border: "1px solid rgba(212,175,82,0.25)",
+                    boxShadow: "inset 0 1px 0 rgba(212,175,82,0.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#d4af52",
+                    marginBottom: 10,
+                  }}>
+                    {a.icon}
+                  </div>
+                  <span className="tcg-action-label" style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2em", textTransform: "uppercase", textAlign: "center" }}>{a.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* ─── Loading skeleton ─── */}
+            {tcgHomeLoading && (
+              <div style={{ position: "relative", zIndex: 1, padding: "60px 0", textAlign: "center", color: "#5a5a5a", fontSize: 13 }}>
+                Loading collection…
+              </div>
+            )}
+
+            {/* ─── Zero state ─── */}
+            {!tcgHomeLoading && !hasData && (
+              <div style={{ position: "relative", zIndex: 1 }}>
+                <div className="tcg-hero" style={{ background: PANEL_BG, border: PANEL_BORDER, borderRadius: 20, padding: "40px 36px", boxShadow: PANEL_SHADOW, textAlign: "center" }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.42em", color: "#8a7a4a", textTransform: "uppercase", marginBottom: 14 }}>Get Started</div>
+                  <h2 style={{ margin: 0, marginBottom: 12, fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 700, fontSize: 28, color: "#f8f5ed", lineHeight: 1.1 }}>
+                    Build Your {gameDisplayName} Collection
+                  </h2>
+                  <div style={{ fontSize: 15, color: "#b5afa6", lineHeight: 1.55, maxWidth: 460, margin: "0 auto 28px" }}>
+                    Scan your first card to unlock pricing, activity, and collection insights.
+                  </div>
+                  <button
+                    className="tcg-zero-cta"
+                    onClick={() => { setTcgScanIntent("collect"); setScreen("tcgScan"); }}
+                    style={{
+                      height: 52,
+                      padding: "0 28px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "linear-gradient(180deg, #d8b14c 0%, #c89a2b 55%, #a67b1f 100%)",
+                      color: "#111111",
+                      fontFamily: font,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      letterSpacing: "0.2em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                      boxShadow: "0 8px 20px rgba(146,107,23,0.18), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.10)",
+                    }}
+                  >
+                    Scan First Card
+                  </button>
+                </div>
+                <div style={{ marginTop: 40, textAlign: "center", opacity: 0.6 }}>
+                  <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.36em", color: "#8a7a4a", textTransform: "uppercase", marginBottom: 14 }}>Supported Games</div>
+                  <div style={{ fontFamily: font, fontSize: 12, color: "#8e887f", lineHeight: 1.8 }}>
+                    Available now &middot; Pokémon<br/>
+                    Coming soon &middot; Magic: The Gathering, One Piece
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ─── Hero summary (populated) ─── */}
+            {!tcgHomeLoading && hasData && (
+              <div className="tcg-hero" style={{ position: "relative", zIndex: 1, background: PANEL_BG, border: PANEL_BORDER, borderRadius: 20, padding: 32, boxShadow: PANEL_SHADOW, marginBottom: 32 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.42em", color: "#8a7a4a", textTransform: "uppercase", marginBottom: 12 }}>Collection</div>
+                <div className="tcg-hero-number" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 48, color: "#f4f1ea", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+                  {tcgCardCount}
+                </div>
+                <div style={{ fontSize: 13, color: "#a7a19a", letterSpacing: "0.04em" }}>cards owned</div>
+                <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "20px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.28em", color: "#8a7a4a", textTransform: "uppercase" }}>Total Value</span>
+                  <span className="tcg-hero-value" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 700, fontSize: 28, color: "#e1c46d" }}>
+                    {fmtMoney(tcgTotalValue)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* ─── Recent Activity ─── */}
+            {!tcgHomeLoading && hasData && tcgRecentActivity.length > 0 && (
+              <div style={{ position: "relative", zIndex: 1, marginBottom: 32 }}>
+                <div style={sectionLabelStyle}>Recent Activity</div>
+                <div style={{ background: PANEL_BG, border: PANEL_BORDER, borderRadius: 16, boxShadow: PANEL_SHADOW, overflow: "hidden" }}>
+                  {tcgRecentActivity.map((a, idx) => {
+                    const name = a.catalog_match_name || a.final_catalog_name || "Unknown card";
+                    return (
+                      <div
+                        key={a.id || idx}
+                        className="tcg-activity-row"
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: idx < tcgRecentActivity.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", gap: 12 }}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, color: "#f4f1ea", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                          <div style={{ fontSize: 11, color: "#8a847d", letterSpacing: "0.02em" }}>checked</div>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#8a847d", flexShrink: 0 }}>{fmtRelative(a.created_at)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ─── Recently Added ─── */}
+            {!tcgHomeLoading && hasData && tcgRecentlyAdded.length > 0 && (
+              <div style={{ position: "relative", zIndex: 1, marginBottom: 32 }}>
+                <div style={sectionLabelStyle}>Recently Added</div>
+                <div className="tcg-thumbs-row" style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 6 }}>
+                  {tcgRecentlyAdded.map(c => (
+                    <button
+                      key={c.id}
+                      className="tcg-thumb-card"
+                      onClick={() => goToCardDetail(c, "tcgHome")}
+                      style={{
+                        flex: "0 0 auto",
+                        width: 120,
+                        background: "rgba(12,15,20,0.85)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                        borderRadius: 12,
+                        padding: 10,
+                        textAlign: "left",
+                        color: "#f4f1ea",
+                        fontFamily: font,
+                      }}
+                    >
+                      {c.scan_image_url ? (
+                        <img src={c.scan_image_url} alt={c.player || ""} style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 8, marginBottom: 8, background: "#151a21" }} />
+                      ) : (
+                        <div style={{ width: "100%", height: 140, background: "#151a21", borderRadius: 8, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "#3a3a44" }}>🎴</div>
+                      )}
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#f4f1ea", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.player || "Unknown"}</div>
+                      <div style={{ fontSize: 10, color: "#8a847d", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
+                        {[c.set, c.card_number].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#e1c46d", fontWeight: 600, marginTop: 4 }}>{fmtMoney(Number(c.raw_value) || 0)}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        {bottomNav}
+      </>
+    );
+  }
 
   // ─── TCG SCAN ───
   if (screen === "tcgScan") return (
@@ -276,7 +834,7 @@ export default function Home() {
 
   if (screen === "scanChooser") return (
     <>
-      <Shell title="What are you doing?" back={() => setScreen("home")}>
+      <Shell title="What are you doing?" back={() => setScreen(homeScreenForMode())}>
         <div style={{ paddingTop: 24 }}>
           <button onClick={() => { setCheckName(""); setCheckRaw(0); setCheckPsa10(0); setCheckPsa9(0); setCheckPsa8(0); setAskingPrice(0); setScanPreview(null); setScanResult(null); setLookupError(""); setNameEdited(false); setScreen("cardCheck"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "24px 20px", cursor: "pointer", textAlign: "left", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: text, marginBottom: 4 }}>Check a Card</div>
@@ -311,7 +869,7 @@ export default function Home() {
   );
 
   if (screen === "addCard") return (<>
-    <Shell title="Add Card" back={() => setScreen("home")}>
+    <Shell title="Add Card" back={() => setScreen(homeScreenForMode())}>
       <div style={{ paddingTop: 16 }}>
         {[{ label: "Player", key: "player", type: "text", placeholder: "Justin Herbert" }, { label: "Year", key: "year", type: "number", placeholder: "2024" }, { label: "Brand", key: "brand", type: "text", placeholder: "Panini" }, { label: "Set", key: "set", type: "text", placeholder: "Prizm Football" }, { label: "Card Number", key: "card_number", type: "text", placeholder: "#315" }, { label: "Value ($)", key: "raw_value", type: "number", placeholder: "0" }, { label: "Cost Paid ($)", key: "cost_basis", type: "number", placeholder: "0" }].map(f => (
           <div key={f.key} style={{ marginBottom: 14 }}>
@@ -395,9 +953,9 @@ export default function Home() {
     {bottomNav}</>
   );
 
-  if (screen === "csvImport") return <><CsvImport onBack={() => setScreen("home")} addCards={addCards} />{bottomNav}</>;
+  if (screen === "csvImport") return <><CsvImport onBack={() => setScreen(homeScreenForMode())} addCards={addCards} />{bottomNav}</>;
 
-  if (screen === "pickList") return <><PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen("home")} />{bottomNav}</>;
+  if (screen === "pickList") return <><PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen(homeScreenForMode())} />{bottomNav}</>;
 
   if (screen === "scanToCollection") return <><ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
@@ -409,7 +967,7 @@ export default function Home() {
 
   if (screen === "smartPull" && smartPullBoxName) return <><SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.boxName) setLotBuilderBoxName(t.boxName); if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
-  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} ecosystemMode={mode} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
+  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} ecosystemMode={mode} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen(homeScreenForMode()); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
@@ -417,7 +975,7 @@ export default function Home() {
   }
 
   if (screen === "cardCheck") return (<>
-    <Shell title="Check a Card" back={() => setScreen("home")}>
+    <Shell title="Check a Card" back={() => setScreen(homeScreenForMode())}>
       <div style={{ paddingTop: 20 }}>
         <input type="file" accept="image/*" capture="environment" ref={fileInputRef} style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleScan(f); }} />
 
@@ -557,13 +1115,13 @@ export default function Home() {
               getNextPosition={getBoxNextPosition}
               addCard={addCard}
               addBox={addBox}
-              onDone={() => { setShowBuyFlow(false); setScreen("home"); }}
+              onDone={() => { setShowBuyFlow(false); setScreen(homeScreenForMode()); }}
               onCancel={() => setShowBuyFlow(false)}
             />
           ) : (
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => setShowBuyFlow(true)} style={{ flex: 1, padding: "18px", background: green, border: "none", borderRadius: 14, color: "#fff", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>BUY</button>
-              <button onClick={() => setScreen("home")} style={{ flex: 1, padding: "18px", background: surface2, border: "1px solid " + border, borderRadius: 14, color: muted, fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>PASS</button>
+              <button onClick={() => setScreen(homeScreenForMode())} style={{ flex: 1, padding: "18px", background: surface2, border: "1px solid " + border, borderRadius: 14, color: muted, fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer" }}>PASS</button>
             </div>
           )}
         </div>
