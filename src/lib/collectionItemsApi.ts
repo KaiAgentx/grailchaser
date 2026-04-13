@@ -5,7 +5,8 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-export const TCG_GAME_VALUES = ["pokemon", "mtg", "one_piece"] as const;
+// Re-export from canonical source so existing imports continue to work.
+export { TCG_GAME_VALUES } from "@/lib/games";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

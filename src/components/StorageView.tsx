@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Card } from "@/lib/types";
+import { isTcgGame } from "@/lib/games";
 import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, cyan, muted, text, font, mono } from "./styles";
@@ -43,9 +44,8 @@ export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBac
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  // Filter boxes and cards by ecosystem: TCG = game in [pokemon, mtg, one_piece]. Sports = everything else.
-  const TCG_GAME_VALUES = ["pokemon", "mtg", "one_piece"];
-  const isTcgItem = (item: any) => item.game && TCG_GAME_VALUES.includes(item.game);
+  // Filter boxes and cards by ecosystem.
+  const isTcgItem = (item: any) => item.game && isTcgGame(item.game);
   const ecoBoxes = ecosystemMode === "tcg" ? boxes.filter(isTcgItem) : ecosystemMode === "sports" ? boxes.filter(b => !isTcgItem(b)) : boxes;
   const ecoCards = ecosystemMode === "tcg" ? cards.filter(isTcgItem) : ecosystemMode === "sports" ? cards.filter(c => !isTcgItem(c)) : cards;
   const unassigned = ecoCards.filter(c => !c.storage_box || c.storage_box === "PENDING");

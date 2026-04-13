@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase";
 import { Shell } from "./Shell";
 import { bg, surface, surface2, border, accent, green, red, amber, muted, secondary, text, font, mono } from "./styles";
 import type { TcgCondition } from "@/lib/types";
+import type { RecognitionSuccess, VisionResult, CandidateCard } from "@/types/tcg";
 
 const CONDITIONS: TcgCondition[] = ["NM", "LP", "MP", "HP", "DMG"];
 
@@ -20,7 +21,7 @@ const VARIANT_LABELS: Record<string, string> = {
   "1stEditionNormal": "1st Ed Non-Holo", unlimitedNormal: "Non-Holo",
 };
 
-function autoSelectVariant(pricing: any, visionResult: any): string {
+function autoSelectVariant(pricing: any, visionResult: VisionResult | null): string {
   const available = Object.keys(pricing?.allPrices || {});
   if (available.length === 0) return pricing?.priceType || "";
   if (available.length === 1) return available[0];
@@ -37,22 +38,16 @@ function fmtDate(s: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-interface Candidate {
-  rank: number; catalogCardId: string; name: string; setName: string; setCode: string;
-  cardNumber: string | null; rarity: string | null; imageSmallUrl: string | null; imageLargeUrl: string | null;
-  weightedDistance: number;
-}
-
 interface Props {
-  result: any; scanIntent: "check" | "collect"; onBack: () => void; onSaved: () => void; onScanAnother: () => void; userId: string;
+  result: RecognitionSuccess; scanIntent: "check" | "collect"; onBack: () => void; onSaved: () => void; onScanAnother: () => void; userId: string;
   scanResultId?: string | null;
   rank1CatalogCardId?: string | null;
 }
 
 export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAnother, userId, scanResultId, rank1CatalogCardId }: Props) {
-  const candidates: Candidate[] = result.result?.candidates || [];
-  const band: string = result.result?.confidenceBand || "unclear";
-  const visionResult = result.visionResult || null;
+  const candidates: CandidateCard[] = result.result?.candidates || [];
+  const band = result.result?.confidenceBand || "unclear";
+  const visionResult: VisionResult | null = result.visionResult || null;
 
   // Selection by catalogCardId instead of index
   const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
@@ -312,6 +307,28 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
             {!hasPrice && (
               <div style={{ fontSize: 12, color: muted, textAlign: "center", padding: "4px 0" }}>No pricing available</div>
             )}
+          </div>
+        )}
+
+        {/* ─── Variant picker (manual override) ─── */}
+        {!pricingLoading && pricing?.allPrices && Object.keys(pricing.allPrices).length > 1 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Variant</span>
+              <span style={{ fontSize: 11, color: "#D4A843" }}>{VARIANT_LABELS[selectedVariant] || selectedVariant}</span>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {Object.keys(pricing.allPrices).map(key => {
+                const isSel = key === selectedVariant;
+                const vm = pricing.allPrices[key]?.market;
+                return (
+                  <button key={key} onClick={() => setSelectedVariant(key)} style={{ padding: "8px 14px", borderRadius: 20, border: isSel ? "1px solid #D4A843" : "1px solid rgba(255,255,255,0.08)", background: isSel ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.03)", color: isSel ? "#D4A843" : "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: isSel ? 600 : 400, fontFamily: font, cursor: "pointer", minHeight: 40, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <span>{VARIANT_LABELS[key] || key}</span>
+                    {vm != null && <span style={{ fontSize: 11, color: isSel ? "#D4A843" : muted, fontWeight: 400 }}>${vm.toFixed(2)}</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

@@ -11,6 +11,9 @@ import type { Game, Mode } from './types';
 // All TCG games. Sports is intentionally excluded.
 export const TCG_GAMES: readonly Game[] = ['pokemon', 'mtg', 'one_piece'] as const;
 
+// Same list as plain strings — for `.includes()` checks on untyped API body values.
+export const TCG_GAME_VALUES: readonly string[] = TCG_GAMES;
+
 // Every supported game, sports first.
 export const ALL_GAMES: readonly Game[] = ['sports', 'pokemon', 'mtg', 'one_piece'] as const;
 

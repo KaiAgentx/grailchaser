@@ -109,7 +109,7 @@ export function TcgScanScreen({ game, scanIntent, onBack, onResult }: Props) {
       const base64 = await compressImage(file, 800);
       const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` };
       if (scanSessionId) headers["X-Scan-Session-ID"] = scanSessionId;
-      const res = await fetch("/api/tcg/recognize", { method: "POST", headers, body: JSON.stringify({ game, imageBase64: base64 }) });
+      const res = await fetch("/api/tcg/recognize", { method: "POST", headers, body: JSON.stringify({ game, imageBase64: base64, scanIntent }) });
       const data = await res.json();
       if (data.scan_session_id) setScanSessionId(data.scan_session_id);
       if (data.ok && data.result?.candidates?.length > 0) {

@@ -48,8 +48,13 @@ export async function POST(req: NextRequest) {
     let body: any;
     try { body = await req.json(); } catch { return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "Invalid JSON", requestId })); }
 
-    const { game, imageBase64 } = body;
+    const { game, imageBase64, scanIntent } = body;
     if (!imageBase64 || typeof imageBase64 !== "string") return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "imageBase64 required", requestId }));
+
+    // Map client scanIntent to session_type for telemetry
+    let sessionType: "quick_check" | "collection_save" | "batch_import" = "quick_check";
+    if (scanIntent === "collect") sessionType = "collection_save";
+    else if (scanIntent !== "check" && scanIntent != null) console.warn(`[${ROUTE}] unexpected scanIntent: ${scanIntent}, defaulting to quick_check`);
     if (game !== "pokemon") {
       return respond(errorResponse({ code: game === "mtg" || game === "one_piece" ? ErrorCode.NOT_FOUND : ErrorCode.INVALID_BODY, details: game === "mtg" || game === "one_piece" ? "Game not yet supported" : "Invalid game", requestId }));
     }
@@ -63,10 +68,8 @@ export async function POST(req: NextRequest) {
     );
 
     // ── Telemetry: session ──
-    // TODO: distinguish quick_check vs collection_save when scanIntent
-    // is threaded through from the client in a future PR.
     const sessionIdHeader = req.headers.get("x-scan-session-id");
-    const sessionId = await getOrCreateScanSession(userId, game, "quick_check", sessionIdHeader);
+    const sessionId = await getOrCreateScanSession(userId, game, sessionType, sessionIdHeader);
     let visionValidated = false;
 
     // ── STEP 1: Claude Vision ──

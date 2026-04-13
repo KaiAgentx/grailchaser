@@ -179,9 +179,8 @@ export default function Home() {
   const unsold = cards.filter(c => !c.sold);
   const listed = cards.filter(c => c.status === "listed");
   const grading = cards.filter(c => c.status === "grading");
-  // Ecosystem filter: TCG = game in [pokemon, mtg, one_piece]. Sports = everything else (game='sports', null, etc).
-  const TCG_GAME_VALUES = ["pokemon", "mtg", "one_piece"];
-  const isTcgCard = (c: any) => c.game && TCG_GAME_VALUES.includes(c.game);
+  // Ecosystem filter: TCG = game in TCG_GAME_VALUES. Sports = everything else.
+  const isTcgCard = (c: any) => c.game && isTcgGame(c.game);
   const ecosystemCards = mode === "tcg" ? cards.filter(isTcgCard) : cards.filter(c => !isTcgCard(c));
   const ecosystemUnsold = ecosystemCards.filter(c => !c.sold);
   const filteredCards = (statusFilter === "pending" ? ecosystemCards.filter(c => !c.storage_box || c.storage_box === "PENDING") : statusFilter === "stale" ? ecosystemCards.filter(c => c.status === "listed" && c.listed_date && (Date.now() - new Date(c.listed_date).getTime()) / 86400000 > 14) : statusFilter ? ecosystemCards.filter(c => c.status === statusFilter) : ecosystemUnsold).filter(c => filterSport === "All" || (mode === "tcg" ? (c as any).game === filterSport : c.sport === filterSport)).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase())).sort((a, b) => sortBy === "value" ? b.raw_value - a.raw_value : sortBy === "recent" ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime() : sortBy === "name" ? a.player.localeCompare(b.player) : (a.storage_box || "ZZZ").localeCompare(b.storage_box || "ZZZ") || (a.storage_position || 0) - (b.storage_position || 0));
