@@ -23,6 +23,7 @@ import { Shell } from "@/components/Shell";
 import { BottomNav } from "@/components/BottomNav";
 import { TcgScanScreen } from "@/components/TcgScanScreen";
 import { TcgResultScreen } from "@/components/TcgResultScreen";
+import { TcgCardDetail } from "@/components/TcgCardDetail";
 import { useBoxes } from "@/hooks/useBoxes";
 import { createClient } from "@/lib/supabase";
 import { bg, surface, surface2, border, borderMed, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "@/components/styles";
@@ -980,6 +981,10 @@ export default function Home() {
 
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
+    const isTcgCard = (liveCard as any).game && isTcgGame((liveCard as any).game);
+    if (isTcgCard) {
+      return <><TcgCardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
+    }
     return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
   }
 

@@ -5,6 +5,7 @@ import { Shell } from "./Shell";
 import { bg, surface, surface2, border, accent, green, red, amber, muted, secondary, text, font, mono } from "./styles";
 import type { TcgCondition } from "@/lib/types";
 import type { RecognitionSuccess, VisionResult, CandidateCard } from "@/types/tcg";
+import { VARIANT_LABELS, autoSelectVariant, fmtPrice, fmtDate } from "@/lib/tcg/variants";
 
 const CONDITIONS: TcgCondition[] = ["NM", "LP", "MP", "HP", "DMG"];
 
@@ -14,29 +15,6 @@ const bandStyles: Record<string, { bg: string; border: string; color: string; la
   choose_version: { bg: "rgba(251,191,36,0.15)", border: "rgba(251,191,36,0.4)", color: "#f59e0b", label: "~ Close Match" },
   unclear: { bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.3)", color: "#f87171", label: "! Low Confidence" },
 };
-
-const VARIANT_LABELS: Record<string, string> = {
-  holofoil: "Holo", reverseHolofoil: "Reverse Holo", normal: "Non-Holo",
-  "1stEditionHolofoil": "1st Edition", unlimitedHolofoil: "Unlimited Holo",
-  "1stEditionNormal": "1st Ed Non-Holo", unlimitedNormal: "Non-Holo",
-};
-
-function autoSelectVariant(pricing: any, visionResult: VisionResult | null): string {
-  const available = Object.keys(pricing?.allPrices || {});
-  if (available.length === 0) return pricing?.priceType || "";
-  if (available.length === 1) return available[0];
-  if (visionResult?.edition === "1st") { const f = available.find((t: string) => t.includes("1stEdition")); if (f) return f; }
-  if (visionResult?.finish === "reverse_holo") { if (available.includes("reverseHolofoil")) return "reverseHolofoil"; }
-  if (visionResult?.finish === "non_holo") { const f = available.find((t: string) => t.includes("Normal") || t === "normal"); if (f) return f; }
-  return pricing?.priceType || available[0];
-}
-
-const fmtPrice = (v: number | null) => v != null ? `$${v.toFixed(2)}` : "—";
-
-function fmtDate(s: string): string {
-  const d = new Date(s.replace(/\//g, "-"));
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 interface Props {
   result: RecognitionSuccess; scanIntent: "check" | "collect"; onBack: () => void; onSaved: () => void; onScanAnother: () => void; userId: string;
