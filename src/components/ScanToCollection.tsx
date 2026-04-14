@@ -2,35 +2,13 @@
 import { useState, useRef } from "react";
 import { NewCard } from "@/lib/types";
 import { Box, BoxType } from "@/hooks/useBoxes";
+import { compressImage } from "@/lib/imageCompress";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, cyan, purple, muted, text, font, mono } from "./styles";
 
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "10px 12px", minHeight: 44, color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" as const, width: "100%" };
 const labelStyle = { fontSize: 10, color: muted, textTransform: "uppercase" as const, letterSpacing: 1, display: "block", marginBottom: 4 };
 const btnStyle = { padding: "12px 16px", minHeight: 48, border: "none", borderRadius: 12, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer" };
-
-function compressImage(file: File, maxWidth = 800): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let w = img.width, h = img.height;
-        if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return reject("No canvas");
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.7).split(",")[1]);
-      };
-      img.onerror = reject;
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 type Screen = "setup" | "scan" | "review" | "summary";
 
@@ -96,7 +74,7 @@ export function ScanToCollection({ boxes, addCard, addBox, getNextPosition, onNa
     setPreview(URL.createObjectURL(file));
     setScanResult(null);
     try {
-      const base64 = await compressImage(file, 800);
+      const base64 = await compressImage(file);
       const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: base64 }) });
       const data = await res.json();
       if (data.success) {
