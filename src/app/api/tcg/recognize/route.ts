@@ -160,7 +160,55 @@ export async function POST(req: NextRequest) {
       weightedDistance: i === 0 ? 0 : i * 5, distanceBreakdown: { phash: 0, dhash: 0, whash: 0 },
     }));
 
-    // Telemetry: vision success
+    // ── STEP 4a: Hash verification reranker ──
+    // Compute perceptual hash of user photo vs each candidate's stored catalog hash.
+    // Rerank by hash distance so "right name+number, wrong set" candidates get demoted.
+    if (candidates.length >= 2) {
+      try {
+        const t4 = performance.now();
+        const cache = await getOrLoadCache(game, supabase);
+        const userBuf = Buffer.from(rawB64, "base64");
+        const preprocessed = await preprocessImage(userBuf);
+        const userPhash = phash(preprocessed.data, preprocessed.width, preprocessed.height);
+        const userDhash = dhash(preprocessed.data, preprocessed.width, preprocessed.height);
+        const userWhash = whash(preprocessed.data, preprocessed.width, preprocessed.height);
+
+        let scoredCount = 0;
+        for (const c of candidates) {
+          const entry = cache.entries.find(e => e.setCode === c.setCode && e.cardNumber === c.cardNumber);
+          if (!entry) continue;
+          const pd = hamming64(userPhash, entry.phash);
+          const dd = hamming64(userDhash, entry.dhash);
+          const wd = hamming64(userWhash, entry.whash);
+          c.weightedDistance = pd * HASH_WEIGHTS.phash + dd * HASH_WEIGHTS.dhash + wd * HASH_WEIGHTS.whash;
+          c.distanceBreakdown = { phash: pd, dhash: dd, whash: wd };
+          scoredCount++;
+        }
+
+        // SAFETY FLOOR: if all scored candidates have distance > 28 (normalized ~0.44),
+        // the user photo is poor quality — preserve original vision ranking
+        const allBad = scoredCount > 0 && candidates.every(c => (c.weightedDistance ?? 0) > 28);
+
+        if (!allBad && scoredCount >= 2) {
+          candidates.sort((a, b) => (a.weightedDistance ?? 999) - (b.weightedDistance ?? 999));
+          candidates.forEach((c, i) => c.rank = i + 1);
+        }
+
+        console.log("[verify] hash verification", {
+          candidateCount: candidates.length,
+          scoredCount,
+          allBad,
+          reranked: !allBad && scoredCount >= 2,
+          distances: candidates.map(c => c.weightedDistance?.toFixed(2) ?? "n/a"),
+          latencyMs: Math.round(performance.now() - t4),
+        });
+      } catch (verifyErr) {
+        console.warn("[verify] hash verification failed, using vision ranking:", verifyErr instanceof Error ? verifyErr.message : verifyErr);
+      }
+    }
+
+    // Telemetry: vision success (uses post-rerank candidate order)
+    const topDistance = candidates[0]?.weightedDistance ?? 0;
     let scanResultId: string | null = null;
     if (sessionId) {
       scanResultId = await writeScanResult({
@@ -169,12 +217,12 @@ export async function POST(req: NextRequest) {
         catalogMatchId: candidates[0]?.catalogCardId ?? null,
         catalogMatchName: candidates[0]?.name ?? null,
         candidateCount: candidates.length,
-        confidenceBand, topDistance: 0,
+        confidenceBand, topDistance: topDistance != null ? Math.round(topDistance) : 0,
         latencyMs: Date.now() - startedAt,
       });
     }
 
-    return respond(NextResponse.json({ ok: true, method: "vision", visionResult, result: { confidenceBand, topDistance: 0, candidates }, scan_session_id: sessionId, scan_result_id: scanResultId }));
+    return respond(NextResponse.json({ ok: true, method: "vision", visionResult, result: { confidenceBand, topDistance, candidates }, scan_session_id: sessionId, scan_result_id: scanResultId }));
   } catch (err: any) {
     console.error(`[${ROUTE}] unhandled:`, err?.message);
     return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));
