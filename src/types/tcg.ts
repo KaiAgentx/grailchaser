@@ -9,6 +9,7 @@ export interface VisionResult {
   edition: "1st" | "unlimited";
   finish: "holo" | "reverse_holo" | "non_holo";
   confidence: "high" | "medium" | "low";
+  number_confidence?: "high" | "medium" | "low";
 }
 
 export interface CandidateCard {

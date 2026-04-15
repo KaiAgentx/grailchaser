@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     let verifierMs: number | null = null;
 
     // ── STEP 1: Claude Vision ──
-    let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low" } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
+    let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low"; number_confidence?: "high" | "medium" | "low" } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
 
     if (anthropic) {
       const visionController = new AbortController();
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
           model: MODEL_NAME, max_tokens: 256,
           messages: [{ role: "user", content: [
             { type: "image", source: { type: "base64", media_type: mediaType, data: rawB64 } },
-            { type: "text", text: `Examine this Pokémon card image carefully.\n\nExtract these fields:\n1. name: The Pokémon or card name at the top (e.g. "Charizard", "M Charizard-EX", "Iono")\n2. number: The card number at the BOTTOM LEFT corner (e.g. "4/102", "025/185", "SWSH146")\n3. set: The set name if visible (e.g. "Base Set", "Scarlet & Violet")\n4. edition: Look for an oval "Edition 1" or "1st Edition" stamp near the bottom left of the card artwork. If you see it return "1st", otherwise return "unlimited"\n5. finish: Look at the card surface:\n   - If the artwork/illustration area has a rainbow sparkle or holographic shine: "holo"\n   - If the card border/background (outside the artwork) has a sparkle pattern but the artwork itself is flat: "reverse_holo"\n   - If the entire card is flat with no sparkle anywhere: "non_holo"\n6. confidence: "high" if text is clearly readable, "medium" if partial, "low" if unclear\n\nReturn ONLY valid JSON, no markdown:\n{"name":"...","number":"...","set":"...","edition":"1st|unlimited","finish":"holo|reverse_holo|non_holo","confidence":"high|medium|low"}\n\nIf not a Pokémon card or completely unreadable:\n{"name":null,"number":null,"set":null,"edition":"unlimited","finish":"holo","confidence":"low"}` }
+            { type: "text", text: `Examine this Pokémon card image carefully.\n\nExtract these fields:\n1. name: The Pokémon or card name at the top (e.g. "Charizard", "M Charizard-EX", "Iono")\n2. number: The card number at the BOTTOM LEFT corner (e.g. "4/102", "025/185", "SWSH146")\n3. number_confidence: "high" if all digits/characters are clearly visible, "medium" if partially obscured by glare or blur, "low" if you are guessing\n4. set: The set name if visible anywhere on the card — look for the set logo, set symbol text, or copyright line (e.g. "Base Set", "Scarlet & Violet", "Stellar Crown")\n5. edition: Look for an oval "Edition 1" or "1st Edition" stamp near the bottom left of the card artwork. If you see it return "1st", otherwise return "unlimited"\n6. finish: Look at the card surface:\n   - If the artwork/illustration area has a rainbow sparkle or holographic shine: "holo"\n   - If the card border/background (outside the artwork) has a sparkle pattern but the artwork itself is flat: "reverse_holo"\n   - If the entire card is flat with no sparkle anywhere: "non_holo"\n7. confidence: "high" if text is clearly readable, "medium" if partial, "low" if unclear\n\nReturn ONLY valid JSON, no markdown:\n{"name":"...","number":"...","number_confidence":"high|medium|low","set":"...","edition":"1st|unlimited","finish":"holo|reverse_holo|non_holo","confidence":"high|medium|low"}\n\nIf not a Pokémon card or completely unreadable:\n{"name":null,"number":null,"number_confidence":"low","set":null,"edition":"unlimited","finish":"holo","confidence":"low"}` }
           ] }]
         }, { signal: visionController.signal });
         const raw = (msg.content[0] as any).text?.trim() || "";
@@ -113,28 +113,60 @@ export async function POST(req: NextRequest) {
     }
 
     // ── STEP 2: Catalog lookup ──
+    const CATALOG_SELECT = "id, name, set_name, set_code, card_number, rarity";
     let cards: any[] = [];
     if (visionResult.name && visionResult.confidence !== "low") {
-      if (visionResult.number) {
-        const { data } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
+      // Attempt 0: set + name + number (highest specificity — uses vision-extracted set)
+      const normalizedSet = visionResult.set && visionResult.set !== "unknown"
+        ? visionResult.set.toLowerCase().replace(/pokémon|pokemon|tcg|[^\w\s]/gi, "").trim()
+        : null;
+      if (normalizedSet && visionResult.number) {
+        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).ilike("set_name", `%${normalizedSet}%`).limit(5);
         cards = data || [];
-        // Vision validated = exact match on first query
         if (cards.length > 0) visionValidated = true;
+      }
 
-        if (!cards.length && visionResult.number.includes("/")) {
-          const { data: d2 } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number.split("/")[0]).limit(5);
-          cards = d2 || [];
-        }
-        if (!cards.length && visionResult.number && !visionResult.number.includes("/")) {
-          const padded = visionResult.number.padStart(3, "0");
-          if (padded !== visionResult.number) {
-            const { data: d3 } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).limit(5);
-            cards = d3 || [];
-          }
+      // Attempt 1: name + number (exact)
+      if (!cards.length && visionResult.number) {
+        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
+        cards = data || [];
+        if (cards.length > 0) visionValidated = true;
+      }
+
+      // Attempt 2: name + number prefix (e.g., "4/102" → "4")
+      if (!cards.length && visionResult.number?.includes("/")) {
+        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number.split("/")[0]).limit(5);
+        cards = data || [];
+      }
+
+      // Attempt 3: name + zero-padded number (e.g., "4" → "004")
+      if (!cards.length && visionResult.number && !visionResult.number.includes("/")) {
+        const padded = visionResult.number.padStart(3, "0");
+        if (padded !== visionResult.number) {
+          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).limit(5);
+          cards = data || [];
         }
       }
+
+      // Attempt 4: number-tolerant (±2) when number_confidence is low
+      // Catches single-digit misreads (1→7, 3→8). Does NOT catch large errors (8→20).
+      if (!cards.length && visionResult.number && visionResult.number_confidence === "low") {
+        const numBase = parseInt(visionResult.number.split("/")[0], 10);
+        if (!isNaN(numBase)) {
+          const nearby = [numBase - 2, numBase - 1, numBase + 1, numBase + 2]
+            .filter(n => n > 0)
+            .map(n => String(n));
+          // Also try zero-padded versions
+          const nearbyPadded = nearby.map(n => n.padStart(3, "0"));
+          const allVariants = [...new Set([...nearby, ...nearbyPadded])];
+          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).in("card_number", allVariants).limit(10);
+          cards = data || [];
+        }
+      }
+
+      // Attempt 5: fuzzy name-only fallback (newest sets first)
       if (!cards.length) {
-        const { data } = await supabase.from("catalog_cards").select("id, name, set_name, set_code, card_number, rarity").eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_name", { ascending: true }).limit(10);
+        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_code", { ascending: false }).limit(10);
         cards = data || [];
       }
     }
@@ -196,9 +228,12 @@ export async function POST(req: NextRequest) {
           scoredCount++;
         }
 
-        // SAFETY FLOOR: if all scored candidates have distance > 28 (normalized ~0.44),
-        // the user photo is poor quality — preserve original vision ranking
-        const allBad = scoredCount > 0 && candidates.every(c => (c.weightedDistance ?? 0) > 28);
+        // SAFETY FLOOR: When vision is uncertain about set or number, trust the hash
+        // verifier more by raising the floor. Loose floor lets the verifier rerank even
+        // when distances are moderate — better than preserving a shaky vision ranking.
+        const visionWeak = !visionResult.set || visionResult.set === "unknown" || visionResult.number_confidence === "low";
+        const safetyFloor = visionWeak ? 35 : 28;
+        const allBad = scoredCount > 0 && candidates.every(c => (c.weightedDistance ?? 0) > safetyFloor);
 
         if (!allBad && scoredCount >= 2) {
           candidates.sort((a, b) => (a.weightedDistance ?? 999) - (b.weightedDistance ?? 999));
