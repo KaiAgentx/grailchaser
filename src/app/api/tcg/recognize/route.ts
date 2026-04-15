@@ -128,6 +128,23 @@ export async function POST(req: NextRequest) {
     const CATALOG_SELECT = "id, name, set_name, set_code, card_number, rarity";
     let cards: any[] = [];
     if (visionResult.name && visionResult.confidence !== "low") {
+      // Lift rarity filter — applied to ALL attempts as a preference, never a hard gate
+      const rarityValues = visionResult.rarity_symbol ? RARITY_MAP[visionResult.rarity_symbol] : null;
+      const hasRarity = rarityValues != null && rarityValues.length > 0;
+
+      // Helper: try query with rarity filter first, fall back to without if no results.
+      // Prevents a misread rarity from blocking a good name+number match.
+      async function queryWithRarityFallback(baseQuery: any, limit: number): Promise<any[]> {
+        if (hasRarity) {
+          const { data: filtered } = await baseQuery.in("rarity", rarityValues).limit(limit);
+          if (filtered && filtered.length > 0) return filtered;
+          // Rebuild query without rarity — Supabase queries are immutable after .in()
+          // so we re-run the original without the filter
+        }
+        const { data } = await baseQuery.limit(limit);
+        return data || [];
+      }
+
       // Attempt 0: name + printed_total via catalog_sets join (highest specificity for Pokémon)
       if (visionResult.set_total && visionResult.name) {
         const { data: matchingSets } = await supabase
@@ -148,13 +165,25 @@ export async function POST(req: NextRequest) {
             query = query.or(`card_number.eq.${numBase},card_number.eq.${numBase.padStart(3, "0")}`);
           }
 
-          const rarityValues = visionResult.rarity_symbol ? RARITY_MAP[visionResult.rarity_symbol] : null;
-          if (rarityValues && rarityValues.length > 0) {
-            query = query.in("rarity", rarityValues);
+          if (hasRarity) {
+            const { data: filtered } = await query.in("rarity", rarityValues!).limit(5);
+            if (filtered && filtered.length > 0) {
+              cards = filtered;
+            } else {
+              // Re-query without rarity
+              let q2 = supabase.from("catalog_cards").select(CATALOG_SELECT)
+                .eq("game", game).ilike("name", visionResult.name).in("set_uuid", setUuids);
+              if (visionResult.number) {
+                const numBase = visionResult.number.split("/")[0];
+                q2 = q2.or(`card_number.eq.${numBase},card_number.eq.${numBase.padStart(3, "0")}`);
+              }
+              const { data } = await q2.limit(5);
+              cards = data || [];
+            }
+          } else {
+            const { data } = await query.limit(5);
+            cards = data || [];
           }
-
-          const { data } = await query.limit(5);
-          cards = data || [];
           if (cards.length > 0) visionValidated = true;
         }
       }
@@ -164,30 +193,67 @@ export async function POST(req: NextRequest) {
         ? visionResult.set.toLowerCase().replace(/pokémon|pokemon|tcg|[^\w\s]/gi, "").trim()
         : null;
       if (!cards.length && normalizedSet && visionResult.number) {
-        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).ilike("set_name", `%${normalizedSet}%`).limit(5);
-        cards = data || [];
+        if (hasRarity) {
+          const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).ilike("set_name", `%${normalizedSet}%`).in("rarity", rarityValues!).limit(5);
+          if (filtered && filtered.length > 0) { cards = filtered; }
+          else {
+            const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).ilike("set_name", `%${normalizedSet}%`).limit(5);
+            cards = data || [];
+          }
+        } else {
+          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).ilike("set_name", `%${normalizedSet}%`).limit(5);
+          cards = data || [];
+        }
         if (cards.length > 0) visionValidated = true;
       }
 
       // Attempt 2: name + number (exact)
       if (!cards.length && visionResult.number) {
-        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
-        cards = data || [];
+        if (hasRarity) {
+          const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).in("rarity", rarityValues!).limit(5);
+          if (filtered && filtered.length > 0) { cards = filtered; }
+          else {
+            const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
+            cards = data || [];
+          }
+        } else {
+          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
+          cards = data || [];
+        }
         if (cards.length > 0) visionValidated = true;
       }
 
       // Attempt 3: name + number prefix (e.g., "4/102" → "4")
       if (!cards.length && visionResult.number?.includes("/")) {
-        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number.split("/")[0]).limit(5);
-        cards = data || [];
+        const prefix = visionResult.number.split("/")[0];
+        if (hasRarity) {
+          const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", prefix).in("rarity", rarityValues!).limit(5);
+          if (filtered && filtered.length > 0) { cards = filtered; }
+          else {
+            const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", prefix).limit(5);
+            cards = data || [];
+          }
+        } else {
+          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", prefix).limit(5);
+          cards = data || [];
+        }
       }
 
       // Attempt 4: name + zero-padded number (e.g., "4" → "004")
       if (!cards.length && visionResult.number && !visionResult.number.includes("/")) {
         const padded = visionResult.number.padStart(3, "0");
         if (padded !== visionResult.number) {
-          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).limit(5);
-          cards = data || [];
+          if (hasRarity) {
+            const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).in("rarity", rarityValues!).limit(5);
+            if (filtered && filtered.length > 0) { cards = filtered; }
+            else {
+              const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).limit(5);
+              cards = data || [];
+            }
+          } else {
+            const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).limit(5);
+            cards = data || [];
+          }
         }
       }
 
@@ -199,18 +265,35 @@ export async function POST(req: NextRequest) {
           const nearby = [numBase - 2, numBase - 1, numBase + 1, numBase + 2]
             .filter(n => n > 0)
             .map(n => String(n));
-          // Also try zero-padded versions
           const nearbyPadded = nearby.map(n => n.padStart(3, "0"));
           const allVariants = [...new Set([...nearby, ...nearbyPadded])];
-          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).in("card_number", allVariants).limit(10);
-          cards = data || [];
+          if (hasRarity) {
+            const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).in("card_number", allVariants).in("rarity", rarityValues!).limit(10);
+            if (filtered && filtered.length > 0) { cards = filtered; }
+            else {
+              const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).in("card_number", allVariants).limit(10);
+              cards = data || [];
+            }
+          } else {
+            const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).in("card_number", allVariants).limit(10);
+            cards = data || [];
+          }
         }
       }
 
       // Attempt 6: fuzzy name-only fallback (newest sets first)
       if (!cards.length) {
-        const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_code", { ascending: false }).limit(10);
-        cards = data || [];
+        if (hasRarity) {
+          const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).in("rarity", rarityValues!).order("set_code", { ascending: false }).limit(10);
+          if (filtered && filtered.length > 0) { cards = filtered; }
+          else {
+            const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_code", { ascending: false }).limit(10);
+            cards = data || [];
+          }
+        } else {
+          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_code", { ascending: false }).limit(10);
+          cards = data || [];
+        }
       }
     }
 
