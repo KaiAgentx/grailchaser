@@ -19,6 +19,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   : null;
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MODEL_NAME = "claude-sonnet-4-20250514";
 
 function detectMediaType(base64: string): "image/jpeg" | "image/png" | "image/webp" {
   if (base64.startsWith("/9j/")) return "image/jpeg";
@@ -48,8 +49,9 @@ export async function POST(req: NextRequest) {
     let body: any;
     try { body = await req.json(); } catch { return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "Invalid JSON", requestId })); }
 
-    const { game, imageBase64, scanIntent } = body;
+    const { game, imageBase64, scanIntent, imagePreW, imagePreH, imagePostW, imagePostH } = body;
     if (!imageBase64 || typeof imageBase64 !== "string") return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "imageBase64 required", requestId }));
+    const imageTokensEst = (imagePostW && imagePostH) ? Math.round((imagePostW * imagePostH) / 750) : null;
 
     // Map client scanIntent to session_type for telemetry
     let sessionType: "quick_check" | "collection_save" | "batch_import" = "quick_check";
@@ -71,17 +73,24 @@ export async function POST(req: NextRequest) {
     const sessionIdHeader = req.headers.get("x-scan-session-id");
     const sessionId = await getOrCreateScanSession(userId, game, sessionType, sessionIdHeader);
     let visionValidated = false;
+    let visionMs: number | null = null;
+    let verifierUsed = false;
+    let verifierReranked = false;
+    let verifierTopDist: number | null = null;
+    let verifierGap: number | null = null;
+    let verifierMs: number | null = null;
 
     // ── STEP 1: Claude Vision ──
     let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low" } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
 
     if (anthropic) {
       const visionController = new AbortController();
+      const visionStart = performance.now();
       const visionTimeout = setTimeout(() => visionController.abort(), 30000);
       try {
         const mediaType = detectMediaType(rawB64);
         const msg = await anthropic.messages.create({
-          model: "claude-sonnet-4-20250514", max_tokens: 256,
+          model: MODEL_NAME, max_tokens: 256,
           messages: [{ role: "user", content: [
             { type: "image", source: { type: "base64", media_type: mediaType, data: rawB64 } },
             { type: "text", text: `Examine this Pokémon card image carefully.\n\nExtract these fields:\n1. name: The Pokémon or card name at the top (e.g. "Charizard", "M Charizard-EX", "Iono")\n2. number: The card number at the BOTTOM LEFT corner (e.g. "4/102", "025/185", "SWSH146")\n3. set: The set name if visible (e.g. "Base Set", "Scarlet & Violet")\n4. edition: Look for an oval "Edition 1" or "1st Edition" stamp near the bottom left of the card artwork. If you see it return "1st", otherwise return "unlimited"\n5. finish: Look at the card surface:\n   - If the artwork/illustration area has a rainbow sparkle or holographic shine: "holo"\n   - If the card border/background (outside the artwork) has a sparkle pattern but the artwork itself is flat: "reverse_holo"\n   - If the entire card is flat with no sparkle anywhere: "non_holo"\n6. confidence: "high" if text is clearly readable, "medium" if partial, "low" if unclear\n\nReturn ONLY valid JSON, no markdown:\n{"name":"...","number":"...","set":"...","edition":"1st|unlimited","finish":"holo|reverse_holo|non_holo","confidence":"high|medium|low"}\n\nIf not a Pokémon card or completely unreadable:\n{"name":null,"number":null,"set":null,"edition":"unlimited","finish":"holo","confidence":"low"}` }
@@ -99,6 +108,7 @@ export async function POST(req: NextRequest) {
         console.error("[vision] Claude error:", (err as any)?.message || (err as any)?.status || JSON.stringify(err));
       } finally {
         clearTimeout(visionTimeout);
+        visionMs = Math.round(performance.now() - visionStart);
       }
     }
 
@@ -166,6 +176,7 @@ export async function POST(req: NextRequest) {
     if (candidates.length >= 2) {
       try {
         const t4 = performance.now();
+        verifierUsed = true;
         const cache = await getOrLoadCache(game, supabase);
         const userBuf = Buffer.from(rawB64, "base64");
         const preprocessed = await preprocessImage(userBuf);
@@ -192,15 +203,22 @@ export async function POST(req: NextRequest) {
         if (!allBad && scoredCount >= 2) {
           candidates.sort((a, b) => (a.weightedDistance ?? 999) - (b.weightedDistance ?? 999));
           candidates.forEach((c, i) => c.rank = i + 1);
+          verifierReranked = true;
         }
+
+        verifierTopDist = candidates[0]?.weightedDistance != null ? candidates[0].weightedDistance / 64 : null;
+        verifierGap = (scoredCount >= 2 && candidates[0]?.weightedDistance != null && candidates[1]?.weightedDistance != null)
+          ? (candidates[1].weightedDistance - candidates[0].weightedDistance) / 64
+          : null;
+        verifierMs = Math.round(performance.now() - t4);
 
         console.log("[verify] hash verification", {
           candidateCount: candidates.length,
           scoredCount,
           allBad,
-          reranked: !allBad && scoredCount >= 2,
+          reranked: verifierReranked,
           distances: candidates.map(c => c.weightedDistance?.toFixed(2) ?? "n/a"),
-          latencyMs: Math.round(performance.now() - t4),
+          latencyMs: verifierMs,
         });
       } catch (verifyErr) {
         console.warn("[verify] hash verification failed, using vision ranking:", verifyErr instanceof Error ? verifyErr.message : verifyErr);
@@ -219,6 +237,14 @@ export async function POST(req: NextRequest) {
         candidateCount: candidates.length,
         confidenceBand, topDistance: topDistance != null ? Math.round(topDistance) : 0,
         latencyMs: Date.now() - startedAt,
+        imagePreW: typeof imagePreW === "number" ? imagePreW : null,
+        imagePreH: typeof imagePreH === "number" ? imagePreH : null,
+        imagePostW: typeof imagePostW === "number" ? imagePostW : null,
+        imagePostH: typeof imagePostH === "number" ? imagePostH : null,
+        imageTokensEst,
+        modelName: MODEL_NAME,
+        visionMs,
+        verifierUsed, verifierReranked, verifierTopDist, verifierGap, verifierMs,
       });
     }
 

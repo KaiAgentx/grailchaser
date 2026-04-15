@@ -97,6 +97,19 @@ export interface ScanResultRow {
   confidenceBand?: string | null;
   topDistance?: number | null;
   latencyMs: number;
+  // WIN #3 telemetry fields
+  imagePreW?: number | null;
+  imagePreH?: number | null;
+  imagePostW?: number | null;
+  imagePostH?: number | null;
+  imageTokensEst?: number | null;
+  modelName?: string | null;
+  visionMs?: number | null;
+  verifierUsed?: boolean;
+  verifierReranked?: boolean;
+  verifierTopDist?: number | null;
+  verifierGap?: number | null;
+  verifierMs?: number | null;
 }
 
 /**
@@ -120,6 +133,18 @@ export async function writeScanResult(row: ScanResultRow): Promise<string | null
         confidence_band: row.confidenceBand ?? null,
         top_distance: row.topDistance ?? null,
         latency_ms: row.latencyMs,
+        image_pre_w: row.imagePreW ?? null,
+        image_pre_h: row.imagePreH ?? null,
+        image_post_w: row.imagePostW ?? null,
+        image_post_h: row.imagePostH ?? null,
+        image_tokens_est: row.imageTokensEst ?? null,
+        model_name: row.modelName ?? null,
+        vision_ms: row.visionMs ?? null,
+        verifier_used: row.verifierUsed ?? false,
+        verifier_reranked: row.verifierReranked ?? false,
+        verifier_top_dist: row.verifierTopDist ?? null,
+        verifier_gap: row.verifierGap ?? null,
+        verifier_ms: row.verifierMs ?? null,
       })
       .select("id")
       .single();

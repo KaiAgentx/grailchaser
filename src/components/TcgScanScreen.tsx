@@ -43,17 +43,35 @@ export function TcgScanScreen({ game, scanIntent, onBack, onResult }: Props) {
       const jwt = sessionData?.session?.access_token;
       if (!jwt) { setError("Not signed in"); setScanning(false); return; }
 
-      const base64 = await compressImage(file);
-      // Temporary dimension logging — will move to telemetry
+      // Measure original dimensions before compression
+      let imagePreW: number | null = null;
+      let imagePreH: number | null = null;
       try {
-        const tmpImg = new window.Image();
-        tmpImg.src = "data:image/jpeg;base64," + base64;
-        await new Promise(r => { tmpImg.onload = r; tmpImg.onerror = r; });
-        console.log("[scan] compressed image", { postW: tmpImg.naturalWidth, postH: tmpImg.naturalHeight, estTokens: Math.round((tmpImg.naturalWidth * tmpImg.naturalHeight) / 750) });
+        const preUrl = URL.createObjectURL(file);
+        const preImg = new window.Image();
+        preImg.src = preUrl;
+        await new Promise(r => { preImg.onload = r; preImg.onerror = r; });
+        imagePreW = preImg.naturalWidth;
+        imagePreH = preImg.naturalHeight;
+        URL.revokeObjectURL(preUrl);
       } catch {}
+
+      const base64 = await compressImage(file);
+
+      // Measure post-compression dimensions
+      let imagePostW: number | null = null;
+      let imagePostH: number | null = null;
+      try {
+        const postImg = new window.Image();
+        postImg.src = "data:image/jpeg;base64," + base64;
+        await new Promise(r => { postImg.onload = r; postImg.onerror = r; });
+        imagePostW = postImg.naturalWidth;
+        imagePostH = postImg.naturalHeight;
+      } catch {}
+
       const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` };
       if (scanSessionId) headers["X-Scan-Session-ID"] = scanSessionId;
-      const res = await fetch("/api/tcg/recognize", { method: "POST", headers, body: JSON.stringify({ game, imageBase64: base64, scanIntent }) });
+      const res = await fetch("/api/tcg/recognize", { method: "POST", headers, body: JSON.stringify({ game, imageBase64: base64, scanIntent, imagePreW, imagePreH, imagePostW, imagePostH }) });
       const data = await res.json();
       if (data.scan_session_id) setScanSessionId(data.scan_session_id);
       if (data.ok && data.result?.candidates?.length > 0) {
