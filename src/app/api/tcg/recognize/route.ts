@@ -21,7 +21,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   : null;
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const MODEL_NAME = "claude-sonnet-4-6";
+const MODEL_NAME = "claude-sonnet-4-20250514";
 
 const RARITY_MAP: Record<string, string[]> = {
   circle: ["Common"],
