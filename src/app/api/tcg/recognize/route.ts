@@ -10,6 +10,8 @@ import { ErrorCode, errorResponse } from "@/lib/errors";
 import { getOrCreateRequestId, logRequest } from "@/lib/logging";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { getOrCreateScanSession, writeScanResult } from "@/lib/scanTelemetry";
+import { getVisionPrompt } from "@/lib/vision/prompts";
+import type { SupportedGame } from "@/lib/vision/prompts";
 
 const ROUTE = "/api/tcg/recognize";
 const ECOSYSTEM = "tcg";
@@ -20,6 +22,16 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MODEL_NAME = "claude-sonnet-4-20250514";
+
+const RARITY_MAP: Record<string, string[]> = {
+  circle: ["Common"],
+  diamond: ["Uncommon"],
+  star: ["Rare", "Rare Holo"],
+  two_stars: ["Double Rare", "Rare Holo"],
+  gold_star: ["Illustration Rare", "Ultra Rare"],
+  gold_two_stars: ["Special Illustration Rare"],
+  gold_three_stars: ["Hyper Rare"],
+};
 
 function detectMediaType(base64: string): "image/jpeg" | "image/png" | "image/webp" {
   if (base64.startsWith("/9j/")) return "image/jpeg";
@@ -81,7 +93,7 @@ export async function POST(req: NextRequest) {
     let verifierMs: number | null = null;
 
     // ── STEP 1: Claude Vision ──
-    let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low"; number_confidence?: "high" | "medium" | "low" } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
+    let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low"; number_confidence?: "high" | "medium" | "low"; set_total?: number | null; rarity_symbol?: string | null } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
 
     if (anthropic) {
       const visionController = new AbortController();
@@ -93,7 +105,7 @@ export async function POST(req: NextRequest) {
           model: MODEL_NAME, max_tokens: 256,
           messages: [{ role: "user", content: [
             { type: "image", source: { type: "base64", media_type: mediaType, data: rawB64 } },
-            { type: "text", text: `Examine this Pokémon card image carefully.\n\nExtract these fields:\n1. name: The Pokémon or card name at the top (e.g. "Charizard", "M Charizard-EX", "Iono")\n2. number: The card number at the BOTTOM LEFT corner (e.g. "4/102", "025/185", "SWSH146")\n3. number_confidence: "high" if all digits/characters are clearly visible, "medium" if partially obscured by glare or blur, "low" if you are guessing\n4. set: The set name if visible anywhere on the card — look for the set logo, set symbol text, or copyright line (e.g. "Base Set", "Scarlet & Violet", "Stellar Crown")\n5. edition: Look for an oval "Edition 1" or "1st Edition" stamp near the bottom left of the card artwork. If you see it return "1st", otherwise return "unlimited"\n6. finish: Look at the card surface:\n   - If the artwork/illustration area has a rainbow sparkle or holographic shine: "holo"\n   - If the card border/background (outside the artwork) has a sparkle pattern but the artwork itself is flat: "reverse_holo"\n   - If the entire card is flat with no sparkle anywhere: "non_holo"\n7. confidence: "high" if text is clearly readable, "medium" if partial, "low" if unclear\n\nReturn ONLY valid JSON, no markdown:\n{"name":"...","number":"...","number_confidence":"high|medium|low","set":"...","edition":"1st|unlimited","finish":"holo|reverse_holo|non_holo","confidence":"high|medium|low"}\n\nIf not a Pokémon card or completely unreadable:\n{"name":null,"number":null,"number_confidence":"low","set":null,"edition":"unlimited","finish":"holo","confidence":"low"}` }
+            { type: "text", text: getVisionPrompt(game as SupportedGame) },
           ] }]
         }, { signal: visionController.signal });
         const raw = (msg.content[0] as any).text?.trim() || "";
@@ -116,30 +128,61 @@ export async function POST(req: NextRequest) {
     const CATALOG_SELECT = "id, name, set_name, set_code, card_number, rarity";
     let cards: any[] = [];
     if (visionResult.name && visionResult.confidence !== "low") {
-      // Attempt 0: set + name + number (highest specificity — uses vision-extracted set)
+      // Attempt 0: name + printed_total via catalog_sets join (highest specificity for Pokémon)
+      if (visionResult.set_total && visionResult.name) {
+        const { data: matchingSets } = await supabase
+          .from("catalog_sets")
+          .select("id")
+          .eq("game", game)
+          .eq("printed_total", visionResult.set_total);
+
+        if (matchingSets && matchingSets.length > 0) {
+          const setUuids = matchingSets.map(s => s.id);
+          let query = supabase.from("catalog_cards").select(CATALOG_SELECT)
+            .eq("game", game)
+            .ilike("name", visionResult.name)
+            .in("set_uuid", setUuids);
+
+          if (visionResult.number) {
+            const numBase = visionResult.number.split("/")[0];
+            query = query.or(`card_number.eq.${numBase},card_number.eq.${numBase.padStart(3, "0")}`);
+          }
+
+          const rarityValues = visionResult.rarity_symbol ? RARITY_MAP[visionResult.rarity_symbol] : null;
+          if (rarityValues && rarityValues.length > 0) {
+            query = query.in("rarity", rarityValues);
+          }
+
+          const { data } = await query.limit(5);
+          cards = data || [];
+          if (cards.length > 0) visionValidated = true;
+        }
+      }
+
+      // Attempt 1: set_name + name + number (uses vision-extracted set name)
       const normalizedSet = visionResult.set && visionResult.set !== "unknown"
         ? visionResult.set.toLowerCase().replace(/pokémon|pokemon|tcg|[^\w\s]/gi, "").trim()
         : null;
-      if (normalizedSet && visionResult.number) {
+      if (!cards.length && normalizedSet && visionResult.number) {
         const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).ilike("set_name", `%${normalizedSet}%`).limit(5);
         cards = data || [];
         if (cards.length > 0) visionValidated = true;
       }
 
-      // Attempt 1: name + number (exact)
+      // Attempt 2: name + number (exact)
       if (!cards.length && visionResult.number) {
         const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
         cards = data || [];
         if (cards.length > 0) visionValidated = true;
       }
 
-      // Attempt 2: name + number prefix (e.g., "4/102" → "4")
+      // Attempt 3: name + number prefix (e.g., "4/102" → "4")
       if (!cards.length && visionResult.number?.includes("/")) {
         const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number.split("/")[0]).limit(5);
         cards = data || [];
       }
 
-      // Attempt 3: name + zero-padded number (e.g., "4" → "004")
+      // Attempt 4: name + zero-padded number (e.g., "4" → "004")
       if (!cards.length && visionResult.number && !visionResult.number.includes("/")) {
         const padded = visionResult.number.padStart(3, "0");
         if (padded !== visionResult.number) {
@@ -148,7 +191,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Attempt 4: number-tolerant (±2) when number_confidence is low
+      // Attempt 5: number-tolerant (±2) when number_confidence is low
       // Catches single-digit misreads (1→7, 3→8). Does NOT catch large errors (8→20).
       if (!cards.length && visionResult.number && visionResult.number_confidence === "low") {
         const numBase = parseInt(visionResult.number.split("/")[0], 10);
@@ -164,7 +207,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Attempt 5: fuzzy name-only fallback (newest sets first)
+      // Attempt 6: fuzzy name-only fallback (newest sets first)
       if (!cards.length) {
         const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_code", { ascending: false }).limit(10);
         cards = data || [];
@@ -228,16 +271,28 @@ export async function POST(req: NextRequest) {
           scoredCount++;
         }
 
-        // SAFETY FLOOR: When vision is uncertain about set or number, trust the hash
-        // verifier more by raising the floor. Loose floor lets the verifier rerank even
-        // when distances are moderate — better than preserving a shaky vision ranking.
+        // BANDED VERIFIER THRESHOLDS (replaces binary safety floor)
+        // Distance bands (out of 64 for raw, normalized to 0-1):
+        //   <= 8  (norm <= 0.125): strong match — trust verifier completely
+        //   <= 16 (norm <= 0.25):  plausible match — trust verifier
+        //   <= 26 (norm <= 0.40):  weak match — only rerank if vision was uncertain
+        //   >  26 (norm >  0.40):  likely mismatch — preserve vision ranking
         const visionWeak = !visionResult.set || visionResult.set === "unknown" || visionResult.number_confidence === "low";
-        const safetyFloor = visionWeak ? 35 : 28;
-        const allBad = scoredCount > 0 && candidates.every(c => (c.weightedDistance ?? 0) > safetyFloor);
+        const topDist = candidates[0]?.weightedDistance ?? 999;
 
-        if (!allBad && scoredCount >= 2) {
+        let shouldRerank = false;
+        if (topDist <= 16) {
+          // Strong or plausible match — always trust verifier
+          shouldRerank = true;
+        } else if (topDist <= 26 && visionWeak) {
+          // Weak match — only trust verifier when vision was uncertain
+          shouldRerank = true;
+        }
+        // else: likely mismatch — preserve vision ranking
+
+        if (shouldRerank && scoredCount >= 2) {
           candidates.sort((a, b) => (a.weightedDistance ?? 999) - (b.weightedDistance ?? 999));
-          candidates.forEach((c, i) => c.rank = i + 1);
+          candidates.forEach((c, i) => { c.rank = i + 1; });
           verifierReranked = true;
         }
 
@@ -250,7 +305,9 @@ export async function POST(req: NextRequest) {
         console.log("[verify] hash verification", {
           candidateCount: candidates.length,
           scoredCount,
-          allBad,
+          topDist: topDist.toFixed(2),
+          visionWeak,
+          shouldRerank,
           reranked: verifierReranked,
           distances: candidates.map(c => c.weightedDistance?.toFixed(2) ?? "n/a"),
           latencyMs: verifierMs,

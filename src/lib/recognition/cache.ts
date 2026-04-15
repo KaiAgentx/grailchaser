@@ -50,6 +50,35 @@ export class CacheLoadError extends Error {
 const caches = new Map<string, RecognitionCache>();
 const inflight = new Map<string, Promise<RecognitionCache>>();
 
+// Version check cache: avoids a Supabase round-trip (~200ms) on every request.
+// Staleness window: up to 60s. A catalog update during this window means the
+// hash cache uses the old version for at most 60s before detecting the change.
+type VersionCacheEntry = { version: string; checkedAt: number };
+const versionCache = new Map<string, VersionCacheEntry>();
+const VERSION_CACHE_TTL_MS = 60_000; // 60 seconds
+
+async function getCatalogVersion(game: string, supabase: SupabaseClient): Promise<string> {
+  const cached = versionCache.get(game);
+  const now = Date.now();
+  if (cached && (now - cached.checkedAt) < VERSION_CACHE_TTL_MS) {
+    return cached.version;
+  }
+  const { data, error } = await supabase
+    .from("catalog_metadata")
+    .select("catalog_version")
+    .eq("game", game)
+    .single();
+  if (error || !data) {
+    throw new CacheLoadError(`Catalog not yet populated for game=${game}. Run sync first.`);
+  }
+  const version = data.catalog_version;
+  if (!version || version === "0") {
+    throw new CacheLoadError(`Catalog not yet populated for game=${game}. Run sync first.`);
+  }
+  versionCache.set(game, { version, checkedAt: now });
+  return version;
+}
+
 // ─── Public API ───
 
 /** Synchronous read of the current cache state. No version check. */
@@ -79,25 +108,8 @@ export async function getOrLoadCache(
   game: string,
   supabase: SupabaseClient
 ): Promise<RecognitionCache> {
-  // a. Fetch current catalog_version
-  const { data: meta, error: metaErr } = await supabase
-    .from("catalog_metadata")
-    .select("catalog_version")
-    .eq("game", game)
-    .single();
-
-  if (metaErr || !meta) {
-    throw new CacheLoadError(
-      `Catalog not yet populated for game=${game}. Run sync first.`
-    );
-  }
-
-  const currentVersion = meta.catalog_version;
-  if (!currentVersion || currentVersion === "0") {
-    throw new CacheLoadError(
-      `Catalog not yet populated for game=${game}. Run sync first.`
-    );
-  }
+  // a. Fetch current catalog_version (cached for 60s to avoid per-request round-trip)
+  const currentVersion = await getCatalogVersion(game, supabase);
 
   // b. Fast path: cache exists and version matches
   const existing = caches.get(game);

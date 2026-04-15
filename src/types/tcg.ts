@@ -10,6 +10,8 @@ export interface VisionResult {
   finish: "holo" | "reverse_holo" | "non_holo";
   confidence: "high" | "medium" | "low";
   number_confidence?: "high" | "medium" | "low";
+  set_total?: number | null;
+  rarity_symbol?: "circle" | "diamond" | "star" | "two_stars" | "gold_star" | "gold_two_stars" | "gold_three_stars" | null;
 }
 
 export interface CandidateCard {
