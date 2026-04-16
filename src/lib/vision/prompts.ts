@@ -14,53 +14,120 @@ export function getVisionPrompt(game: SupportedGame): string {
   }
 }
 
-// POKÉMON: number/set_total/rarity all bottom-left, fraction format
-// HP/card-number disambiguation is critical — see CRITICAL DISTINCTION block
-const POKEMON_PROMPT = `Examine this Pokémon card image carefully.
+// POKÉMON: Step-by-step extraction with visual location map.
+// Leverages Sonnet 4.6's better spec compliance for structured prompts.
+const POKEMON_PROMPT = `You are analyzing a Pokémon trading card. Extract structured data by following these steps in order.
 
-CRITICAL DISTINCTION: Pokémon cards have TWO numbers that look similar.
-Do NOT confuse them:
+═══════════════════════════════════════════════════════
+STEP 1 — UNDERSTAND THE CARD LAYOUT
+═══════════════════════════════════════════════════════
 
-- **HP (IGNORE THIS)**: Located at TOP-RIGHT of the card, next to the
-  Pokémon name. Format: "HP 120" or just "120" in large bold text.
-  HP is typically a round number like 60, 70, 80, 100, 110, 120, 130,
-  150, 180, 210, 280, 320. Do NOT return HP as the card number.
+A Pokémon card has 6 zones you need to recognize:
 
-- **Card number (EXTRACT THIS)**: Located at BOTTOM-LEFT of the card,
-  small text. Format: "N/TOTAL" like "078/182", "041/088", "008/086".
-  Always appears with a slash separating numerator and denominator
-  (unless it's a promo with a letter code like "SWSH146").
+┌─────────────────────────────────────────────────────────┐
+│  [Zone A: Pokémon name]              [Zone B: HP value] │  ← TOP
+│                                                         │
+│  [Zone C: Artwork / Illustration]                       │  ← MIDDLE
+│                                                         │
+│  [Zone D: Attacks and game text]                        │
+│                                                         │
+│  [Zone E: Illustrator,              [Zone F: Copyright] │  ← BOTTOM
+│   card number,                                          │
+│   set code,                                             │
+│   rarity symbol]                                        │
+└─────────────────────────────────────────────────────────┘
 
-Extract these fields:
+IMPORTANT LOCATION RULES:
+- Zone A (name) is at TOP, center/left
+- Zone B (HP) is at TOP, RIGHT side, shows "HP 100" or similar in large bold text
+- Zone E (card number cluster) is at BOTTOM-LEFT in small text
+- Zone F (copyright) is at BOTTOM-CENTER or BOTTOM-RIGHT
 
-1. name: The Pokémon or card name at the top of the card
-2. number: ONLY the numerator from the BOTTOM-LEFT card number
-   (e.g., "78" from "078/182", "41" from "041/088").
-   This is NEVER the HP value from top-right.
-3. number_confidence: "high" if you clearly see the bottom-left N/TOTAL
-   format, "medium" if partially obscured, "low" if you cannot find
-   the bottom-left card number
-4. set_total: The denominator from the bottom-left card number.
-   From "078/182" return 182. From "041/088" return 88.
-   Return null if no slash-format number visible.
-5. rarity_symbol: Small symbol at BOTTOM-LEFT near the card number.
-   "circle" (black ●), "diamond" (black ◆), "star" (black ★),
-   "two_stars" (★★), "gold_star" (gold ★), "gold_two_stars" (gold ★★),
-   "gold_three_stars" (gold ★★★). Return null if unclear.
-6. set: Set name if visible (logo, set symbol, copyright line).
-   Return "unknown" if you can't identify.
-7. edition: "1st" if you see an "Edition 1" / "1st Edition" stamp,
-   else "unlimited"
-8. finish: "holo" (artwork sparkles), "reverse_holo" (border sparkles
-   but not artwork), or "non_holo" (flat)
-9. confidence: "high" if all fields readable, "medium" if partial,
-   "low" if unclear
+═══════════════════════════════════════════════════════
+STEP 2 — EXTRACT FIELDS IN THIS EXACT PRIORITY ORDER
+═══════════════════════════════════════════════════════
 
-If you cannot confidently find the BOTTOM-LEFT card number: set number
-to null and number_confidence to "low". Do not substitute the HP value.
+Priority 1: Read Zone A (TOP). Extract the Pokémon name.
+  → Field: "name"
+  → Examples: "Charizard", "Zeraora", "Maractus", "Landorus", "Iono"
+  → If you see "V", "VMAX", "ex", "VSTAR" after the name, include it (e.g., "Zeraora VMAX")
 
-Return ONLY valid JSON, no markdown:
-{"name":"...","number":"...","number_confidence":"high|medium|low","set_total":86,"rarity_symbol":"circle|diamond|star|two_stars|gold_star|gold_two_stars|gold_three_stars|null","set":"...","edition":"1st|unlimited","finish":"holo|reverse_holo|non_holo","confidence":"high|medium|low"}
+Priority 2: Read Zone E (BOTTOM-LEFT ONLY). Find the card number.
+  → The card number cluster contains 4-5 stacked items in small text:
+    - Illustrator credit ("Illus. NAME")
+    - Rotation marker (a small "1" or similar)
+    - Set abbreviation (2-4 uppercase letters, e.g., "BLK EN", "DRI EN", "ME03 EN")
+    - Card number in format "N/TOTAL" (e.g., "008/086", "078/182", "041/088")
+    - Rarity symbol (●, ◆, ★, ★★, gold ★)
+  → Field: "number" = ONLY the numerator (e.g., "008", "78", "41")
+  → Field: "set_total" = the denominator (integer, e.g., 86, 182, 88)
 
-If not a Pokémon card or completely unreadable:
+CRITICAL: The HP value in Zone B (TOP-RIGHT) is NOT the card number.
+If you see a large bold number in the TOP-RIGHT corner (like "HP 120" or just "120"),
+that is HP — do not use it as the card number. The card number is ALWAYS at BOTTOM-LEFT.
+
+If you cannot confidently read the BOTTOM-LEFT card number:
+  - Set "number" to null
+  - Set "number_confidence" to "low"
+  - Set "set_total" to null
+  - DO NOT substitute the HP value from Zone B.
+
+Priority 3: Read the rarity symbol in Zone E (BOTTOM-LEFT).
+  → Field: "rarity_symbol"
+  → Options: "circle" (●), "diamond" (◆), "star" (★), "two_stars" (★★),
+    "gold_star" (gold ★), "gold_two_stars" (gold ★★), "gold_three_stars" (gold ★★★)
+  → If unclear, return null
+
+Priority 4: Read the set name if visible.
+  → Look for a set logo (stylized artwork) somewhere on the card, or text in the
+    copyright line at the bottom
+  → Field: "set"
+  → Examples: "Base Set", "Scarlet & Violet", "Black Bolt", "Destined Rivals"
+  → Return "unknown" if you can't identify the specific set (do NOT guess)
+
+Priority 5: Read surface finish.
+  → Field: "finish"
+  → "holo" = the artwork/illustration itself has a holographic shine or rainbow sparkle
+  → "reverse_holo" = the artwork is flat, but the border/background AROUND the artwork sparkles
+  → "non_holo" = entirely flat, no sparkle anywhere
+
+Priority 6: Look for 1st Edition stamp.
+  → Field: "edition"
+  → "1st" if you see an oval "Edition 1" or "1st Edition" stamp near the artwork
+  → "unlimited" otherwise
+
+═══════════════════════════════════════════════════════
+STEP 3 — ASSESS CONFIDENCE
+═══════════════════════════════════════════════════════
+
+Priority 7: Report confidence scores.
+  → Field: "number_confidence"
+    - "high" if you clearly read the N/TOTAL format in BOTTOM-LEFT
+    - "medium" if partially visible (glare/blur obscures some digits)
+    - "low" if you cannot find the bottom-left card number at all
+  → Field: "confidence" (overall)
+    - "high" if name, number, set_total, rarity_symbol all read clearly
+    - "medium" if some fields are uncertain
+    - "low" if major fields unreadable
+
+═══════════════════════════════════════════════════════
+STEP 4 — OUTPUT
+═══════════════════════════════════════════════════════
+
+Return ONLY valid JSON. No markdown, no code fences, no explanation.
+
+Schema:
+{
+  "name": string | null,
+  "number": string | null,
+  "number_confidence": "high" | "medium" | "low",
+  "set_total": integer | null,
+  "rarity_symbol": "circle" | "diamond" | "star" | "two_stars" | "gold_star" | "gold_two_stars" | "gold_three_stars" | null,
+  "set": string | null,
+  "edition": "1st" | "unlimited",
+  "finish": "holo" | "reverse_holo" | "non_holo",
+  "confidence": "high" | "medium" | "low"
+}
+
+If the image is not a Pokémon card OR you cannot extract any fields:
 {"name":null,"number":null,"number_confidence":"low","set_total":null,"rarity_symbol":null,"set":null,"edition":"unlimited","finish":"holo","confidence":"low"}`;
