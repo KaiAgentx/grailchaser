@@ -21,7 +21,8 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   : null;
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const MODEL_NAME = "claude-sonnet-4-20250514";
+const PRIMARY_MODEL = "claude-sonnet-4-6-20260218";
+const FALLBACK_MODEL = "claude-sonnet-4-20250514";
 
 const RARITY_MAP: Record<string, string[]> = {
   circle: ["Common"],
@@ -95,19 +96,32 @@ export async function POST(req: NextRequest) {
     // ── STEP 1: Claude Vision ──
     let visionResult: { name: string | null; number: string | null; set: string | null; edition: string; finish: string; confidence: "high" | "medium" | "low"; number_confidence?: "high" | "medium" | "low"; set_total?: number | null; rarity_symbol?: string | null } = { name: null, number: null, set: null, edition: "unlimited", finish: "holo", confidence: "low" };
 
+    let modelUsed = PRIMARY_MODEL;
     if (anthropic) {
       const visionController = new AbortController();
       const visionStart = performance.now();
       const visionTimeout = setTimeout(() => visionController.abort(), 30000);
       try {
         const mediaType = detectMediaType(rawB64);
-        const msg = await anthropic.messages.create({
-          model: MODEL_NAME, max_tokens: 256,
-          messages: [{ role: "user", content: [
-            { type: "image", source: { type: "base64", media_type: mediaType, data: rawB64 } },
-            { type: "text", text: getVisionPrompt(game as SupportedGame) },
-          ] }]
-        }, { signal: visionController.signal });
+        const visionMessages = [{ role: "user" as const, content: [
+          { type: "image" as const, source: { type: "base64" as const, media_type: mediaType, data: rawB64 } },
+          { type: "text" as const, text: getVisionPrompt(game as SupportedGame) },
+        ] }];
+
+        let msg;
+        try {
+          msg = await anthropic.messages.create({
+            model: PRIMARY_MODEL, max_tokens: 256, messages: visionMessages,
+          }, { signal: visionController.signal });
+        } catch (primaryErr) {
+          if ((primaryErr as any)?.name === "AbortError" || visionController.signal.aborted) throw primaryErr;
+          console.warn("[vision] primary model failed, falling back:", (primaryErr as any)?.message || primaryErr);
+          modelUsed = FALLBACK_MODEL;
+          msg = await anthropic.messages.create({
+            model: FALLBACK_MODEL, max_tokens: 256, messages: visionMessages,
+          }, { signal: visionController.signal });
+        }
+
         const raw = (msg.content[0] as any).text?.trim() || "";
         const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
         const parsed = JSON.parse(cleaned);
@@ -417,7 +431,7 @@ export async function POST(req: NextRequest) {
         imagePostW: typeof imagePostW === "number" ? imagePostW : null,
         imagePostH: typeof imagePostH === "number" ? imagePostH : null,
         imageTokensEst,
-        modelName: MODEL_NAME,
+        modelName: modelUsed,
         visionMs,
         verifierUsed, verifierReranked, verifierTopDist, verifierGap, verifierMs,
       });
