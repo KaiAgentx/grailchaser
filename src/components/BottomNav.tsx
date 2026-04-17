@@ -8,7 +8,7 @@ type Tab = "home" | "myCards" | "scanChooser" | "storage" | "more";
 const tabScreenMap: Record<string, Tab> = {
   home: "home", tcgHome: "home", modeSelector: "home",
   myCards: "myCards", cardDetail: "myCards", cardCheck: "scanChooser", cardResult: "scanChooser",
-  scanToCollection: "scanChooser", scanChooser: "scanChooser", tcgScan: "scanChooser", tcgResult: "scanChooser",
+  scanToCollection: "scanChooser", scanChooser: "scanChooser", tcgScanChooser: "scanChooser", tcgScan: "scanChooser", tcgResult: "scanChooser",
   storage: "storage", smartPull: "storage",
   gradeCheck: "storage", gradingReturn: "storage", pickList: "home", lotBuilder: "more", csvImport: "more",
 };

@@ -29,7 +29,7 @@ import { createClient } from "@/lib/supabase";
 import { compressImage } from "@/lib/imageCompress";
 import { bg, surface, surface2, border, borderMed, accent, green, red, cyan, purple, amber, muted, secondary, text, font, mono, sportColors } from "@/components/styles";
 
-type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser" | "modeSelector" | "tcgHome" | "tcgScan" | "tcgResult";
+type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "cardResult" | "storage" | "csvImport" | "pickList" | "scanToCollection" | "smartPull" | "gradeCheck" | "gradingReturn" | "lotBuilder" | "scanChooser" | "modeSelector" | "tcgHome" | "tcgScan" | "tcgResult" | "tcgScanChooser";
 
 // compressImage imported from @/lib/imageCompress
 
@@ -232,7 +232,10 @@ export default function Home() {
 
   // Bottom nav handler
   const handleBottomNav = (s: string) => {
-    if (s === "scanChooser") setScreen("scanChooser");
+    if (s === "scanChooser") {
+      if (mode === "tcg") setScreen("tcgScanChooser");
+      else setScreen("scanChooser");
+    }
     else if (s === "home") setScreen(homeScreenForMode());
     else if (s === "myCards") { setStatusFilter(""); setScreen("myCards"); }
     else if (s === "storage") { setStorageInitialBox(""); setScreen("storage"); }
@@ -830,6 +833,24 @@ export default function Home() {
             <div style={{ fontSize: 13, color: secondary }}>Evaluate a card before buying</div>
           </button>
           <button onClick={() => setScreen("scanToCollection")} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "24px 20px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: text, marginBottom: 4 }}>Scan to Collection</div>
+            <div style={{ fontSize: 13, color: secondary }}>Log cards you already own</div>
+          </button>
+        </div>
+      </Shell>
+      {bottomNav}
+    </>
+  );
+
+  if (screen === "tcgScanChooser") return (
+    <>
+      <Shell title="What are you doing?" back={() => setScreen(homeScreenForMode())}>
+        <div style={{ paddingTop: 24 }}>
+          <button onClick={() => { setTcgScanIntent("check"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "24px 20px", cursor: "pointer", textAlign: "left", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: text, marginBottom: 4 }}>Quick Check</div>
+            <div style={{ fontSize: 13, color: secondary }}>Evaluate a card before buying</div>
+          </button>
+          <button onClick={() => { setTcgScanIntent("collect"); setScreen("tcgScan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "24px 20px", cursor: "pointer", textAlign: "left", boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: text, marginBottom: 4 }}>Scan to Collection</div>
             <div style={{ fontSize: 13, color: secondary }}>Log cards you already own</div>
           </button>
