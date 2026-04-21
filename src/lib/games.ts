@@ -76,9 +76,9 @@ export const GAME_DISPLAY_NAME: Record<Game, string> = {
 // (coming in a later step). One default box per (user, game).
 export const DEFAULT_BOX_NAME: Record<Game, string> = {
   sports: 'Default',
-  pokemon: 'Default Pokémon',
-  mtg: 'Default MTG',
-  one_piece: 'Default One Piece',
+  pokemon: 'Pokémon Unsorted',
+  mtg: 'MTG Unsorted',
+  one_piece: 'One Piece Unsorted',
 };
 
 // Publisher per TCG game. Used as the synthetic `brand` value for TCG saves

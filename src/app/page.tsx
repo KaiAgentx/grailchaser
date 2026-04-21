@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCards } from "@/hooks/useCards";
 import { useActiveGame } from "@/hooks/useActiveGame";
-import { GAME_DISPLAY_NAME, TCG_GAMES, isTcgGame } from "@/lib/games";
+import { DEFAULT_BOX_NAME, GAME_DISPLAY_NAME, TCG_GAMES, isTcgGame } from "@/lib/games";
 import type { Game } from "@/lib/types";
 import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
 import { LoginScreen } from "@/components/LoginScreen";
@@ -37,7 +37,7 @@ export default function Home() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const { cards, loading, addCard, addCards, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition, renumberBox, fetchCards } = useCards(user?.id);
   const [smartPullBoxName, setSmartPullBoxName] = useState("");
-  const { boxes, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
+  const { boxes, loading: boxesLoading, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
   const { lots, createLot, updateLot, deleteLot, markLotListed, markLotSold, markLotShipped, fetchLots } = useLots(user?.id);
   const [lotBuilderBoxName, setLotBuilderBoxName] = useState("");
   const [tcgScanIntent, setTcgScanIntent] = useState<"check" | "collect">("check");
@@ -122,11 +122,11 @@ export default function Home() {
   // Auto-create default TCG box if none exist
   const [tcgBoxCreated, setTcgBoxCreated] = useState(false);
   useEffect(() => {
-    if (screen !== "tcgHome" || !user || !gameHydrated || tcgBoxCreated) return;
+    if (screen !== "tcgHome" || !user || !gameHydrated || tcgBoxCreated || boxesLoading) return;
     if (boxes.some(b => b.mode === "tcg")) return;
     setTcgBoxCreated(true);
-    addBox("Pokémon Unsorted", 1, 100, "singles", "tcg");
-  }, [screen, user, gameHydrated, boxes, tcgBoxCreated]);
+    addBox(DEFAULT_BOX_NAME.pokemon, 1, 100, "singles", "tcg");
+  }, [screen, user, gameHydrated, boxes, tcgBoxCreated, boxesLoading]);
 
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [prevScreen, setPrevScreen] = useState<string>("home");

@@ -6,6 +6,7 @@ import { bg, surface, surface2, border, accent, green, red, amber, muted, second
 import type { TcgCondition } from "@/lib/types";
 import type { RecognitionSuccess, VisionResult, CandidateCard } from "@/types/tcg";
 import { VARIANT_LABELS, autoSelectVariant, fmtPrice, fmtDate } from "@/lib/tcg/variants";
+import { DEFAULT_BOX_NAME, type TcgGame } from "@/lib/games";
 
 const CONDITIONS: TcgCondition[] = ["NM", "LP", "MP", "HP", "DMG"];
 
@@ -184,7 +185,7 @@ export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAno
         rarity: selected.rarity,
         raw_value: displayMarket ?? 0,
         scan_image_url: selected.imageLargeUrl || selected.imageSmallUrl,
-        storage_box: "PENDING",
+        storage_box: DEFAULT_BOX_NAME["pokemon" as TcgGame] ?? "PENDING",
       };
 
       const res = await fetch("/api/tcg/collection-items", {
