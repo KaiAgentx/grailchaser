@@ -1,5 +1,30 @@
 import type { Game, Mode } from './types';
 
+/**
+ * TCG/Sports Game Discriminator
+ *
+ * The `cards` table is a single table holding both sports cards and TCG
+ * cards. The `game` column (game_t enum: 'sports' | 'pokemon' | 'mtg' |
+ * 'one_piece') is the canonical discriminator.
+ *
+ * Because `cards` has sports-first NOT NULL columns (sport, player, brand,
+ * year), TCG saves currently synthesize values to satisfy the schema:
+ *   - sport   → GAME_TO_SPORT[game]        (e.g., "Pokemon")
+ *   - player  → card name                  (e.g., "Charizard")
+ *   - brand   → GAME_TO_PUBLISHER[game]    (e.g., "Pokémon TCG")
+ *   - year    → catalog_cards.release_date (actual release year)
+ *
+ * This synthesis is a Phase 0 expedient.
+ *
+ * TODO(Phase 1): Make sport and player nullable, drop the synthesis, and
+ * null-guard the 5 read sites that assume non-null values:
+ *   1. LotBuilder.tsx generateTitle()
+ *   2. Dashboard.tsx recent-grading list
+ *   3. page.tsx sport pill filter (~line 177)
+ *   4. useCards.ts isDuplicate() (year/brand comparison)
+ *   5. useCards.ts addCards() batch path
+ */
+
 // =====================================================================
 // Game and Mode helpers
 //
@@ -10,6 +35,9 @@ import type { Game, Mode } from './types';
 
 // All TCG games. Sports is intentionally excluded.
 export const TCG_GAMES: readonly Game[] = ['pokemon', 'mtg', 'one_piece'] as const;
+
+// A game that lives in the TCG ecosystem (excludes 'sports').
+export type TcgGame = Exclude<Game, 'sports'>;
 
 // Same list as plain strings — for `.includes()` checks on untyped API body values.
 export const TCG_GAME_VALUES: readonly string[] = TCG_GAMES;
@@ -51,4 +79,13 @@ export const DEFAULT_BOX_NAME: Record<Game, string> = {
   pokemon: 'Default Pokémon',
   mtg: 'Default MTG',
   one_piece: 'Default One Piece',
+};
+
+// Publisher per TCG game. Used as the synthetic `brand` value for TCG saves
+// (Phase 0 synthesis — see file header). Phase 1 will null out brand for
+// TCG cards and remove the synthesis.
+export const GAME_TO_PUBLISHER: Record<TcgGame, string> = {
+  pokemon:   'Pokémon TCG',
+  mtg:       'Wizards of the Coast',
+  one_piece: 'Bandai',
 };
