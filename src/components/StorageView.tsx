@@ -172,7 +172,7 @@ export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBac
           {count === 0 ? (
             <button onClick={async () => { await deleteBox(selectedBox.id); setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: red + "15", border: "1px solid " + red + "30", color: red }}>Delete Box</button>
           ) : (
-            <div style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 4 }}>Remove all {count} cards to delete this box</div>
+            <div style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 4 }}>{count === 1 ? "Remove the 1 card to delete this box" : `Remove all ${count} cards to delete this box`}</div>
           )}
         </div>
       </Shell>

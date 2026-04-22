@@ -189,7 +189,7 @@ export function TcgCardDetail({ card, boxes, onBack, updateCard, deleteCard, mar
         {/* ─── Identity ─── */}
         <div style={{ textAlign: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 24, fontWeight: 700, color: text }}>{card.player}</div>
-          <div style={{ fontSize: 14, color: muted, marginTop: 4 }}>{c.set_name || card.set} · #{card.card_number}</div>
+          <div style={{ fontSize: 14, color: muted, marginTop: 4 }}>{card.year} · {c.set_name || card.set} · #{card.card_number}</div>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 8 }}>
             {c.rarity && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.2)", color: "#D4A843", fontWeight: 600 }}>{c.rarity}</span>}
             <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: "rgba(212,168,67,0.06)", border: "1px solid rgba(212,168,67,0.15)", color: "#D4A843", fontWeight: 600 }}>{gameName}</span>
