@@ -23,7 +23,7 @@ interface Props {
   rank1CatalogCardId?: string | null;
 }
 
-export function TcgResultScreen({ result, scanIntent, onBack, onSaved, onScanAnother, userId, scanResultId, rank1CatalogCardId }: Props) {
+export function ResultScreen({ result, scanIntent, onBack, onSaved, onScanAnother, userId, scanResultId, rank1CatalogCardId }: Props) {
   const candidates: CandidateCard[] = result.result?.candidates || [];
   const band = result.result?.confidenceBand || "unclear";
   const visionResult: VisionResult | null = result.visionResult || null;

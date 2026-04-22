@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { Card } from "@/lib/types";
-import { isTcgGame } from "@/lib/games";
 import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, cyan, muted, text, font, mono } from "./styles";
@@ -17,9 +16,8 @@ type Screen = "list" | "create" | "detail" | "edit";
 interface Props {
   cards: Card[];
   boxes: Box[];
-  ecosystemMode?: "sports" | "tcg" | null;
   onBack: () => void;
-  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType, mode?: "sports" | "tcg") => Promise<any>;
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
   updateBox: (id: string, updates: Partial<Pick<Box, "name" | "num_rows" | "divider_size" | "box_type">>) => Promise<any>;
   deleteBox: (id: string) => Promise<any>;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
@@ -30,7 +28,7 @@ interface Props {
   getBoxCards: (boxName: string) => Card[];
 }
 
-export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
+export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
   const initBox = initialBoxName ? boxes.find(b => b.name === initialBoxName) || null : null;
   const [screen, setScreen] = useState<Screen>(initBox ? "detail" : "list");
   const [selectedBox, setSelectedBox] = useState<Box | null>(initBox);
@@ -44,10 +42,9 @@ export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBac
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  // Filter boxes by mode column, cards by game column.
-  const isTcgCard = (c: any) => c.game && isTcgGame(c.game);
-  const ecoBoxes = ecosystemMode === "tcg" ? boxes.filter(b => b.mode === "tcg") : ecosystemMode === "sports" ? boxes.filter(b => b.mode !== "tcg") : boxes;
-  const ecoCards = ecosystemMode === "tcg" ? cards.filter(isTcgCard) : ecosystemMode === "sports" ? cards.filter(c => !isTcgCard(c)) : cards;
+  // boxes and cards are pre-filtered to TCG by useBoxes / useCards.
+  const ecoBoxes = boxes;
+  const ecoCards = cards;
   const unassigned = ecoCards.filter(c => !c.storage_box || c.storage_box === "PENDING");
 
   // ─── BOX LIST ───
@@ -82,7 +79,7 @@ export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBac
           );
         })}
 
-        {ecoBoxes.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>{ecosystemMode === "tcg" ? "No TCG boxes yet. Create one to get started." : "No boxes yet — create one to start organizing"}</div>}
+        {ecoBoxes.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>No boxes yet — create one to get started</div>}
 
         <button onClick={() => { setNewName(""); setNewRows(1); setNewDivider(50); setNewType("singles"); setScreen("create"); }} style={{ width: "100%", ...btnStyle, background: green + "15", border: "1px solid " + green + "30", color: green, marginTop: 8 }}>+ Create New Box</button>
       </div>
@@ -125,7 +122,7 @@ export function StorageView({ cards, boxes, ecosystemMode, initialBoxName, onBac
           </div>
         </div>
         {createError && <div style={{ fontSize: 12, color: red, textAlign: "center", marginBottom: 8 }}>{createError}</div>}
-        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider, newType, ecosystemMode === "tcg" ? "tcg" : "sports"); setSaving(false); if (error) setCreateError(error.message || "Failed to create box"); else setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
+        <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider, newType); setSaving(false); if (error) setCreateError(error.message || "Failed to create box"); else setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
       </div>
     </Shell>
   );

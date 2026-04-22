@@ -1,4 +1,3 @@
-export type Sport = "Baseball" | "Football" | "Basketball" | "Hockey" | "Soccer";
 export type Tier = "Gem" | "Star" | "Core" | "Bulk";
 export type CardStatus = "raw" | "listed" | "sold" | "shipped" | "grading" | "graded";
 export type Condition = "Mint" | "NM" | "EX" | "VG" | "Good" | "Fair" | "Poor";
@@ -7,7 +6,7 @@ export interface Card {
   id: string;
   user_id: string;
   player: string;
-  sport: Sport;
+  sport: string;
   team: string;
   year: number;
   brand: string;
@@ -145,11 +144,8 @@ export interface GradingCompany {
 // =====================================================================
 
 // Which game a card belongs to. Used as the database `game` column.
-export type Game = "sports" | "pokemon" | "mtg" | "one_piece";
-
-// Which "world" the user is currently browsing. Derived from Game in code,
-// never stored on rows. (sports → sports, pokemon/mtg/one_piece → tcg)
-export type Mode = "sports" | "tcg";
+// Sports support was removed in Session X; this app is TCG-only.
+export type Game = "pokemon" | "mtg" | "one_piece";
 
 // Standard TCG condition grades. Different from sports `Condition`.
 export type TcgCondition = "NM" | "LP" | "MP" | "HP" | "DMG";

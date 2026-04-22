@@ -1,27 +1,24 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
-import { bg, border, accent, muted, secondary, text, font, mono, red } from "./styles";
+import { border, accent, muted, text, font } from "./styles";
 
 type Tab = "home" | "myCards" | "scanChooser" | "storage" | "more";
 
 const tabScreenMap: Record<string, Tab> = {
-  home: "home", tcgHome: "home", modeSelector: "home",
-  myCards: "myCards", cardDetail: "myCards", cardCheck: "scanChooser", cardResult: "scanChooser",
-  scanToCollection: "scanChooser", scanChooser: "scanChooser", tcgScanChooser: "scanChooser", tcgScan: "scanChooser", tcgResult: "scanChooser",
-  storage: "storage", smartPull: "storage",
-  gradeCheck: "storage", gradingReturn: "storage", pickList: "home", lotBuilder: "more", csvImport: "more",
+  home: "home",
+  myCards: "myCards", cardDetail: "myCards",
+  scanChooser: "scanChooser", scan: "scanChooser", result: "scanChooser",
+  storage: "storage",
 };
 
 interface Props {
   currentScreen: string;
   prevScreen: string;
   onNavigate: (screen: string) => void;
-  onSwitchWorld?: () => void;
-  currentMode?: string | null;
 }
 
-export function BottomNav({ currentScreen, prevScreen, onNavigate, onSwitchWorld, currentMode }: Props) {
+export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -61,19 +58,7 @@ export function BottomNav({ currentScreen, prevScreen, onNavigate, onSwitchWorld
           <div onClick={() => setMoreOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 98 }} />
           <div style={{ position: "fixed", bottom: 56, left: 0, right: 0, zIndex: 99, display: "flex", justifyContent: "center" }}>
             <div style={{ maxWidth: 500, width: "100%", background: "#111318", borderTop: "1px solid " + border, borderRadius: "16px 16px 0 0", padding: "8px 0", animation: "scaleIn 0.15s ease" }}>
-              {onSwitchWorld && (
-                <button onClick={() => { setMoreOpen(false); onSwitchWorld(); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderBottom: "1px solid " + border, color: text, fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>
-                  <div>Switch World</div>
-                  <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>Currently: {currentMode === "tcg" ? "TCG" : "Sports Cards"}</div>
-                </button>
-              )}
-              {[
-                { label: "Lot Builder", screen: "lotBuilder" },
-                { label: "Import CSV", screen: "csvImport" },
-              ].map(item => (
-                <button key={item.screen} onClick={() => { setMoreOpen(false); onNavigate(item.screen); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderBottom: "1px solid " + border, color: text, fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>{item.label}</button>
-              ))}
-              <button onClick={() => { setMoreOpen(false); handleSignOut(); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderTop: "1px solid " + border, color: "#ef4444", fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48, marginTop: 8 }}>Sign Out</button>
+              <button onClick={() => { setMoreOpen(false); handleSignOut(); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", color: "#ef4444", fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>Sign Out</button>
             </div>
           </div>
         </>

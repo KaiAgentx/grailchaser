@@ -1,77 +1,33 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import type { Game, Mode } from "@/lib/types";
-import { gameToMode, isTcgGame } from "@/lib/games";
+import type { Game } from "@/lib/types";
 
-const GAME_KEY = "grailchaser:activeGame";
-const STREAK_KEY = "grailchaser:modeStreak";
+// Key bumped to v2 in Session X to discard sports-era localStorage state
+// (previous keys: grailchaser:activeGame, grailchaser:modeStreak,
+// grailchaser:lastTcgGame). Old keys are not migrated — they linger as
+// dead data in the browser but no code reads them anymore.
+const GAME_KEY = "grailchaser:activeGame:v2";
 
-interface ModeStreak {
-  mode: Mode;
-  count: number;
-}
-
+/**
+ * Tracks which TCG game (pokemon/mtg/one_piece) is active. Defaults to
+ * 'pokemon' after hydration. Sports support was removed in Session X.
+ */
 export function useActiveGame() {
-  const [activeGame, setActiveGameState] = useState<Game | null>(null);
-  const [modeStreak, setModeStreakState] = useState<ModeStreak>({ mode: "sports", count: 0 });
-  const [lastTcgGameState, setLastTcgGameState] = useState<Game>("pokemon");
+  const [activeGame, setActiveGameState] = useState<Game>("pokemon");
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from localStorage on mount (client only)
   useEffect(() => {
     const stored = localStorage.getItem(GAME_KEY);
-    if (stored && ["sports", "pokemon", "mtg", "one_piece"].includes(stored)) {
+    if (stored && (["pokemon", "mtg", "one_piece"] as const).includes(stored as Game)) {
       setActiveGameState(stored as Game);
-    } else {
-      setActiveGameState(null); // null = chooser not yet answered
     }
-
-    const streakStr = localStorage.getItem(STREAK_KEY);
-    if (streakStr) {
-      try {
-        const parsed = JSON.parse(streakStr);
-        if (parsed.mode && typeof parsed.count === "number") {
-          setModeStreakState(parsed);
-        }
-      } catch {}
-    }
-
-    const lastTcg = localStorage.getItem("grailchaser:lastTcgGame");
-    if (lastTcg && ["pokemon", "mtg", "one_piece"].includes(lastTcg)) {
-      setLastTcgGameState(lastTcg as Game);
-    }
-
     setHydrated(true);
   }, []);
 
-  const setActiveGame = useCallback((game: Game | null) => {
+  const setActiveGame = useCallback((game: Game) => {
     setActiveGameState(game);
-    if (game) localStorage.setItem(GAME_KEY, game);
-    else localStorage.removeItem(GAME_KEY);
-    // Also persist last-used TCG game separately so returning to TCG remembers it
-    if (game && isTcgGame(game)) {
-      localStorage.setItem("grailchaser:lastTcgGame", game);
-      setLastTcgGameState(game);
-    }
+    localStorage.setItem(GAME_KEY, game);
   }, []);
 
-  const recordModeSelection = useCallback((mode: Mode) => {
-    setModeStreakState(prev => {
-      const next = prev.mode === mode ? { mode, count: prev.count + 1 } : { mode, count: 1 };
-      localStorage.setItem(STREAK_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  const mode: Mode | null = activeGame ? gameToMode(activeGame) : null;
-
-  return {
-    activeGame,
-    setActiveGame,
-    mode,
-    modeStreak,
-    recordModeSelection,
-    hydrated,
-    lastTcgGame: lastTcgGameState,
-  };
+  return { activeGame, setActiveGame, hydrated };
 }

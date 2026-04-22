@@ -15,8 +15,6 @@ export const BOX_TYPE_LABELS: Record<BoxType, { label: string; desc: string }> =
   sorted: { label: "Sorted", desc: "Sorted and organized cards" },
 };
 
-export type BoxMode = "sports" | "tcg";
-
 export interface Box {
   id: string;
   user_id: string;
@@ -24,11 +22,14 @@ export interface Box {
   num_rows: number;
   divider_size: number;
   box_type: BoxType;
-  mode: BoxMode;
+  mode: "tcg";
   created_at: string;
   card_count?: number;
 }
 
+/**
+ * TCG-only boxes hook. Hardcodes mode='tcg' on every query/insert.
+ */
 export function useBoxes(userId?: string, cards?: any[]) {
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,7 @@ export function useBoxes(userId?: string, cards?: any[]) {
       .from("boxes")
       .select("*")
       .eq("user_id", userId)
+      .eq("mode", "tcg")
       .order("created_at", { ascending: true });
     if (error) console.error("fetchBoxes error:", error);
     if (!error && data) setBoxes(data);
@@ -55,9 +57,9 @@ export function useBoxes(userId?: string, cards?: any[]) {
     card_count: cards ? cards.filter(c => c.storage_box === b.name).length : 0,
   }));
 
-  const addBox = async (name: string, num_rows: number, divider_size: number, box_type: BoxType, mode: BoxMode = "sports") => {
+  const addBox = async (name: string, num_rows: number, divider_size: number, box_type: BoxType) => {
     if (!userId) return { error: { message: "Not logged in" } };
-    const row: any = { user_id: userId, name, num_rows, divider_size, box_type, mode };
+    const row: any = { user_id: userId, name, num_rows, divider_size, box_type, mode: "tcg" };
     const { data, error } = await supabase
       .from("boxes")
       .insert(row)

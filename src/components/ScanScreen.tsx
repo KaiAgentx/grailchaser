@@ -14,7 +14,7 @@ interface Props {
   onResult: (result: any, intent: "check" | "collect") => void;
 }
 
-export function TcgScanScreen({ game, scanIntent, onBack, onResult }: Props) {
+export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
