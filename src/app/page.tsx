@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCards } from "@/hooks/useCards";
+import { useTcgCards } from "@/hooks/useTcgCards";
+import { useTcgBoxes } from "@/hooks/useTcgBoxes";
 import { useActiveGame } from "@/hooks/useActiveGame";
 import { DEFAULT_BOX_NAME, GAME_DISPLAY_NAME, TCG_GAMES, isTcgGame } from "@/lib/games";
 import type { Game } from "@/lib/types";
@@ -36,6 +38,7 @@ type Screen = "home" | "addCard" | "myCards" | "cardDetail" | "cardCheck" | "car
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
   const { cards, loading, addCard, addCards, deleteCard, updateCard, markListed, markSold, markShipped, submitForGrading, returnFromGrading, getNextPosition, renumberBox, fetchCards } = useCards(user?.id);
+  const sportsCards = cards.filter(c => (c as any).game === 'sports');
   const [smartPullBoxName, setSmartPullBoxName] = useState("");
   const { boxes, loading: boxesLoading, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
   const { lots, createLot, updateLot, deleteLot, markLotListed, markLotSold, markLotShipped, fetchLots } = useLots(user?.id);
@@ -51,6 +54,9 @@ export default function Home() {
   const [showBuyFlow, setShowBuyFlow] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const { activeGame, setActiveGame, mode, modeStreak, recordModeSelection, hydrated: gameHydrated, lastTcgGame } = useActiveGame();
+  const tcgGame: 'pokemon' | 'mtg' | 'one_piece' | undefined = activeGame && isTcgGame(activeGame) ? (activeGame as 'pokemon' | 'mtg' | 'one_piece') : undefined;
+  const { cards: tcgCards, updateCard: tcgUpdateCard, deleteCard: tcgDeleteCard, markListed: tcgMarkListed, markSold: tcgMarkSold, markShipped: tcgMarkShipped } = useTcgCards(user?.id, tcgGame);
+  const { boxes: tcgBoxes, loading: tcgBoxesLoading, addBox: tcgAddBox, getNextPosition: getTcgBoxNextPosition } = useTcgBoxes(user?.id, tcgCards);
   const [screen, setScreen] = useState<Screen>("home");
   const [initialScreenSet, setInitialScreenSet] = useState(false);
 
@@ -122,11 +128,11 @@ export default function Home() {
   // Auto-create default TCG box if none exist
   const [tcgBoxCreated, setTcgBoxCreated] = useState(false);
   useEffect(() => {
-    if (screen !== "tcgHome" || !user || !gameHydrated || tcgBoxCreated || boxesLoading) return;
-    if (boxes.some(b => b.mode === "tcg")) return;
+    if (screen !== "tcgHome" || !user || !gameHydrated || tcgBoxCreated || tcgBoxesLoading) return;
+    if (tcgBoxes.length > 0) return;
     setTcgBoxCreated(true);
-    addBox(DEFAULT_BOX_NAME.pokemon, 1, 100, "singles", "tcg");
-  }, [screen, user, gameHydrated, boxes, tcgBoxCreated, boxesLoading]);
+    tcgAddBox(DEFAULT_BOX_NAME.pokemon, 1, 100, "singles");
+  }, [screen, user, gameHydrated, tcgBoxes, tcgBoxCreated, tcgBoxesLoading]);
 
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [prevScreen, setPrevScreen] = useState<string>("home");
@@ -169,9 +175,8 @@ export default function Home() {
   const unsold = cards.filter(c => !c.sold);
   const listed = cards.filter(c => c.status === "listed");
   const grading = cards.filter(c => c.status === "grading");
-  // Ecosystem filter: TCG = game in TCG_GAME_VALUES. Sports = everything else.
-  const isTcgCard = (c: any) => c.game && isTcgGame(c.game);
-  const ecosystemCards = mode === "tcg" ? cards.filter(isTcgCard) : cards.filter(c => !isTcgCard(c));
+  // Ecosystem filter: TCG screens read tcgCards (query-level filter), Sports screens read sportsCards (router-level filter).
+  const ecosystemCards = mode === "tcg" ? tcgCards : sportsCards;
   const ecosystemUnsold = ecosystemCards.filter(c => !c.sold);
   const filteredCards = (statusFilter === "pending" ? ecosystemCards.filter(c => !c.storage_box || c.storage_box === "PENDING") : statusFilter === "stale" ? ecosystemCards.filter(c => c.status === "listed" && c.listed_date && (Date.now() - new Date(c.listed_date).getTime()) / 86400000 > 14) : statusFilter ? ecosystemCards.filter(c => c.status === statusFilter) : ecosystemUnsold).filter(c => filterSport === "All" || (mode === "tcg" ? (c as any).game === filterSport : c.sport === filterSport)).filter(c => !search || c.player.toLowerCase().includes(search.toLowerCase()) || c.brand.toLowerCase().includes(search.toLowerCase())).sort((a, b) => sortBy === "value" ? b.raw_value - a.raw_value : sortBy === "recent" ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime() : sortBy === "name" ? a.player.localeCompare(b.player) : (a.storage_box || "ZZZ").localeCompare(b.storage_box || "ZZZ") || (a.storage_position || 0) - (b.storage_position || 0));
   const sports = mode === "tcg" ? ["All", "pokemon", "mtg", "one_piece"] : ["All", ...Array.from(new Set(ecosystemCards.map(c => c.sport)))];
@@ -862,7 +867,7 @@ export default function Home() {
 
   if (screen === "home") return (
     <><Dashboard
-      cards={cards}
+      cards={sportsCards}
       boxes={boxes}
       lots={lots}
       userEmail={user.email || ""}
@@ -965,25 +970,25 @@ export default function Home() {
 
   if (screen === "csvImport") return <><CsvImport onBack={() => setScreen(homeScreenForMode())} addCards={addCards} />{bottomNav}</>;
 
-  if (screen === "pickList") return <><PickList cards={cards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen(homeScreenForMode())} />{bottomNav}</>;
+  if (screen === "pickList") return <><PickList cards={sportsCards} boxes={boxes} markShipped={markShipped} updateCard={updateCard} onBack={() => setScreen(homeScreenForMode())} />{bottomNav}</>;
 
   if (screen === "scanToCollection") return <><ScanToCollection boxes={boxes} addCard={addCard} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
-  if (screen === "lotBuilder") return <><LotBuilder cards={cards} boxes={boxes} lots={lots} boxName={lotBuilderBoxName || undefined} createLot={createLot} updateLot={updateLot} deleteLot={deleteLot} markLotListed={markLotListed} markLotSold={markLotSold} markLotShipped={markLotShipped} fetchLots={fetchLots} fetchCards={fetchCards} onNavigate={(t: any) => setScreen(t.screen as Screen)} />{bottomNav}</>;
+  if (screen === "lotBuilder") return <><LotBuilder cards={sportsCards} boxes={boxes} lots={lots} boxName={lotBuilderBoxName || undefined} createLot={createLot} updateLot={updateLot} deleteLot={deleteLot} markLotListed={markLotListed} markLotSold={markLotSold} markLotShipped={markLotShipped} fetchLots={fetchLots} fetchCards={fetchCards} onNavigate={(t: any) => setScreen(t.screen as Screen)} />{bottomNav}</>;
 
-  if (screen === "gradeCheck") return <><GradeCheck cards={cards} boxes={boxes} updateCard={updateCard} submitForGrading={submitForGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />{bottomNav}</>;
+  if (screen === "gradeCheck") return <><GradeCheck cards={sportsCards} boxes={boxes} updateCard={updateCard} submitForGrading={submitForGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => { if (t.boxName) setSmartPullBoxName(t.boxName); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
-  if (screen === "gradingReturn") return <><GradingReturn cards={cards} boxes={boxes} updateCard={updateCard} returnFromGrading={returnFromGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => setScreen(t.screen as Screen)} />{bottomNav}</>;
+  if (screen === "gradingReturn") return <><GradingReturn cards={sportsCards} boxes={boxes} updateCard={updateCard} returnFromGrading={returnFromGrading} addBox={addBox} getNextPosition={getBoxNextPosition} onNavigate={(t: any) => setScreen(t.screen as Screen)} />{bottomNav}</>;
 
-  if (screen === "smartPull" && smartPullBoxName) return <><SmartPull boxName={smartPullBoxName} cards={cards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.boxName) setLotBuilderBoxName(t.boxName); if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />{bottomNav}</>;
+  if (screen === "smartPull" && smartPullBoxName) return <><SmartPull boxName={smartPullBoxName} cards={sportsCards} boxes={boxes} updateCard={updateCard} addBox={addBox} getNextPosition={getBoxNextPosition} renumberBox={renumberBox} fetchCards={fetchCards} onNavigate={(t: any) => { if (t.card && t.screen === "cardDetail") { goToCardDetail(t.card, "smartPull", { boxName: smartPullBoxName }); return; } if (t.boxName) setLotBuilderBoxName(t.boxName); if (t.filter) setStatusFilter(t.filter); setScreen(t.screen as Screen); }} />{bottomNav}</>;
 
   if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} ecosystemMode={mode} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen(homeScreenForMode()); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => { if (t.boxName) { setSmartPullBoxName(t.boxName); setLotBuilderBoxName(t.boxName); } setScreen(t.screen as Screen); }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
 
   if (screen === "cardDetail" && selectedCard) {
-    const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    const isTcgCard = (liveCard as any).game && isTcgGame((liveCard as any).game);
-    if (isTcgCard) {
-      return <><TcgCardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
+    const isSelectedTcg = (selectedCard as any).game && isTcgGame((selectedCard as any).game);
+    const liveCard = (isSelectedTcg ? tcgCards : sportsCards).find(c => c.id === selectedCard.id) || selectedCard;
+    if (isSelectedTcg) {
+      return <><TcgCardDetail card={liveCard} boxes={tcgBoxes} onBack={goBackFromDetail} updateCard={tcgUpdateCard} deleteCard={async (id) => { await tcgDeleteCard(id); goBackFromDetail(); }} markListed={tcgMarkListed} markSold={tcgMarkSold} markShipped={tcgMarkShipped} getNextPosition={getTcgBoxNextPosition} />{bottomNav}</>;
     }
     return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} submitForGrading={submitForGrading} returnFromGrading={returnFromGrading} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
   }

@@ -56,8 +56,8 @@ export function TcgCardDetail({ card, boxes, onBack, updateCard, deleteCard, mar
   const fetchGen = useRef(0);
 
   // ─── Derived ───
-  const cardMode = c.game && isTcgGame(c.game) ? "tcg" : "sports";
-  const modeBoxes = boxes.filter(b => b.mode === cardMode);
+  // boxes is pre-filtered to TCG by useTcgBoxes; no client-side filter needed.
+  const modeBoxes = boxes;
   const catalogCardId: string | null = c.catalog_card_id || null;
   const gameName = c.game ? (GAME_DISPLAY_NAME[c.game as keyof typeof GAME_DISPLAY_NAME] || c.game) : "TCG";
   const val = (field: keyof Card) => (edits as any)[field] ?? (card as any)[field];
