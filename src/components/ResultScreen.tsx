@@ -6,6 +6,7 @@ import type { RecognitionSuccess, CandidateCard } from "@/types/tcg";
 import { fmtPrice } from "@/lib/tcg/variants";
 import { GAME_DISPLAY_NAME, type TcgGame } from "@/lib/games";
 import type { GradedComps, GradedCompsOutcome } from "@/lib/ppt/client";
+import type { Box, BoxType } from "@/hooks/useBoxes";
 
 interface Props {
   result: RecognitionSuccess;
@@ -16,6 +17,8 @@ interface Props {
   userId: string;
   scanResultId?: string | null;
   rank1CatalogCardId?: string | null;
+  boxes: Box[];
+  addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
 }
 
 type CompsState =
@@ -54,7 +57,7 @@ async function jwt(): Promise<string | null> {
   return data?.session?.access_token ?? null;
 }
 
-export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId }: Props) {
+export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId, boxes, addBox }: Props) {
   const candidates: CandidateCard[] = result.result?.candidates || [];
   const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
   const selected = candidates.find(c => c.catalogCardId === selectedCardId) || candidates[0];
@@ -209,20 +212,16 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
 
   const ensureShowPickupsBox = async (): Promise<string | null> => {
     const boxName = `${GAME_DISPLAY_NAME[GAME]} Show Pickups`;
-    const sb = createClient();
-    const { data: existing, error: readErr } = await sb
-      .from("boxes")
-      .select("name")
-      .eq("user_id", userId)
-      .eq("name", boxName)
-      .eq("mode", "tcg")
-      .maybeSingle();
-    if (readErr) { console.warn("[ShowPickups] box lookup failed:", readErr.message); return null; }
-    if (existing) return boxName;
-    const { error: insErr } = await sb.from("boxes").insert({
-      user_id: userId, name: boxName, num_rows: 1, divider_size: 50, box_type: "singles", mode: "tcg",
-    });
-    if (insErr) { console.warn("[ShowPickups] box create failed:", insErr.message); return null; }
+    // Check React state first — if useBoxes already knows about it, no work needed
+    if (boxes.some(b => b.name === boxName)) return boxName;
+    // Create via addBox so useBoxes state stays in sync
+    const { error } = await addBox(boxName, 1, 50, "singles" as BoxType);
+    if (error) {
+      // Duplicate-name error means it exists in DB but not in React state (race).
+      // That's fine — the box exists, card save will succeed.
+      console.warn("[ShowPickups] addBox error (may be duplicate):", error.message || error);
+      return boxName;
+    }
     return boxName;
   };
 

@@ -519,6 +519,8 @@ export default function Home() {
       userId={user?.id || ""}
       scanResultId={recognizeResult?.scan_result_id}
       rank1CatalogCardId={recognizeResult?.result?.candidates?.[0]?.catalogCardId}
+      boxes={boxes}
+      addBox={addBox}
     />{bottomNav}</>
   );
 
