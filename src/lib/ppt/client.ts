@@ -18,6 +18,15 @@ export interface GradedComps {
   last_updated: string | null;
 }
 
+// Outcome discriminated union so callers can tell "PPT has no row" (not_found)
+// apart from transport failures. Maps onto HTTP status in the route layer.
+export type GradedCompsOutcome =
+  | { status: "ok"; comps: GradedComps }
+  | { status: "not_found" }
+  | { status: "timeout" }
+  | { status: "rate_limited"; retryAfterSeconds?: number }
+  | { status: "error"; message?: string };
+
 // "004/102" → "4"; "4" → "4"; "4/102" → "4"
 function normalizeCardNumber(n: string | null | undefined): string {
   if (!n) return "";
@@ -35,11 +44,11 @@ export async function getCardGradedComps(input: {
   setName: string;
   cardNumber: string;
   rarity?: string;
-}): Promise<GradedComps | null> {
+}): Promise<GradedCompsOutcome> {
   const apiKey = process.env.POKEMON_PRICE_TRACKER_API_KEY;
   if (!apiKey) {
     console.warn("[ppt] POKEMON_PRICE_TRACKER_API_KEY not set");
-    return null;
+    return { status: "error", message: "api key not configured" };
   }
 
   const url = new URL(`${BASE_URL}/cards`);
@@ -54,17 +63,22 @@ export async function getCardGradedComps(input: {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
     });
+    if (res.status === 429) {
+      const retryAfter = res.headers.get("retry-after");
+      const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : undefined;
+      return { status: "rate_limited", retryAfterSeconds };
+    }
     if (!res.ok) {
       console.warn(`[ppt] non-ok response: ${res.status}`);
-      return null;
+      return { status: "error", message: `upstream ${res.status}` };
     }
     const body = await res.json();
     const rows: any[] = Array.isArray(body?.data) ? body.data : [];
-    if (rows.length === 0) return null;
+    if (rows.length === 0) return { status: "not_found" };
 
     const target = normalizeCardNumber(input.cardNumber);
     const exactNum = rows.filter(r => normalizeCardNumber(r?.cardNumber) === target);
-    if (exactNum.length === 0) return null;
+    if (exactNum.length === 0) return { status: "not_found" };
 
     // If multiple rows share the same cardNumber (error variants, etc.),
     // prefer the one whose name matches the query exactly.
@@ -77,19 +91,25 @@ export async function getCardGradedComps(input: {
     // Fall back to TCGPlayer market when eBay lacks ungraded data.
     const rawMarket = num(byGrade?.ungraded?.smartMarketPrice?.price) ?? num(match?.prices?.market);
     return {
-      raw_market: rawMarket,
-      psa10_avg: num(byGrade?.psa10?.averagePrice),
-      psa9_avg: num(byGrade?.psa9?.averagePrice),
-      psa8_avg: num(byGrade?.psa8?.averagePrice),
-      trend30d: typeof byGrade?.ungraded?.marketTrend === "string" ? byGrade.ungraded.marketTrend : null,
-      last_updated:
-        (typeof match?.prices?.lastUpdated === "string" && match.prices.lastUpdated) ||
-        (typeof match?.ebay?.updatedAt === "string" && match.ebay.updatedAt) ||
-        null,
+      status: "ok",
+      comps: {
+        raw_market: rawMarket,
+        psa10_avg: num(byGrade?.psa10?.averagePrice),
+        psa9_avg: num(byGrade?.psa9?.averagePrice),
+        psa8_avg: num(byGrade?.psa8?.averagePrice),
+        trend30d: typeof byGrade?.ungraded?.marketTrend === "string" ? byGrade.ungraded.marketTrend : null,
+        last_updated:
+          (typeof match?.prices?.lastUpdated === "string" && match.prices.lastUpdated) ||
+          (typeof match?.ebay?.updatedAt === "string" && match.ebay.updatedAt) ||
+          null,
+      },
     };
   } catch (err) {
+    if ((err as any)?.name === "AbortError" || controller.signal.aborted) {
+      return { status: "timeout" };
+    }
     console.warn("[ppt] fetch failed:", err instanceof Error ? err.message : err);
-    return null;
+    return { status: "error", message: err instanceof Error ? err.message : "fetch failed" };
   } finally {
     clearTimeout(timeout);
   }

@@ -3,13 +3,13 @@ import { extractUserId } from "@/lib/collectionItemsApi";
 import { ErrorCode, errorResponse } from "@/lib/errors";
 import { getOrCreateRequestId, logRequest } from "@/lib/logging";
 import { checkRateLimit } from "@/lib/rateLimit";
-import { getCardGradedComps, type GradedComps } from "@/lib/ppt/client";
+import { getCardGradedComps, type GradedCompsOutcome } from "@/lib/ppt/client";
 
 const ROUTE = "/api/tcg/graded-comps";
 const ECOSYSTEM = "tcg";
 
 const CACHE_TTL_MS = 60 * 60 * 1000;
-const cache = new Map<string, { value: GradedComps | null; ts: number }>();
+const cache = new Map<string, { outcome: GradedCompsOutcome; ts: number }>();
 
 export async function GET(req: NextRequest) {
   const requestId = getOrCreateRequestId(req.headers);
@@ -40,13 +40,20 @@ export async function GET(req: NextRequest) {
 
     const key = `${name}|${setName}|${cardNumber}`;
     const cached = cache.get(key);
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-      return respond(NextResponse.json({ ok: true, cached: true, comps: cached.value }));
+    let outcome: GradedCompsOutcome;
+    let fromCache = false;
+
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS && cached.outcome.status !== "timeout" && cached.outcome.status !== "error") {
+      // Only cache stable outcomes (ok / not_found / rate_limited). Timeout and error
+      // may be transient — let the next call retry instead of pinning a bad result.
+      outcome = cached.outcome;
+      fromCache = true;
+    } else {
+      outcome = await getCardGradedComps({ name, setName, cardNumber });
+      cache.set(key, { outcome, ts: Date.now() });
     }
 
-    const comps = await getCardGradedComps({ name, setName, cardNumber });
-    cache.set(key, { value: comps, ts: Date.now() });
-    return respond(NextResponse.json({ ok: true, cached: false, comps }));
+    return respond(NextResponse.json({ ok: true, cached: fromCache, outcome }));
   } catch (err: any) {
     console.error(`[${ROUTE}] unhandled:`, err?.message);
     return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));

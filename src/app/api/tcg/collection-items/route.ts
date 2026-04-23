@@ -105,6 +105,9 @@ export async function POST(req: NextRequest) {
     if (body.catalogCardId) cardData.catalog_card_id = body.catalogCardId;
     if (body.canonical_card_id) cardData.canonical_card_id = body.canonical_card_id;
     if (body.printing_id) cardData.printing_id = body.printing_id;
+    if (body.tcg_condition != null) cardData.tcg_condition = body.tcg_condition;
+    if (body.purchase_source != null) cardData.purchase_source = body.purchase_source;
+    if (body.purchase_date != null) cardData.purchase_date = body.purchase_date;
 
     const svc = serviceRoleClient();
     console.log("[TcgAPI] Inserting — userId:", userId, "game:", cardData.game, "catalogCardId:", cardData.catalog_card_id);

@@ -1,246 +1,311 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase";
-import { Shell } from "./Shell";
-import { bg, surface, surface2, border, accent, green, red, amber, muted, secondary, text, font, mono } from "./styles";
-import { type TcgCondition, TCG_CONDITION_VALUES, tcgConditionLabel } from "@/lib/types";
-import type { RecognitionSuccess, VisionResult, CandidateCard } from "@/types/tcg";
-import { VARIANT_LABELS, autoSelectVariant, fmtPrice, fmtDate } from "@/lib/tcg/variants";
-import { DEFAULT_BOX_NAME, type TcgGame } from "@/lib/games";
-
-const bandStyles: Record<string, { bg: string; border: string; color: string; label: string }> = {
-  exact: { bg: "rgba(52,211,153,0.1)", border: "rgba(52,211,153,0.3)", color: "#34d399", label: "✓ Exact Match" },
-  likely: { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.3)", color: "#fbbf24", label: "~ Good Match" },
-  choose_version: { bg: "rgba(251,191,36,0.15)", border: "rgba(251,191,36,0.4)", color: "#f59e0b", label: "~ Close Match" },
-  unclear: { bg: "rgba(248,113,113,0.1)", border: "rgba(248,113,113,0.3)", color: "#f87171", label: "! Low Confidence" },
-};
+import { bg, surface, surface2, border, green, red, amber, muted, text, font, mono } from "./styles";
+import type { RecognitionSuccess, CandidateCard } from "@/types/tcg";
+import { fmtPrice } from "@/lib/tcg/variants";
+import { GAME_DISPLAY_NAME, type TcgGame } from "@/lib/games";
+import type { GradedComps, GradedCompsOutcome } from "@/lib/ppt/client";
 
 interface Props {
-  result: RecognitionSuccess; scanIntent: "check" | "collect"; onBack: () => void; onSaved: () => void; onScanAnother: () => void; userId: string;
+  result: RecognitionSuccess;
+  scanIntent: "check" | "collect";
+  onBack: () => void;
+  onSaved: () => void;
+  onScanAnother: () => void;
+  userId: string;
   scanResultId?: string | null;
   rank1CatalogCardId?: string | null;
 }
 
-export function ResultScreen({ result, scanIntent, onBack, onSaved, onScanAnother, userId, scanResultId, rank1CatalogCardId }: Props) {
+type CompsState =
+  | { kind: "loading" }
+  | { kind: "ok"; comps: GradedComps }
+  | { kind: "not_found" }
+  | { kind: "timeout" }
+  | { kind: "rate_limited"; retryAfterSeconds?: number }
+  | { kind: "error"; message?: string };
+
+type PurchaseStage = "idle" | "confirming" | "saving";
+
+const GAME: TcgGame = "pokemon";
+
+const trendArrow = (t: string | null): { label: string; color: string } => {
+  if (t === "up") return { label: "↑", color: amber };
+  if (t === "down") return { label: "↓", color: red };
+  if (t === "stable") return { label: "→", color: muted };
+  return { label: "", color: muted };
+};
+
+function verdictFor(ask: number | null, rawMarket: number | null):
+  | { tone: "green" | "amber" | "red"; label: string; pct: number }
+  | null
+{
+  if (ask == null || !Number.isFinite(ask) || ask <= 0) return null;
+  if (rawMarket == null || !Number.isFinite(rawMarket) || rawMarket <= 0) return null;
+  const pct = (ask / rawMarket) * 100;
+  if (pct < 85) return { tone: "green", label: "Good Buy", pct };
+  if (pct <= 110) return { tone: "amber", label: "Fair", pct };
+  return { tone: "red", label: "Overpriced", pct };
+}
+
+async function jwt(): Promise<string | null> {
+  const { data } = await createClient().auth.getSession();
+  return data?.session?.access_token ?? null;
+}
+
+export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId }: Props) {
   const candidates: CandidateCard[] = result.result?.candidates || [];
-  const band = result.result?.confidenceBand || "unclear";
-  const visionResult: VisionResult | null = result.visionResult || null;
-
-  // Selection by catalogCardId instead of index
   const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
-  const [condition, setCondition] = useState<TcgCondition>("near_mint");
-  const [pricing, setPricing] = useState<any>(null);
-  const [pricingLoading, setPricingLoading] = useState(true);
-  const [selectedVariant, setSelectedVariant] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [priceError, setPriceError] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(3);
-  const [imgError, setImgError] = useState(false);
-
-  // Price cache to avoid re-fetching
-  const priceCache = useRef(new Map<string, any>());
-  // Generation counter to discard stale fetches
-  const fetchGen = useRef(0);
-
   const selected = candidates.find(c => c.catalogCardId === selectedCardId) || candidates[0];
 
-  // Fetch pricing — with cache and stale-discard
+  const [compsState, setCompsState] = useState<CompsState>({ kind: "loading" });
+  const [compsRetryToken, setCompsRetryToken] = useState(0);
+  const [ownedCount, setOwnedCount] = useState<number | null>(null);
+  const [dealerAsk, setDealerAsk] = useState<string>("");
+  const [purchaseStage, setPurchaseStage] = useState<PurchaseStage>("idle");
+  const [finalPrice, setFinalPrice] = useState<string>("");
+  const [decisionInFlight, setDecisionInFlight] = useState<null | "skip" | "walked" | "purchased">(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // ─── Fetch comps whenever the confirmed candidate (or retry token) changes ───
   useEffect(() => {
     if (!selected?.catalogCardId) return;
-    setImgError(false);
-
-    const cached = priceCache.current.get(selected.catalogCardId);
-    if (cached) {
-      setPricing(cached);
-      setPricingLoading(false);
-      setSelectedVariant(autoSelectVariant(cached, visionResult));
+    if (!selected.cardNumber) {
+      setCompsState({ kind: "not_found" });
       return;
     }
+    let cancelled = false;
+    setCompsState({ kind: "loading" });
 
-    setPricingLoading(true);
-    setPricing(null);
-    setPriceError(null);
-    setSelectedVariant("");
-    const gen = ++fetchGen.current;
-
-    const supabasePrice = createClient();
-    supabasePrice.auth.getSession().then(({ data: sd }) => {
-      const jwt = sd?.session?.access_token;
-      if (!jwt) { if (gen === fetchGen.current) setPricingLoading(false); return; }
-      fetch(`/api/tcg/price?cardId=${encodeURIComponent(selected.catalogCardId)}`, {
-        headers: { "Authorization": `Bearer ${jwt}` },
-      })
-        .then(r => r.json())
-        .then(d => {
-          if (gen !== fetchGen.current) return; // stale
-          if (d.error === "price_fetch_failed") {
-            setPriceError("fetch_failed");
-          } else if (d.ok === true && d.pricing === null && d.reason === "not_found") {
-            setPriceError("not_found");
-          } else if (!d.error) {
-            priceCache.current.set(selected.catalogCardId, d);
-            setPricing(d);
-            setSelectedVariant(autoSelectVariant(d, visionResult));
-          }
-          setPricingLoading(false);
-        })
-        .catch(() => {
-          if (gen === fetchGen.current) {
-            setPriceError("fetch_failed");
-            setPricingLoading(false);
-          }
+    (async () => {
+      const token = await jwt();
+      if (!token) { if (!cancelled) setCompsState({ kind: "error", message: "not authenticated" }); return; }
+      const params = new URLSearchParams({
+        name: selected.name,
+        setName: selected.setName,
+        cardNumber: selected.cardNumber!,
+      });
+      try {
+        const res = await fetch(`/api/tcg/graded-comps?${params}`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-    });
-  }, [selected?.catalogCardId]);
+        if (!res.ok) {
+          if (cancelled) return;
+          if (res.status === 429) setCompsState({ kind: "rate_limited" });
+          else setCompsState({ kind: "error", message: `HTTP ${res.status}` });
+          return;
+        }
+        const body = await res.json();
+        const outcome: GradedCompsOutcome | undefined = body?.outcome;
+        if (cancelled) return;
+        if (!outcome) { setCompsState({ kind: "error", message: "no outcome" }); return; }
+        switch (outcome.status) {
+          case "ok": setCompsState({ kind: "ok", comps: outcome.comps }); break;
+          case "not_found": setCompsState({ kind: "not_found" }); break;
+          case "timeout": setCompsState({ kind: "timeout" }); break;
+          case "rate_limited": setCompsState({ kind: "rate_limited", retryAfterSeconds: outcome.retryAfterSeconds }); break;
+          case "error": setCompsState({ kind: "error", message: outcome.message }); break;
+        }
+      } catch (err) {
+        if (!cancelled) setCompsState({ kind: "error", message: err instanceof Error ? err.message : "fetch failed" });
+      }
+    })();
 
-  // Haptic on mount
-  useEffect(() => { if (band === "exact") navigator.vibrate?.(50); else if (band === "unclear") navigator.vibrate?.([30, 50, 30]); }, []);
+    return () => { cancelled = true; };
+  }, [selected?.catalogCardId, selected?.name, selected?.setName, selected?.cardNumber, compsRetryToken]);
 
-  // Rapid scan countdown
+  // ─── Owned count (cards table) ───
   useEffect(() => {
-    if (!saved || scanIntent !== "collect") return;
-    const iv = setInterval(() => { setCountdown(c => { if (c <= 1) { clearInterval(iv); onScanAnother(); return 0; } return c - 1; }); }, 1000);
-    return () => clearInterval(iv);
-  }, [saved, scanIntent]);
+    if (!selected?.catalogCardId || !userId) return;
+    let cancelled = false;
+    (async () => {
+      const { count } = await createClient()
+        .from("cards")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("catalog_card_id", selected.catalogCardId);
+      if (!cancelled) setOwnedCount(count ?? 0);
+    })();
+    return () => { cancelled = true; };
+  }, [selected?.catalogCardId, userId]);
 
-  // Retry price lookup (invalidates cache, re-fetches)
-  const retryPriceFetch = () => {
-    if (!selected?.catalogCardId) return;
-    priceCache.current.delete(selected.catalogCardId);
-    setPriceError(null);
-    setPricingLoading(true);
-    setPricing(null);
-    setSelectedVariant("");
-    const gen = ++fetchGen.current;
-    const sb = createClient();
-    sb.auth.getSession().then(({ data: sd }) => {
-      const jwt = sd?.session?.access_token;
-      if (!jwt) { if (gen === fetchGen.current) setPricingLoading(false); return; }
-      fetch(`/api/tcg/price?cardId=${encodeURIComponent(selected.catalogCardId)}`, { headers: { "Authorization": `Bearer ${jwt}` } })
-        .then(r => r.json())
-        .then(d => {
-          if (gen !== fetchGen.current) return;
-          if (d.error === "price_fetch_failed") { setPriceError("fetch_failed"); }
-          else if (d.ok === true && d.pricing === null && d.reason === "not_found") { setPriceError("not_found"); }
-          else if (!d.error) { priceCache.current.set(selected.catalogCardId, d); setPricing(d); setSelectedVariant(autoSelectVariant(d, visionResult)); }
-          setPricingLoading(false);
-        })
-        .catch(() => { if (gen === fetchGen.current) { setPriceError("fetch_failed"); setPricingLoading(false); } });
-    });
+  const compsOk = compsState.kind === "ok" ? compsState.comps : null;
+  const askNumeric = useMemo(() => {
+    const n = parseFloat(dealerAsk);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [dealerAsk]);
+  const verdict = verdictFor(askNumeric, compsOk?.raw_market ?? null);
+  const trend = trendArrow(compsOk?.trend30d ?? null);
+
+  // ─── Decision POST ───
+  async function postDecision(decision: "skip" | "walked" | "purchased", includeSnapshot: boolean, dealerAskValue: number | null) {
+    if (!scanResultId) return; // nothing to update, but side-effects (card insert) still run
+    const token = await jwt();
+    if (!token) return;
+    const payload: Record<string, unknown> = { user_decision: decision };
+    if (decision !== "skip") {
+      if (dealerAskValue != null) payload.dealer_ask = dealerAskValue;
+      if (includeSnapshot && compsOk) {
+        payload.ppt_raw_market = compsOk.raw_market;
+        payload.ppt_psa10_avg = compsOk.psa10_avg;
+        payload.ppt_psa9_avg = compsOk.psa9_avg;
+        payload.ppt_psa8_avg = compsOk.psa8_avg;
+        if (compsOk.trend30d) payload.ppt_trend30d = compsOk.trend30d;
+      }
+    }
+    await fetch(`/api/tcg/scan-results/${scanResultId}/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  }
+
+  // If the user re-picked a non-rank-1 candidate, fire the existing correction telemetry.
+  async function maybePostCorrection() {
+    if (!scanResultId || !rank1CatalogCardId || !selected) return;
+    if (selected.catalogCardId === rank1CatalogCardId) return;
+    const token = await jwt();
+    if (!token) return;
+    void fetch(`/api/tcg/scan-results/${scanResultId}/correct`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ final_catalog_id: selected.catalogCardId, final_catalog_name: selected.name }),
+    }).catch(() => {});
+  }
+
+  // ─── Handlers ───
+  const handleSkip = async () => {
+    if (decisionInFlight) return;
+    setDecisionInFlight("skip");
+    setErrorMsg(null);
+    await maybePostCorrection();
+    await postDecision("skip", false, null);
+    navigator.vibrate?.(30);
+    onScanAnother();
   };
 
-  // Computed prices (USD only)
-  const activePrice = pricing?.allPrices?.[selectedVariant];
-  const displayMarket = activePrice?.market ?? pricing?.market ?? null;
-  const displayLow = activePrice?.low ?? pricing?.low ?? null;
-  const displayHigh = activePrice?.high ?? pricing?.high ?? null;
-  const displayMid = activePrice?.mid ?? pricing?.mid ?? null;
-  const displayDirectLow = (activePrice as any)?.directLow ?? null;
-  const hasPrice = displayMarket != null;
+  const handleWalked = async () => {
+    if (decisionInFlight) return;
+    setDecisionInFlight("walked");
+    setErrorMsg(null);
+    await maybePostCorrection();
+    await postDecision("walked", true, askNumeric);
+    navigator.vibrate?.(40);
+    onScanAnother();
+  };
 
-  const handleSave = async () => {
-    if (!selected) return;
-    setSaving(true);
+  const handlePurchasedStart = () => {
+    setErrorMsg(null);
+    setFinalPrice(dealerAsk || "");
+    setPurchaseStage("confirming");
+  };
 
-    // Fire correction telemetry if user picked a non-rank-1 variant
-    if (scanResultId && rank1CatalogCardId && selected.catalogCardId !== rank1CatalogCardId) {
-      const supabaseCorr = createClient();
-      supabaseCorr.auth.getSession().then(({ data: sd }) => {
-        const t = sd?.session?.access_token;
-        if (!t) return;
-        void fetch(`/api/tcg/scan-results/${scanResultId}/correct`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
-          body: JSON.stringify({ final_catalog_id: selected.catalogCardId, final_catalog_name: selected.name }),
-        }).catch(() => {});
-      });
-    }
+  const handlePurchasedCancel = () => {
+    setPurchaseStage("idle");
+    setFinalPrice("");
+  };
 
-    setSaveError(null);
+  const ensureShowPickupsBox = async (): Promise<string | null> => {
+    const boxName = `${GAME_DISPLAY_NAME[GAME]} Show Pickups`;
+    const sb = createClient();
+    const { data: existing, error: readErr } = await sb
+      .from("boxes")
+      .select("name")
+      .eq("user_id", userId)
+      .eq("name", boxName)
+      .eq("mode", "tcg")
+      .maybeSingle();
+    if (readErr) { console.warn("[ShowPickups] box lookup failed:", readErr.message); return null; }
+    if (existing) return boxName;
+    const { error: insErr } = await sb.from("boxes").insert({
+      user_id: userId, name: boxName, num_rows: 1, divider_size: 50, box_type: "singles", mode: "tcg",
+    });
+    if (insErr) { console.warn("[ShowPickups] box create failed:", insErr.message); return null; }
+    return boxName;
+  };
+
+  const handlePurchasedConfirm = async () => {
+    if (!selected || decisionInFlight) return;
+    const price = parseFloat(finalPrice);
+    if (!Number.isFinite(price) || price < 0) { setErrorMsg("Enter a valid final price (0 or more)."); return; }
+    setDecisionInFlight("purchased");
+    setPurchaseStage("saving");
+    setErrorMsg(null);
     try {
-      const supabase = createClient();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const jwt = sessionData?.session?.access_token;
-      if (!jwt) {
-        console.error("[TcgSave] no JWT — user not authenticated");
-        setSaveError("Not authenticated. Please sign in again.");
-        setSaving(false);
-        return;
-      }
+      await maybePostCorrection();
+
+      const boxName = await ensureShowPickupsBox();
+      if (!boxName) { setErrorMsg("Could not prepare Show Pickups box."); setPurchaseStage("confirming"); setDecisionInFlight(null); return; }
+
+      const token = await jwt();
+      if (!token) { setErrorMsg("Not authenticated."); setPurchaseStage("confirming"); setDecisionInFlight(null); return; }
 
       const idemKey = crypto.randomUUID();
       const payload = {
         catalogCardId: selected.catalogCardId,
-        game: "pokemon",
+        game: GAME,
         player: selected.name,
         brand: "Pokémon TCG",
-        set: selected.setName,
-        set_name: selected.setName,
-        set_code: selected.setCode,
-        card_number: selected.cardNumber,
-        rarity: selected.rarity,
-        raw_value: displayMarket ?? 0,
+        set: selected.setName, set_name: selected.setName, set_code: selected.setCode,
+        card_number: selected.cardNumber, rarity: selected.rarity,
+        raw_value: compsOk?.raw_market ?? 0,
+        cost_basis: price,
+        purchase_source: "show",
+        purchase_date: new Date().toISOString().slice(0, 10),
         scan_image_url: selected.imageLargeUrl || selected.imageSmallUrl,
-        storage_box: DEFAULT_BOX_NAME["pokemon" as TcgGame] ?? "PENDING",
+        storage_box: boxName,
       };
 
       const res = await fetch("/api/tcg/collection-items", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${jwt}`,
-          "Idempotency-Key": idemKey,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "Idempotency-Key": idemKey },
         body: JSON.stringify(payload),
       });
-
-      const data = await res.json().catch(e => ({ _parseError: String(e) }));
-
-      if (res.ok && (data.card || data.replay)) {
-        setSaveError(null);
-        setSaved(true);
-        navigator.vibrate?.(80);
-        if (scanIntent !== "collect") setTimeout(onSaved, 1500);
-      } else {
-        console.error("[TcgSave] failed — status:", res.status, "body:", data);
-        setSaveError(`Save failed (${res.status}): ${data.error || data.details || "Unknown error"}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || (!data.card && !data.replay)) {
+        setErrorMsg(`Save failed (${res.status}): ${data.error || data.details || "Unknown error"}`);
+        setPurchaseStage("confirming");
+        setDecisionInFlight(null);
+        return;
       }
-    } catch (err) {
-      console.error("[TcgSave] threw:", err);
-      setSaveError(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    setSaving(false);
-  };
 
-  const imgSrc = imgError ? null : (selected?.imageLargeUrl || selected?.imageSmallUrl);
-  const bStyle = bandStyles[band] || bandStyles.unclear;
-  const updatedDate = pricing?.updatedAt ? fmtDate(pricing.updatedAt) : null;
+      await postDecision("purchased", true, askNumeric ?? price);
+      navigator.vibrate?.(80);
+      setToast(`Added to ${boxName}`);
+      setTimeout(() => onScanAnother(), 900);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Unexpected error");
+      setPurchaseStage("confirming");
+      setDecisionInFlight(null);
+    }
+  };
 
   // ─── Zero candidates ───
   if (candidates.length === 0) {
     return (
-      <Shell title="Result" back={onBack}>
+      <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 500, margin: "0 auto", padding: 24 }}>
         <div style={{ paddingTop: 60, textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12, color: muted }}>🎴</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: text, marginBottom: 8 }}>Couldn{"'"}t identify this card</div>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Couldn{"'"}t identify this card</div>
           <button onClick={onScanAnother} style={{ padding: "14px 28px", minHeight: 48, background: green, border: "none", borderRadius: 12, color: "#fff", fontFamily: font, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Try scanning again</button>
+          <div style={{ marginTop: 16 }}>
+            <button onClick={onBack} style={{ background: "transparent", border: "none", color: muted, fontFamily: font, fontSize: 13, cursor: "pointer" }}>Back</button>
+          </div>
         </div>
-      </Shell>
+      </div>
     );
   }
 
+  const imgSrc = selected?.imageSmallUrl || selected?.imageLargeUrl;
+
   return (
     <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 500, margin: "0 auto" }}>
-      <style>{`
-        @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
-      `}</style>
-
-      {/* ─── Custom header ─── */}
+      {/* Sticky header */}
       <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(8,9,13,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: "1px solid " + border, padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={onBack} style={{ background: "none", border: "none", color: muted, cursor: "pointer", padding: "8px 4px", lineHeight: 1, display: "flex", alignItems: "center" }} aria-label="Back">
+          <button onClick={onBack} aria-label="Back" style={{ background: "none", border: "none", color: muted, cursor: "pointer", padding: "8px 4px", lineHeight: 1, display: "flex", alignItems: "center" }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           </button>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#D4A843", textTransform: "uppercase", letterSpacing: 1.5 }}>Pokémon</span>
@@ -248,139 +313,45 @@ export function ResultScreen({ result, scanIntent, onBack, onSaved, onScanAnothe
         <button onClick={onScanAnother} style={{ background: "rgba(53,99,233,0.12)", border: "1px solid rgba(53,99,233,0.25)", borderRadius: 8, padding: "8px 14px", color: "#5B8DEF", fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Scan Another</button>
       </div>
 
-      {/* ─── Content ─── */}
-      <div style={{ padding: "0 20px 80px", animation: "fadeIn 0.3s ease" }}>
-
-        {/* Card image */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "28px 0 20px" }}>
+      <div style={{ padding: "16px 20px 80px" }}>
+        {/* Compact card header */}
+        <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 12 }}>
           {imgSrc ? (
-            <img src={imgSrc} alt={selected?.name} loading="eager" onError={() => setImgError(true)} style={{ width: 200, height: 280, objectFit: "contain", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }} />
+            <img src={imgSrc} alt={selected?.name} style={{ width: 72, height: 100, objectFit: "contain", borderRadius: 6, flexShrink: 0, boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }} />
           ) : (
-            <div style={{ width: 200, height: 280, background: surface2, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, color: muted }}>🎴</div>
+            <div style={{ width: 72, height: 100, background: surface2, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: muted }}>🎴</div>
           )}
-        </div>
-
-        {/* Confidence badge */}
-        <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <span style={{ display: "inline-block", padding: "4px 14px", borderRadius: 9999, background: bStyle.bg, border: "1px solid " + bStyle.border, color: bStyle.color, fontSize: 12, fontWeight: 600 }}>{bStyle.label}</span>
-        </div>
-
-        {/* ─── Split layout: name left, price right ─── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
-          {/* Left — card info */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "#ffffff", lineHeight: 1.2 }}>{selected?.name}</div>
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", marginTop: 5 }}>{selected?.setName} · #{selected?.cardNumber}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{selected?.name}</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginTop: 3 }}>{selected?.setName} · #{selected?.cardNumber}</div>
             {selected?.rarity && (
-              <span style={{ display: "inline-block", marginTop: 8, background: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.2)", borderRadius: 6, padding: "3px 10px", color: "#D4A843", fontSize: 11, fontWeight: 600 }}>{selected.rarity}</span>
-            )}
-          </div>
-          {/* Right — market price */}
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, color: "#D4A843", fontWeight: 600, marginBottom: 4 }}>Market</div>
-            {pricingLoading ? (
-              <div style={{ fontSize: 32, fontWeight: 700, color: muted }}>—</div>
-            ) : priceError === "fetch_failed" ? (
-              <div style={{ fontSize: 14, fontWeight: 600, color: red }}>Lookup failed</div>
-            ) : priceError === "not_found" ? (
-              <div style={{ fontSize: 14, fontWeight: 500, color: muted }}>No data</div>
-            ) : hasPrice ? (
-              <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.5, color: "#D4A843", background: "linear-gradient(105deg, #B8860B 0%, #D4A843 20%, #FFD700 35%, #FFF8DC 42%, #FFD700 48%, #D4A843 60%, #B8860B 80%, #D4A843 100%)", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "shimmer 4s ease-in-out infinite", lineHeight: 1.1 }}>{fmtPrice(displayMarket)}</div>
-            ) : (
-              <div style={{ fontSize: 14, fontWeight: 500, color: muted }}>No data</div>
-            )}
-            {!pricingLoading && (displayLow != null || displayMid != null) && (
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>{fmtPrice(displayLow)} – {fmtPrice(displayMid)}</div>
+              <span style={{ display: "inline-block", marginTop: 6, background: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.2)", borderRadius: 6, padding: "2px 8px", color: "#D4A843", fontSize: 10, fontWeight: 600 }}>{selected.rarity}</span>
             )}
           </div>
         </div>
 
-        {/* ─── Pricing detail card ─── */}
-        {!pricingLoading && (
-          <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${priceError === "fetch_failed" ? "rgba(248,113,113,0.2)" : "rgba(255,255,255,0.06)"}`, borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
-            {priceError === "fetch_failed" ? (
-              <div style={{ textAlign: "center", padding: "8px 0" }}>
-                <div style={{ fontSize: 13, color: red, marginBottom: 8 }}>Price lookup failed</div>
-                <button onClick={retryPriceFetch} style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 8, padding: "8px 18px", color: red, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Retry</button>
-              </div>
-            ) : priceError === "not_found" ? (
-              <div style={{ fontSize: 13, color: muted, textAlign: "center", padding: "8px 0" }}>No market data available for this variant</div>
-            ) : (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", gap: 24 }}>
-                    <div>
-                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Low</div>
-                      <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayLow)}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Mid</div>
-                      <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayMid)}</div>
-                    </div>
-                    {displayDirectLow != null && (
-                      <div>
-                        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, color: "#D4A843", fontWeight: 600 }}>Direct</div>
-                        <div style={{ fontFamily: font, fontSize: 18, color: "#ffffff", fontWeight: 600, marginTop: 2 }}>{fmtPrice(displayDirectLow)}</div>
-                      </div>
-                    )}
-                  </div>
-                  {pricing?.tcgplayerUrl && (
-                    <a href={pricing.tcgplayerUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#5B8DEF", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap", paddingTop: 2 }}>View on TCGPlayer →</a>
-                  )}
-                </div>
-                {updatedDate && (
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 8 }}>Updated {updatedDate}</div>
-                )}
-                {!hasPrice && (
-                  <div style={{ fontSize: 13, color: muted, textAlign: "center", padding: "4px 0" }}>No market data available for this variant</div>
-                )}
-              </>
-            )}
+        {/* Owned badge */}
+        {ownedCount != null && ownedCount > 0 && (
+          <div style={{ background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13, fontWeight: 600, color: "#a78bfa", textAlign: "center" }}>
+            You own {ownedCount} cop{ownedCount === 1 ? "y" : "ies"}
           </div>
         )}
 
-        {/* ─── Variant picker (manual override) ─── */}
-        {!pricingLoading && pricing?.allPrices && Object.keys(pricing.allPrices).length > 1 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", fontWeight: 600 }}>Variant</span>
-              <span style={{ fontSize: 11, color: "#D4A843" }}>{VARIANT_LABELS[selectedVariant] || selectedVariant}</span>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {Object.keys(pricing.allPrices).map(key => {
-                const isSel = key === selectedVariant;
-                const vm = pricing.allPrices[key]?.market;
-                return (
-                  <button key={key} onClick={() => setSelectedVariant(key)} style={{ padding: "8px 14px", borderRadius: 20, border: isSel ? "1px solid #D4A843" : "1px solid rgba(255,255,255,0.08)", background: isSel ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.03)", color: isSel ? "#D4A843" : "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: isSel ? 600 : 400, fontFamily: font, cursor: "pointer", minHeight: 40, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <span>{VARIANT_LABELS[key] || key}</span>
-                    {vm != null && <span style={{ fontSize: 11, color: isSel ? "#D4A843" : muted, fontWeight: 400 }}>${vm.toFixed(2)}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ─── Candidate picker — "PICK YOUR VERSION" ─── */}
+        {/* Pick Your Version (candidate disambiguation) */}
         {candidates.length >= 2 && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", fontWeight: 600, marginBottom: 10 }}>Pick Your Version</div>
-            <div style={{ display: "flex", gap: 10, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 6, WebkitOverflowScrolling: "touch" }}>
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", fontWeight: 600, marginBottom: 8 }}>Pick Your Version</div>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 6, WebkitOverflowScrolling: "touch" }}>
               {candidates.map(c => {
                 const isSel = c.catalogCardId === selectedCardId;
                 return (
-                  <button key={c.catalogCardId} onClick={() => setSelectedCardId(c.catalogCardId)} style={{ position: "relative", flex: "0 0 auto", minWidth: 135, scrollSnapAlign: "start", background: isSel ? "rgba(212,168,67,0.06)" : "rgba(255,255,255,0.02)", border: isSel ? "2px solid #D4A843" : "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 8, cursor: "pointer", textAlign: "center" }}>
-                    {isSel && (
-                      <div style={{ position: "absolute", top: 0, right: 0, background: "#D4A843", color: "#0a0a12", fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: "0 10px 0 8px" }}>SELECTED</div>
-                    )}
-                    {(c.imageLargeUrl || c.imageSmallUrl) ? (
-                      <img src={c.imageLargeUrl || c.imageSmallUrl || ""} alt="" loading="lazy" onError={e => (e.currentTarget.style.display = "none")} style={{ width: 119, height: 167, objectFit: "contain", borderRadius: 7, marginBottom: 6 }} />
+                  <button key={c.catalogCardId} onClick={() => setSelectedCardId(c.catalogCardId)} style={{ position: "relative", flex: "0 0 auto", minWidth: 110, scrollSnapAlign: "start", background: isSel ? "rgba(212,168,67,0.06)" : "rgba(255,255,255,0.02)", border: isSel ? "2px solid #D4A843" : "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 6, cursor: "pointer", textAlign: "center" }}>
+                    {(c.imageSmallUrl || c.imageLargeUrl) ? (
+                      <img src={c.imageSmallUrl || c.imageLargeUrl || ""} alt="" loading="lazy" onError={e => (e.currentTarget.style.display = "none")} style={{ width: 96, height: 134, objectFit: "contain", borderRadius: 5, marginBottom: 4 }} />
                     ) : (
-                      <div style={{ width: 119, height: 167, background: surface2, borderRadius: 7, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: muted, margin: "0 auto" }}>🎴</div>
+                      <div style={{ width: 96, height: 134, background: surface2, borderRadius: 5, marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: muted, margin: "0 auto" }}>🎴</div>
                     )}
-                    <div style={{ fontSize: 13, fontWeight: 600, color: isSel ? "#D4A843" : "rgba(255,255,255,0.8)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                    <div style={{ fontSize: 10, color: muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{c.setName}</div>
-                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{c.rarity}</div>
+                    <div style={{ fontSize: 11, color: isSel ? "#D4A843" : "rgba(255,255,255,0.8)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.setName}</div>
                   </button>
                 );
               })}
@@ -388,54 +359,155 @@ export function ResultScreen({ result, scanIntent, onBack, onSaved, onScanAnothe
           </div>
         )}
 
-        {/* ─── Action buttons (in flow, not sticky) ─── */}
-        <div style={{ marginTop: 8, paddingBottom: 20 }}>
-          {saved && scanIntent === "collect" ? (
-            <>
-              <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 14, color: green, fontWeight: 600, marginBottom: 8 }}>✓ {selected?.name} added</div>
-              <button onClick={onScanAnother} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: "pointer", position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10, paddingBottom: 8 }}>
-                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "#CC0000" }} />
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "#ffffff" }} />
-                <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 2 }} />
-                <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
-                </div>
-                <span style={{ position: "relative", zIndex: 4, fontSize: 18, fontWeight: 800, letterSpacing: 0.3, color: "#000000" }}>Scan Next Card ({countdown}...)</span>
-              </button>
-            </>
-          ) : saved ? (
-            <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: "12px", textAlign: "center", fontSize: 14, color: green, fontWeight: 600 }}>✓ {selected?.name} added to collection</div>
-          ) : (
-            <>
-              {scanIntent === "collect" && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Condition</div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    {TCG_CONDITION_VALUES.map(c => (
-                      <button key={c} onClick={() => setCondition(c)} style={{ flex: 1, padding: "8px 4px", minHeight: 44, background: condition === c ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.03)", border: "1px solid " + (condition === c ? "rgba(212,168,67,0.3)" : "rgba(255,255,255,0.06)"), borderRadius: 8, color: condition === c ? "#D4A843" : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{tcgConditionLabel(c)}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {saveError && (
-                <div style={{ background: "rgba(80,20,20,0.25)", border: "1px solid rgba(180,80,80,0.35)", color: "#e8c4c4", fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{saveError}</div>
-              )}
-              <button onClick={handleSave} disabled={saving || !selected} style={{ width: "100%", height: 56, border: "none", borderRadius: 14, fontFamily: font, fontSize: 17, fontWeight: 700, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 10, paddingBottom: 8 }}>
-                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "50%", background: "#CC0000" }} />
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "50%", background: "#ffffff" }} />
-                <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 2 }} />
-                <div style={{ position: "absolute", top: "50%", left: 24, width: 24, height: 24, borderRadius: "50%", background: "#1a1a2e", transform: "translateY(-50%)", zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ffffff", border: "2px solid #1a1a2e" }} />
-                </div>
-                <span style={{ position: "relative", zIndex: 4, fontSize: 18, fontWeight: 800, letterSpacing: 0.3, color: "#000000" }}>{saving ? "Saving..." : "Add to Collection"}</span>
-              </button>
-              {scanIntent === "check" && (
-                <button onClick={onBack} style={{ width: "100%", height: 56, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, color: "rgba(255,255,255,0.6)", fontFamily: font, fontSize: 16, fontWeight: 500, cursor: "pointer", marginTop: 8 }}>Skip</button>
-              )}
-            </>
+        {/* Comps panel */}
+        <div style={{ background: surface, border: "1px solid " + border, borderRadius: 12, padding: 14, marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>Graded Comps</div>
+            {compsOk && trend.label && (
+              <div style={{ fontSize: 14, color: trend.color, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                <span>Trend</span>
+                <span style={{ fontSize: 16 }}>{trend.label}</span>
+              </div>
+            )}
+          </div>
+
+          {compsState.kind === "loading" && (
+            <div style={{ fontSize: 13, color: muted, textAlign: "center", padding: "12px 0" }}>Loading comps…</div>
+          )}
+          {compsState.kind === "not_found" && (
+            <div style={{ fontSize: 13, color: muted, textAlign: "center", padding: "12px 0" }}>No comps available for this card</div>
+          )}
+          {compsState.kind === "timeout" && (
+            <div style={{ fontSize: 13, color: amber, textAlign: "center", padding: "12px 0" }}>
+              Comps lookup timed out. <button onClick={() => setCompsRetryToken(t => t + 1)} style={{ background: "none", border: "none", color: amber, fontFamily: font, fontSize: 13, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Retry</button>
+            </div>
+          )}
+          {compsState.kind === "rate_limited" && (
+            <div style={{ fontSize: 13, color: amber, textAlign: "center", padding: "12px 0" }}>
+              Too many requests. {compsState.retryAfterSeconds ? `Retry in ${compsState.retryAfterSeconds}s.` : "Try again shortly."}
+            </div>
+          )}
+          {compsState.kind === "error" && (
+            <div style={{ fontSize: 13, color: red, textAlign: "center", padding: "12px 0" }}>
+              Comps error{compsState.message ? `: ${compsState.message}` : ""}. <button onClick={() => setCompsRetryToken(t => t + 1)} style={{ background: "none", border: "none", color: red, fontFamily: font, fontSize: 13, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Retry</button>
+            </div>
+          )}
+          {compsState.kind === "ok" && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+              <CompStat label="Raw market" value={fmtPrice(compsState.comps.raw_market)} accent="#fff" />
+              <CompStat label="PSA 10" value={fmtPrice(compsState.comps.psa10_avg)} accent="#D4A843" />
+              <CompStat label="PSA 9" value={fmtPrice(compsState.comps.psa9_avg)} accent="rgba(255,255,255,0.8)" />
+              <CompStat label="PSA 8" value={fmtPrice(compsState.comps.psa8_avg)} accent="rgba(255,255,255,0.8)" />
+            </div>
           )}
         </div>
+
+        {/* Dealer ask input */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: "block", fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.4)", fontWeight: 600, marginBottom: 6 }}>Dealer Ask</label>
+          <div style={{ position: "relative" }}>
+            <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontSize: 22, fontWeight: 700, color: muted }}>$</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={dealerAsk}
+              onChange={e => setDealerAsk(e.target.value)}
+              placeholder="0.00"
+              disabled={purchaseStage !== "idle"}
+              style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 12, padding: "18px 16px 18px 36px", fontFamily: mono, fontSize: 22, fontWeight: 700, color: text, outline: "none", boxSizing: "border-box", opacity: purchaseStage !== "idle" ? 0.5 : 1 }}
+            />
+          </div>
+        </div>
+
+        {/* Verdict strip */}
+        {verdict && (
+          <div style={{
+            borderRadius: 12, padding: "14px 16px", marginBottom: 14, textAlign: "center",
+            background: verdict.tone === "green" ? "rgba(52,211,153,0.12)" : verdict.tone === "amber" ? "rgba(251,191,36,0.12)" : "rgba(248,113,113,0.12)",
+            border: "1px solid " + (verdict.tone === "green" ? "rgba(52,211,153,0.35)" : verdict.tone === "amber" ? "rgba(251,191,36,0.35)" : "rgba(248,113,113,0.35)"),
+            color: verdict.tone === "green" ? green : verdict.tone === "amber" ? amber : red,
+            fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
+          }}>
+            {verdict.label} · {verdict.pct.toFixed(0)}% of market
+          </div>
+        )}
+        {!verdict && askNumeric != null && !compsOk && (
+          <div style={{ borderRadius: 12, padding: "12px 16px", marginBottom: 14, textAlign: "center", background: surface2, border: "1px solid " + border, color: muted, fontSize: 13 }}>
+            Verdict unavailable — no market price
+          </div>
+        )}
+
+        {errorMsg && (
+          <div style={{ background: "rgba(80,20,20,0.25)", border: "1px solid rgba(180,80,80,0.35)", color: "#e8c4c4", fontSize: 13, padding: "10px 14px", borderRadius: 10, marginBottom: 12, textAlign: "center" }}>{errorMsg}</div>
+        )}
+
+        {toast && (
+          <div style={{ background: "rgba(52,211,153,0.15)", border: "1px solid rgba(52,211,153,0.3)", borderRadius: 12, padding: 12, textAlign: "center", fontSize: 14, color: green, fontWeight: 600, marginBottom: 12 }}>✓ {toast}</div>
+        )}
+
+        {/* CTA block */}
+        {purchaseStage === "idle" && !toast && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button onClick={handleSkip} disabled={decisionInFlight !== null} style={{
+              width: "100%", minHeight: 56, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14,
+              color: "rgba(255,255,255,0.75)", fontFamily: font, fontSize: 16, fontWeight: 600,
+              cursor: decisionInFlight ? "wait" : "pointer", opacity: decisionInFlight && decisionInFlight !== "skip" ? 0.4 : 1,
+            }}>
+              {decisionInFlight === "skip" ? "Logging…" : "Skip"}
+            </button>
+            <button onClick={handleWalked} disabled={decisionInFlight !== null} style={{
+              width: "100%", minHeight: 56, background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.35)", borderRadius: 14,
+              color: amber, fontFamily: font, fontSize: 16, fontWeight: 700,
+              cursor: decisionInFlight ? "wait" : "pointer", opacity: decisionInFlight && decisionInFlight !== "walked" ? 0.4 : 1,
+            }}>
+              {decisionInFlight === "walked" ? "Logging…" : "Walked"}
+            </button>
+            <button onClick={handlePurchasedStart} disabled={decisionInFlight !== null || !selected} style={{
+              width: "100%", minHeight: 56, border: "none", borderRadius: 14,
+              background: green, color: "#0a0a12", fontFamily: font, fontSize: 17, fontWeight: 800,
+              cursor: decisionInFlight ? "wait" : "pointer", letterSpacing: 0.3,
+              position: "relative", overflow: "hidden",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            }}>
+              <span style={{ display: "inline-flex", width: 20, height: 20, borderRadius: "50%", background: "#0a0a12", color: green, alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>●</span>
+              Purchased
+            </button>
+          </div>
+        )}
+
+        {/* Inline purchased confirm */}
+        {purchaseStage !== "idle" && !toast && (
+          <div style={{ background: surface, border: "1px solid rgba(52,211,153,0.3)", borderRadius: 14, padding: 14 }}>
+            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1.2, color: green, fontWeight: 700, marginBottom: 8 }}>Final Price Paid</div>
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <span style={{ position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)", fontSize: 22, fontWeight: 700, color: muted }}>$</span>
+              <input
+                type="number" inputMode="decimal" step="0.01" min="0"
+                value={finalPrice} onChange={e => setFinalPrice(e.target.value)} autoFocus
+                disabled={purchaseStage === "saving"}
+                style={{ width: "100%", background: surface2, border: "1px solid " + border, borderRadius: 12, padding: "18px 16px 18px 36px", fontFamily: mono, fontSize: 22, fontWeight: 700, color: text, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handlePurchasedCancel} disabled={purchaseStage === "saving"} style={{ flex: 1, minHeight: 48, background: surface2, border: "1px solid " + border, borderRadius: 12, color: muted, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handlePurchasedConfirm} disabled={purchaseStage === "saving"} style={{ flex: 2, minHeight: 48, background: green, border: "none", borderRadius: 12, color: "#0a0a12", fontFamily: font, fontSize: 15, fontWeight: 800, cursor: purchaseStage === "saving" ? "wait" : "pointer" }}>
+                {purchaseStage === "saving" ? "Saving…" : `Confirm & Add to Show Pickups`}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function CompStat({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: 8, padding: "10px 12px" }}>
+      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.6, color: muted, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: accent, marginTop: 3, fontFamily: mono }}>{value}</div>
     </div>
   );
 }
