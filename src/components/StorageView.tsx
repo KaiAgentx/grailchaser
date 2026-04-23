@@ -123,6 +123,7 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
         </div>
         {createError && <div style={{ fontSize: 12, color: red, textAlign: "center", marginBottom: 8 }}>{createError}</div>}
         <button disabled={!newName.trim() || saving} onClick={async () => { setSaving(true); setCreateError(""); const { error } = await addBox(newName.trim(), newRows, newDivider, newType); setSaving(false); if (error) setCreateError(error.message || "Failed to create box"); else setScreen("list"); }} style={{ width: "100%", ...btnStyle, background: green, color: "#fff", opacity: newName.trim() ? 1 : 0.4 }}>{saving ? "Creating..." : "Create Box"}</button>
+        {!newName.trim() && !saving && <div style={{ fontSize: 11, color: muted, textAlign: "center", marginTop: 8 }}>Name your box to continue</div>}
       </div>
     </Shell>
   );
