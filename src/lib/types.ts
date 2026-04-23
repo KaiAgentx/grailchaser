@@ -147,8 +147,36 @@ export interface GradingCompany {
 // Sports support was removed in Session X; this app is TCG-only.
 export type Game = "pokemon" | "mtg" | "one_piece";
 
-// Standard TCG condition grades. Different from sports `Condition`.
-export type TcgCondition = "NM" | "LP" | "MP" | "HP" | "DMG";
+// Standard TCG condition grades. Values match the Postgres `tcg_condition_t`
+// enum exactly so app-side values can flow straight into `cards.tcg_condition`
+// without translation. Render via `tcgConditionLabel(c)` — never show the raw
+// value in UI.
+export type TcgCondition =
+  | "near_mint"
+  | "lightly_played"
+  | "moderately_played"
+  | "heavily_played"
+  | "damaged";
+
+export const TCG_CONDITION_VALUES: readonly TcgCondition[] = [
+  "near_mint",
+  "lightly_played",
+  "moderately_played",
+  "heavily_played",
+  "damaged",
+] as const;
+
+const TCG_CONDITION_LABELS: Record<TcgCondition, string> = {
+  near_mint: "NM",
+  lightly_played: "LP",
+  moderately_played: "MP",
+  heavily_played: "HP",
+  damaged: "DMG",
+};
+
+export function tcgConditionLabel(c: TcgCondition): string {
+  return TCG_CONDITION_LABELS[c];
+}
 
 // What kind of attention a card needs after a scan or import.
 // "none" = good to go. Anything else = appears in the review queue.

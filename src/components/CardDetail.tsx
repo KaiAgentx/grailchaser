@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase";
 import { Card } from "@/lib/types";
-import type { TcgCondition } from "@/lib/types";
 import type { VisionResult } from "@/types/tcg";
 import { GAME_DISPLAY_NAME } from "@/lib/games";
 import { Box } from "@/hooks/useBoxes";
@@ -12,7 +11,11 @@ import { getFreshNextPosition } from "@/lib/boxPosition";
 import { Shell } from "./Shell";
 import { surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
 
-const CONDITIONS: TcgCondition[] = ["NM", "LP", "MP", "HP", "DMG"];
+// NOTE: this picker writes into the sports-shaped `cards.condition` column
+// (via `as any` below), not `cards.tcg_condition`. The TCG-flavored shorthand
+// is pre-existing and only "NM" actually round-trips through the sports
+// Condition enum cleanly — out of scope to fix here.
+const CONDITIONS: string[] = ["NM", "LP", "MP", "HP", "DMG"];
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "10px 12px", minHeight: 44, color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" as const, width: "100%" };
 const labelStyle = { fontSize: 10, color: muted, textTransform: "uppercase" as const, letterSpacing: 1, display: "block", marginBottom: 3 };
 const btnSmall = { padding: "10px 14px", minHeight: 44, border: "none", borderRadius: 10, fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer" };

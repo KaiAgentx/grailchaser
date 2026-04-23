@@ -3,12 +3,10 @@ import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase";
 import { Shell } from "./Shell";
 import { bg, surface, surface2, border, accent, green, red, amber, muted, secondary, text, font, mono } from "./styles";
-import type { TcgCondition } from "@/lib/types";
+import { type TcgCondition, TCG_CONDITION_VALUES, tcgConditionLabel } from "@/lib/types";
 import type { RecognitionSuccess, VisionResult, CandidateCard } from "@/types/tcg";
 import { VARIANT_LABELS, autoSelectVariant, fmtPrice, fmtDate } from "@/lib/tcg/variants";
 import { DEFAULT_BOX_NAME, type TcgGame } from "@/lib/games";
-
-const CONDITIONS: TcgCondition[] = ["NM", "LP", "MP", "HP", "DMG"];
 
 const bandStyles: Record<string, { bg: string; border: string; color: string; label: string }> = {
   exact: { bg: "rgba(52,211,153,0.1)", border: "rgba(52,211,153,0.3)", color: "#34d399", label: "✓ Exact Match" },
@@ -30,7 +28,7 @@ export function ResultScreen({ result, scanIntent, onBack, onSaved, onScanAnothe
 
   // Selection by catalogCardId instead of index
   const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
-  const [condition, setCondition] = useState<TcgCondition>("NM");
+  const [condition, setCondition] = useState<TcgCondition>("near_mint");
   const [pricing, setPricing] = useState<any>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
   const [selectedVariant, setSelectedVariant] = useState("");
@@ -413,8 +411,8 @@ export function ResultScreen({ result, scanIntent, onBack, onSaved, onScanAnothe
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Condition</div>
                   <div style={{ display: "flex", gap: 4 }}>
-                    {CONDITIONS.map(c => (
-                      <button key={c} onClick={() => setCondition(c)} style={{ flex: 1, padding: "8px 4px", minHeight: 44, background: condition === c ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.03)", border: "1px solid " + (condition === c ? "rgba(212,168,67,0.3)" : "rgba(255,255,255,0.06)"), borderRadius: 8, color: condition === c ? "#D4A843" : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{c}</button>
+                    {TCG_CONDITION_VALUES.map(c => (
+                      <button key={c} onClick={() => setCondition(c)} style={{ flex: 1, padding: "8px 4px", minHeight: 44, background: condition === c ? "rgba(212,168,67,0.12)" : "rgba(255,255,255,0.03)", border: "1px solid " + (condition === c ? "rgba(212,168,67,0.3)" : "rgba(255,255,255,0.06)"), borderRadius: 8, color: condition === c ? "#D4A843" : muted, fontFamily: font, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{tcgConditionLabel(c)}</button>
                     ))}
                   </div>
                 </div>
