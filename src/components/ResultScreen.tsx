@@ -19,6 +19,7 @@ interface Props {
   rank1CatalogCardId?: string | null;
   boxes: Box[];
   addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
+  addCard: (row: any) => void;
 }
 
 type CompsState =
@@ -57,7 +58,7 @@ async function jwt(): Promise<string | null> {
   return data?.session?.access_token ?? null;
 }
 
-export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId, boxes, addBox }: Props) {
+export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId, boxes, addBox, addCard }: Props) {
   const candidates: CandidateCard[] = result.result?.candidates || [];
   const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
   const selected = candidates.find(c => c.catalogCardId === selectedCardId) || candidates[0];
@@ -269,6 +270,9 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
         setDecisionInFlight(null);
         return;
       }
+
+      // Push saved card into useCards state so boxes/detail/counts reflect it immediately
+      if (data.card) addCard(data.card);
 
       await postDecision("purchased", true, askNumeric ?? price);
       navigator.vibrate?.(80);

@@ -45,6 +45,11 @@ export function useCards(userId?: string, game?: 'pokemon' | 'mtg' | 'one_piece'
 
   useEffect(() => { fetchCards(); }, [fetchCards]);
 
+  /** Push a freshly-saved card row into local state (newest-first). */
+  const addCard = (row: Card) => {
+    setCards(prev => [row, ...prev]);
+  };
+
   const updateCard = async (id: string, updates: Partial<Card>) => {
     if (updates.raw_value !== undefined) {
       updates.tier = calcTier(updates.raw_value);
@@ -114,7 +119,7 @@ export function useCards(userId?: string, game?: 'pokemon' | 'mtg' | 'one_piece'
   };
 
   return {
-    cards, loading, fetchCards,
+    cards, loading, fetchCards, addCard,
     updateCard, deleteCard, deleteCards,
     markListed, markSold, markShipped,
     batchUpdate, getNextPosition, renumberBox,

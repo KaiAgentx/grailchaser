@@ -21,7 +21,7 @@ type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "s
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
   const { activeGame, setActiveGame, hydrated: gameHydrated } = useActiveGame();
-  const { cards, loading, updateCard, deleteCard, markListed, markSold, markShipped } = useCards(user?.id, activeGame);
+  const { cards, loading, addCard, updateCard, deleteCard, markListed, markSold, markShipped } = useCards(user?.id, activeGame);
   const { boxes, loading: boxesLoading, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
 
   const [screen, setScreen] = useState<Screen>("home");
@@ -521,6 +521,7 @@ export default function Home() {
       rank1CatalogCardId={recognizeResult?.result?.candidates?.[0]?.catalogCardId}
       boxes={boxes}
       addBox={addBox}
+      addCard={addCard}
     />{bottomNav}</>
   );
 

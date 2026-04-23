@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
       graded_values: { "10": 0, "9": 0, "8": 0, "7": 0 }, status: "raw",
       tier: (body.raw_value || 0) >= 100 ? "Gem" : (body.raw_value || 0) >= 25 ? "Star" : (body.raw_value || 0) >= 5 ? "Core" : "Bulk",
       condition: "NM", date_added: new Date().toISOString().slice(0, 10),
+      storage_row: 1,
       notes: "",
     };
     if (body.rarity != null) cardData.rarity = body.rarity;
