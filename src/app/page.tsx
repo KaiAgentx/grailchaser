@@ -14,6 +14,8 @@ import { CardDetail } from "@/components/CardDetail";
 import { ScanScreen } from "@/components/ScanScreen";
 import { ResultScreen } from "@/components/ResultScreen";
 import { createClient } from "@/lib/supabase";
+import { TierBadge } from "@/components/TierBadge";
+import { TIER_RANK, type Tier } from "@/lib/utils";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "@/components/styles";
 
 type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result";
@@ -124,6 +126,7 @@ export default function Home() {
       sortBy === "value" ? b.raw_value - a.raw_value :
       sortBy === "recent" ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime() :
       sortBy === "name" ? a.player.localeCompare(b.player) :
+      sortBy === "tier" ? (TIER_RANK[(a.tier ?? "Unpriced") as Tier] ?? 4) - (TIER_RANK[(b.tier ?? "Unpriced") as Tier] ?? 4) :
       ((a.storage_box || "ZZZ").localeCompare(b.storage_box || "ZZZ") || (a.storage_position || 0) - (b.storage_position || 0))
     );
 
@@ -552,6 +555,7 @@ export default function Home() {
           <input placeholder="Search player, brand..." value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", color: text, fontFamily: font, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
           <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "8px 12px", color: secondary, fontFamily: font, fontSize: 12, outline: "none", cursor: "pointer" }}>
             <option value="value">Value ↓</option>
+            <option value="tier">Tier</option>
             <option value="recent">Recent</option>
             <option value="name">Name A-Z</option>
             <option value="box">Box</option>
@@ -573,7 +577,8 @@ export default function Home() {
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: text }}>{card.player}</div>
               <div style={{ fontSize: 12, color: secondary, marginTop: 2 }}>{card.year} {card.brand} {card.parallel !== "Base" ? card.parallel : ""} {card.card_number}</div>
-              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                <TierBadge tier={card.tier} size="sm" />
                 {card.storage_box && card.storage_box !== "PENDING" ? <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 9999, background: "rgba(255,255,255,0.06)", color: muted }}>{card.storage_box} #{card.storage_position}</span> : <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 9999, background: "rgba(248,113,113,0.1)", color: red, fontWeight: 600 }}>No Box</span>}
               </div>
             </div>

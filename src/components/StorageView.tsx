@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Card } from "@/lib/types";
 import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
 import { Shell } from "./Shell";
+import { TierBadge } from "./TierBadge";
 import { surface, surface2, border, accent, green, red, cyan, muted, text, font, mono } from "./styles";
 
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", minHeight: 44, color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" as const, width: "100%" };
@@ -253,6 +254,7 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
                           <div style={{ fontSize: 14, fontWeight: 600, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.player}</div>
                           <div style={{ fontSize: 11, color: muted }}>{card.year} {card.brand} {card.set}{card.parallel !== "Base" ? " " + card.parallel : ""}</div>
                         </div>
+                        <TierBadge tier={card.tier} size="sm" />
                         <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: green }}>${card.raw_value}</span>
                       </button>
                     ))}

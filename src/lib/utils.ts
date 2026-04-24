@@ -25,6 +25,10 @@ export const TIER_LABEL: Record<Tier, string> = {
   Bulk: 'Bulk', Low: 'Low', Mid: 'Mid', High: 'High',
 };
 
+export const TIER_RANK: Record<Tier, number> = {
+  High: 0, Mid: 1, Low: 2, Bulk: 3, Unpriced: 4,
+};
+
 export const today = () => new Date().toISOString().slice(0, 10);
 
 export const PLATFORMS: Platform[] = [
