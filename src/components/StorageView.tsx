@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Card } from "@/lib/types";
 import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
+import { createClient } from "@/lib/supabase";
 import { Shell } from "./Shell";
 import { TierBadge } from "./TierBadge";
 import { surface, surface2, border, accent, green, red, cyan, muted, text, font, mono } from "./styles";
@@ -27,9 +28,10 @@ interface Props {
   initialBoxName?: string;
   getNextPosition: (boxName: string) => number;
   getBoxCards: (boxName: string) => Card[];
+  updateCardPrice: (id: string, updatedRow: Card) => void;
 }
 
-export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards }: Props) {
+export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, updateBox, deleteBox, updateCard, onCardTap, onNavigate, getNextPosition, getBoxCards, updateCardPrice }: Props) {
   const initBox = initialBoxName ? boxes.find(b => b.name === initialBoxName) || null : null;
   const [screen, setScreen] = useState<Screen>(initBox ? "detail" : "list");
   const [selectedBox, setSelectedBox] = useState<Box | null>(initBox);
@@ -42,11 +44,56 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
   const [editDivider, setEditDivider] = useState(50);
   const [saving, setSaving] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [bulkRefreshing, setBulkRefreshing] = useState(false);
+  const [bulkRefreshProgress, setBulkRefreshProgress] = useState<{ current: number; total: number; name: string } | null>(null);
+  const [bulkRefreshResult, setBulkRefreshResult] = useState<string | null>(null);
 
   // boxes and cards are pre-filtered to TCG by useBoxes / useCards.
   const ecoBoxes = boxes;
   const ecoCards = cards;
   const unassigned = ecoCards.filter(c => !c.storage_box || c.storage_box === "PENDING");
+
+  const handleBulkRefresh = async (boxCards: Card[]) => {
+    if (bulkRefreshing) return;
+    const targetCards = boxCards.filter(c => c.tier !== "Bulk");
+    if (targetCards.length === 0) {
+      setBulkRefreshResult("Nothing to refresh (all Bulk)");
+      setTimeout(() => setBulkRefreshResult(null), 5000);
+      return;
+    }
+    setBulkRefreshing(true);
+    setBulkRefreshResult(null);
+    const sb = createClient();
+    const { data: session } = await sb.auth.getSession();
+    const token = session?.session?.access_token;
+    if (!token) { setBulkRefreshResult("Not authenticated"); setBulkRefreshing(false); return; }
+
+    let refreshed = 0, unchanged = 0, noPrice = 0, skipped = 0, errors = 0;
+    for (let i = 0; i < targetCards.length; i++) {
+      const card = targetCards[i];
+      setBulkRefreshProgress({ current: i + 1, total: targetCards.length, name: card.player });
+      try {
+        const r = await fetch(`/api/tcg/cards/${card.id}/refresh-price`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+        const data = await r.json().catch(() => ({}));
+        if (r.status === 429 || data.outcome === "rate_limited") { skipped++; }
+        else if (data.outcome === "refreshed") {
+          updateCardPrice(card.id, data.card);
+          if (data.before?.raw_value === data.after?.raw_value) { unchanged++; } else { refreshed++; }
+        } else if (data.outcome === "not_found") { noPrice++; }
+        else { errors++; }
+      } catch { errors++; }
+      if (i < targetCards.length - 1) await new Promise(res => setTimeout(res, 200));
+    }
+    setBulkRefreshProgress(null);
+    setBulkRefreshResult(
+      `Refreshed ${refreshed} · Unchanged ${unchanged}` +
+      (noPrice > 0 ? ` · No price ${noPrice}` : "") +
+      (skipped > 0 ? ` · Skipped ${skipped}` : "") +
+      (errors > 0 ? ` · Errors ${errors}` : "")
+    );
+    setBulkRefreshing(false);
+    setTimeout(() => setBulkRefreshResult(null), 10000);
+  };
 
   // ─── BOX LIST ───
   if (screen === "list") return (
@@ -230,9 +277,17 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
               {selectedBox.box_type === "grade_check" && !selectedBox.name.startsWith("AT ") && onNavigate && <button onClick={() => onNavigate({ screen: "gradeCheck" })} style={{ ...btnStyle, padding: "8px 12px", background: "#a855f715", border: "1px solid #a855f730", color: "#a855f7", fontSize: 11 }}>Inspect</button>}
               {selectedBox.name.startsWith("AT ") && onNavigate && <button onClick={() => onNavigate({ screen: "gradingReturn" })} style={{ ...btnStyle, padding: "8px 12px", background: "#a855f715", border: "1px solid #a855f730", color: "#a855f7", fontSize: 11 }}>Process Return</button>}
               {onNavigate && <button onClick={() => onNavigate({ screen: "lotBuilder", boxName: selectedBox.name })} style={{ ...btnStyle, padding: "8px 12px", background: "#f59e0b15", border: "1px solid #f59e0b30", color: "#f59e0b", fontSize: 11 }}>Create Lot</button>}
+              {(() => { const nonBulk = boxCards.filter(c => c.tier !== "Bulk").length; return (
+                <button onClick={() => handleBulkRefresh(boxCards)} disabled={bulkRefreshing || nonBulk === 0} style={{ ...btnStyle, padding: "8px 12px", background: accent + "15", border: "1px solid " + accent + "30", color: nonBulk === 0 ? muted : accent, fontSize: 11, opacity: bulkRefreshing ? 0.6 : 1 }}>
+                  {bulkRefreshing ? "Refreshing…" : nonBulk === 0 ? "No cards to refresh" : `Refresh prices (${nonBulk})`}
+                </button>
+              ); })()}
               <button onClick={() => { setEditName(selectedBox.name); setEditRows(selectedBox.num_rows); setEditDivider(selectedBox.divider_size); setScreen("edit"); }} style={{ ...btnStyle, padding: "8px 16px", background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>Edit</button>
             </div>
           </div>
+
+          {bulkRefreshProgress && <div style={{ fontSize: 11, color: muted, marginBottom: 8 }}>Refreshing {bulkRefreshProgress.current} of {bulkRefreshProgress.total}: {bulkRefreshProgress.name}</div>}
+          {bulkRefreshResult && <div style={{ fontSize: 11, color: accent, marginBottom: 8 }}>{bulkRefreshResult}</div>}
 
           {boxCards.length === 0 && <div style={{ textAlign: "center", color: muted, fontSize: 13, padding: "40px 0" }}>No cards in this box yet</div>}
 

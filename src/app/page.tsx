@@ -591,7 +591,7 @@ export default function Home() {
   );
 
   // ─── STORAGE ───
-  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => setScreen(t.screen as Screen)} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
+  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} updateCardPrice={updateCardPrice} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => setScreen(t.screen as Screen)} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
 
   // ─── CARD DETAIL ───
   if (screen === "cardDetail" && selectedCard) {
