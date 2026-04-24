@@ -14,12 +14,13 @@ import { CardDetail } from "@/components/CardDetail";
 import { ScanScreen } from "@/components/ScanScreen";
 import { ResultScreen } from "@/components/ResultScreen";
 import { WatchlistView } from "@/components/WatchlistView";
+import { BatchImportView } from "@/components/BatchImportView";
 import { createClient } from "@/lib/supabase";
 import { TierBadge } from "@/components/TierBadge";
 import { TIER_RANK, type Tier } from "@/lib/utils";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result" | "watchlist";
+type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result" | "watchlist" | "batchImport";
 
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
@@ -597,6 +598,11 @@ export default function Home() {
   // ─── WATCHLIST ───
   if (screen === "watchlist") return (
     <><WatchlistView cards={cards.filter(c => c.is_watched === true)} onBack={() => setScreen("home")} onCardTap={(card) => goToCardDetail(card, "watchlist")} updateCardPrice={updateCardPrice} />{bottomNav}</>
+  );
+
+  // ─── BATCH IMPORT ───
+  if (screen === "batchImport") return (
+    <><BatchImportView boxes={boxes} onBack={() => setScreen("home")} addCard={addCard} onDone={() => setScreen("home")} />{bottomNav}</>
   );
 
   // ─── CARD DETAIL ───
