@@ -10,7 +10,7 @@
  * Both are intentional v1 trade-offs, revisit only if production traffic shows they matter.
  */
 
-export type RouteClass = "save" | "recognize" | "catalog_read" | "default";
+export type RouteClass = "save" | "recognize" | "catalog_read" | "bulk" | "default";
 
 interface BucketConfig { max: number; windowMs: number }
 
@@ -18,6 +18,7 @@ const CONFIGS: Record<RouteClass, BucketConfig> = {
   save: { max: 60, windowMs: 60_000 },
   recognize: { max: 30, windowMs: 60_000 },
   catalog_read: { max: 120, windowMs: 60_000 },
+  bulk: { max: 5, windowMs: 60_000 },
   default: { max: 60, windowMs: 60_000 },
 };
 

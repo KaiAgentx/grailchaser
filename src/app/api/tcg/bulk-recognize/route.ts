@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     const authHeader = req.headers.get("authorization") || "";
 
     // Rate limit
-    const limit = checkRateLimit(userId, "default");
+    const limit = checkRateLimit(userId, "bulk");
     if (!limit.allowed) {
       return respond(errorResponse({ code: ErrorCode.RATE_LIMITED, details: `Rate limit exceeded (${limit.limit}/min). Retry in ${limit.retryAfterSeconds}s.`, requestId, headers: { "Retry-After": String(limit.retryAfterSeconds) } }));
     }
