@@ -23,7 +23,7 @@ type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "s
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
   const { activeGame, setActiveGame, hydrated: gameHydrated } = useActiveGame();
-  const { cards, loading, addCard, updateCard, deleteCard, markListed, markSold, markShipped } = useCards(user?.id, activeGame);
+  const { cards, loading, addCard, updateCardPrice, updateCard, deleteCard, markListed, markSold, markShipped } = useCards(user?.id, activeGame);
   const { boxes, loading: boxesLoading, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
 
   const [screen, setScreen] = useState<Screen>("home");
@@ -596,7 +596,7 @@ export default function Home() {
   // ─── CARD DETAIL ───
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
+    return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} updateCardPrice={updateCardPrice} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
   }
 
   return null;

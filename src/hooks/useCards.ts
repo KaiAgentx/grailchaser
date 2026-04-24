@@ -50,6 +50,11 @@ export function useCards(userId?: string, game?: 'pokemon' | 'mtg' | 'one_piece'
     setCards(prev => [row, ...prev]);
   };
 
+  /** Replace a card row in state with a fresh copy from the server. */
+  const updateCardPrice = (id: string, updatedRow: Card) => {
+    setCards(prev => prev.map(c => c.id === id ? updatedRow : c));
+  };
+
   const updateCard = async (id: string, updates: Partial<Card>) => {
     if (updates.raw_value !== undefined) {
       updates.tier = calcTier(updates.raw_value);
@@ -119,7 +124,7 @@ export function useCards(userId?: string, game?: 'pokemon' | 'mtg' | 'one_piece'
   };
 
   return {
-    cards, loading, fetchCards, addCard,
+    cards, loading, fetchCards, addCard, updateCardPrice,
     updateCard, deleteCard, deleteCards,
     markListed, markSold, markShipped,
     batchUpdate, getNextPosition, renumberBox,

@@ -29,10 +29,11 @@ interface Props {
   markListed: (id: string, platform: string, price: number) => Promise<any>;
   markSold: (id: string, price: number, platform: string) => Promise<any>;
   markShipped: (id: string, tracking?: string) => Promise<any>;
+  updateCardPrice: (id: string, updatedRow: Card) => void;
   getNextPosition: (box: string) => number;
 }
 
-export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markListed, markSold, markShipped, getNextPosition }: Props) {
+export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, deleteCard, markListed, markSold, markShipped, getNextPosition }: Props) {
   const c = card as any; // access TCG-specific fields not in Card interface
 
   // ─── State ───
@@ -40,6 +41,8 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
   const [edits, setEdits] = useState<Partial<Card>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
   const [showMoveBox, setShowMoveBox] = useState(false);
   const [moveConfirm, setMoveConfirm] = useState("");
   const [sellOptExpanded, setSellOptExpanded] = useState(false);
@@ -150,11 +153,42 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const refreshRawValue = async () => {
-    if (displayMarket == null) return;
-    await updateCard(card.id, { raw_value: displayMarket });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleRefreshPrice = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshMsg(null);
+    try {
+      const sb = createClient();
+      const { data: session } = await sb.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) { setRefreshMsg("Not authenticated"); setRefreshing(false); return; }
+      const res = await fetch(`/api/tcg/cards/${card.id}/refresh-price`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.outcome === "refreshed") {
+        updateCardPrice(card.id, data.card);
+        const before = data.before?.raw_value ?? card.raw_value;
+        const after = data.after?.raw_value;
+        const tierChanged = data.before?.tier !== data.after?.tier;
+        if (before === after) {
+          setRefreshMsg("Price unchanged");
+        } else {
+          setRefreshMsg(`$${before} → $${after}${tierChanged ? ` (Now ${data.after.tier})` : ""}`);
+        }
+        setTimeout(() => setRefreshMsg(null), 8000);
+      } else if (data.outcome === "not_found") {
+        setRefreshMsg(`No current price data — kept $${card.raw_value}`);
+      } else if (data.outcome === "rate_limited") {
+        setRefreshMsg(`Just refreshed — wait ${data.retry_after_seconds ?? 60}s`);
+      } else {
+        setRefreshMsg(data.message || "Couldn't refresh — price unchanged");
+      }
+    } catch {
+      setRefreshMsg("Couldn't refresh — price unchanged");
+    }
+    setRefreshing(false);
   };
 
   const platformColors: Record<string, string> = { eBay: "#e53238", Shopify: "#96bf48", Mercari: "#4dc1e8", Whatnot: "#7b61ff", Facebook: "#1877f2", TCGPlayer: "#f4a100" };
@@ -255,9 +289,10 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
             <div>
               <div style={labelStyle}>RAW VALUE</div>
               <div style={{ fontFamily: mono, fontSize: 22, fontWeight: 700, color: green }}>${card.raw_value}</div>
-              {hasPrice && displayMarket !== card.raw_value && (
-                <button onClick={refreshRawValue} style={{ background: "none", border: "none", color: "#5B8DEF", fontSize: 10, fontFamily: font, cursor: "pointer", padding: 0, marginTop: 4 }}>Refresh from market</button>
-              )}
+              <button onClick={handleRefreshPrice} disabled={refreshing} style={{ background: "none", border: "none", color: refreshing ? muted : accent, fontSize: 10, fontFamily: font, cursor: refreshing ? "wait" : "pointer", padding: 0, marginTop: 4, display: "block" }}>
+                {refreshing ? "Checking…" : "Check current price"}
+              </button>
+              {refreshMsg && <div style={{ fontSize: 10, color: accent, marginTop: 2 }}>{refreshMsg}</div>}
             </div>
             <div>
               <div style={labelStyle}>COST BASIS</div>
