@@ -25,7 +25,7 @@ interface Props {
   boxes: Box[];
   onBack: () => void;
   addCard: (row: any) => void;
-  onDone: () => void;
+  onDone: (savedCardIds: string[]) => void;
 }
 
 export function BatchImportView({ boxes, onBack, addCard, onDone }: Props) {
@@ -41,6 +41,7 @@ export function BatchImportView({ boxes, onBack, addCard, onDone }: Props) {
   const [failedCount, setFailedCount] = useState(0);
   const [progressIndex, setProgressIndex] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
 
   const handleFilesSelected = (selected: FileList | null) => {
     if (!selected) return;
@@ -132,6 +133,7 @@ export function BatchImportView({ boxes, onBack, addCard, onDone }: Props) {
     let succeeded = 0;
     let failed = 0;
     const failedIds: string[] = [];
+    const savedCardIds: string[] = [];
     const idsArray = Array.from(acceptedIds);
 
     for (let i = 0; i < idsArray.length; i++) {
@@ -163,7 +165,9 @@ export function BatchImportView({ boxes, onBack, addCard, onDone }: Props) {
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && (data.card || data.replay)) {
-          addCard(data.card || data);
+          const row = data.card || data;
+          addCard(row);
+          if (row.id) savedCardIds.push(row.id);
           succeeded++;
           setSavedCount(s => s + 1);
         } else {
@@ -180,6 +184,7 @@ export function BatchImportView({ boxes, onBack, addCard, onDone }: Props) {
     }
 
     if (failedIds.length > 0) console.error("[BatchImport] failed scan_result_ids:", failedIds);
+    setSavedIds(savedCardIds);
     setPhase("done");
   };
 
@@ -310,14 +315,16 @@ export function BatchImportView({ boxes, onBack, addCard, onDone }: Props) {
 
   // ─── DONE ───
   return (
-    <Shell title="Import Complete" back={onDone}>
+    <Shell title="Import Complete" back={() => onDone(savedIds)}>
       <div style={{ paddingTop: 60, textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>{failedCount > 0 ? "⚠" : "✓"}</div>
         <div style={{ fontSize: 20, fontWeight: 700, color: failedCount > 0 ? "#f59e0b" : green, marginBottom: 8 }}>
           {failedCount > 0 ? `Saved ${savedCount} · Failed ${failedCount}` : `Saved ${savedCount} cards`}
         </div>
         <div style={{ fontSize: 13, color: muted, marginBottom: 32 }}>Added to {targetBox}</div>
-        <button onClick={onDone} style={{ padding: "14px 32px", minHeight: 48, background: green, border: "none", borderRadius: 12, color: "#0a0a12", fontFamily: font, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>Done</button>
+        <button onClick={() => onDone(savedIds)} style={{ padding: "14px 32px", minHeight: 48, background: green, border: "none", borderRadius: 12, color: "#0a0a12", fontFamily: font, fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+          {savedIds.length > 0 ? "Review tiers" : "Done"}
+        </button>
       </div>
     </Shell>
   );

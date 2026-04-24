@@ -15,12 +15,13 @@ import { ScanScreen } from "@/components/ScanScreen";
 import { ResultScreen } from "@/components/ResultScreen";
 import { WatchlistView } from "@/components/WatchlistView";
 import { BatchImportView } from "@/components/BatchImportView";
+import { TierBreakdownView } from "@/components/TierBreakdownView";
 import { createClient } from "@/lib/supabase";
 import { TierBadge } from "@/components/TierBadge";
 import { TIER_RANK, type Tier } from "@/lib/utils";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result" | "watchlist" | "batchImport";
+type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result" | "watchlist" | "batchImport" | "tierBreakdown";
 
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
@@ -31,6 +32,7 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("home");
   const [scanIntent, setScanIntent] = useState<"check" | "collect">("check");
   const [recognizeResult, setRecognizeResult] = useState<any>(null);
+  const [tierBreakdownScope, setTierBreakdownScope] = useState<{ cardIds: string[]; label: string } | null>(null);
   const [tcgCardCount, setTcgCardCount] = useState<number | null>(null);
   const [tcgTotalValue, setTcgTotalValue] = useState<number>(0);
   const [tcgRecentActivity, setTcgRecentActivity] = useState<any[]>([]);
@@ -593,7 +595,15 @@ export default function Home() {
   );
 
   // ─── STORAGE ───
-  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} updateCardPrice={updateCardPrice} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => setScreen(t.screen as Screen)} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
+  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} updateCardPrice={updateCardPrice} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => {
+    if (t.screen === "tierBreakdown" && t.boxName) {
+      const boxCards = getBoxCards(t.boxName);
+      setTierBreakdownScope({ cardIds: boxCards.map(c => c.id), label: t.boxName });
+      setScreen("tierBreakdown");
+    } else {
+      setScreen(t.screen as Screen);
+    }
+  }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
 
   // ─── WATCHLIST ───
   if (screen === "watchlist") return (
@@ -602,8 +612,21 @@ export default function Home() {
 
   // ─── BATCH IMPORT ───
   if (screen === "batchImport") return (
-    <><BatchImportView boxes={boxes} onBack={() => setScreen("home")} addCard={addCard} onDone={() => setScreen("home")} />{bottomNav}</>
+    <><BatchImportView boxes={boxes} onBack={() => setScreen("home")} addCard={addCard} onDone={(savedCardIds) => {
+      if (savedCardIds.length > 0) {
+        setTierBreakdownScope({ cardIds: savedCardIds, label: `${savedCardIds.length} cards from last import` });
+        setScreen("tierBreakdown");
+      } else {
+        setScreen("home");
+      }
+    }} />{bottomNav}</>
   );
+
+  // ─── TIER BREAKDOWN ───
+  if (screen === "tierBreakdown" && tierBreakdownScope) {
+    const scopeCards = cards.filter(c => tierBreakdownScope.cardIds.includes(c.id));
+    return <><TierBreakdownView cards={scopeCards} boxes={boxes} scopeLabel={tierBreakdownScope.label} onBack={() => { setTierBreakdownScope(null); setScreen("home"); }} onCardTap={c => goToCardDetail(c, "tierBreakdown")} updateCard={updateCard} />{bottomNav}</>;
+  }
 
   // ─── CARD DETAIL ───
   if (screen === "cardDetail" && selectedCard) {

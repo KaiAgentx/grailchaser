@@ -5,7 +5,7 @@ import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
 import { createClient } from "@/lib/supabase";
 import { Shell } from "./Shell";
 import { TierBadge } from "./TierBadge";
-import { surface, surface2, border, accent, green, red, cyan, muted, text, font, mono } from "./styles";
+import { surface, surface2, border, accent, green, red, cyan, muted, secondary, text, font, mono } from "./styles";
 
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", minHeight: 44, color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" as const, width: "100%" };
 const labelStyle = { fontSize: 10, color: muted, textTransform: "uppercase" as const, letterSpacing: 1, display: "block", marginBottom: 4 };
@@ -282,6 +282,7 @@ export function StorageView({ cards, boxes, initialBoxName, onBack, addBox, upda
                   {bulkRefreshing ? "Refreshing…" : nonBulk === 0 ? "No cards to refresh" : `Refresh prices (${nonBulk})`}
                 </button>
               ); })()}
+              {onNavigate && boxCards.length > 0 && <button onClick={() => onNavigate({ screen: "tierBreakdown", boxName: selectedBox.name })} style={{ ...btnStyle, padding: "8px 12px", background: surface2, border: "1px solid " + border, color: secondary, fontSize: 11 }}>Tier breakdown</button>}
               <button onClick={() => { setEditName(selectedBox.name); setEditRows(selectedBox.num_rows); setEditDivider(selectedBox.divider_size); setScreen("edit"); }} style={{ ...btnStyle, padding: "8px 16px", background: surface2, border: "1px solid " + border, color: muted, fontSize: 12 }}>Edit</button>
             </div>
           </div>
