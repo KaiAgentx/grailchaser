@@ -7,6 +7,7 @@ import { extractUserId, isValidUuid, canonicalHash, checkIdempotency, writeIdemp
 import { ErrorCode, errorResponse } from "@/lib/errors";
 import { getOrCreateRequestId, logRequest } from "@/lib/logging";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { calcTier } from "@/lib/utils";
 
 const ROUTE = "/api/tcg/collection-items";
 const ECOSYSTEM = "tcg";
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
       team: "", parallel: "Base", is_rc: false, is_auto: false, is_numbered: false,
       watchlist: false, grade_candidate: false, gem_probability: 0.15,
       graded_values: { "10": 0, "9": 0, "8": 0, "7": 0 }, status: "raw",
-      tier: (body.raw_value || 0) >= 100 ? "Gem" : (body.raw_value || 0) >= 25 ? "Star" : (body.raw_value || 0) >= 5 ? "Core" : "Bulk",
+      tier: calcTier(body.raw_value ?? null),
       condition: "NM", date_added: new Date().toISOString().slice(0, 10),
       storage_row: 1,
       notes: "",

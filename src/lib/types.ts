@@ -1,4 +1,5 @@
-export type Tier = "Gem" | "Star" | "Core" | "Bulk";
+import type { Tier } from "./utils";
+export type { Tier };
 export type CardStatus = "raw" | "listed" | "sold" | "shipped" | "grading" | "graded";
 export type Condition = "Mint" | "NM" | "EX" | "VG" | "Good" | "Fair" | "Poor";
 

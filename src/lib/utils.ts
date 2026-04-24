@@ -1,4 +1,29 @@
-import { Platform, GradingCompany, Tier } from "./types";
+import { Platform, GradingCompany } from "./types";
+
+// ─── Tier system (single source of truth) ───
+
+export type Tier = 'Unpriced' | 'Bulk' | 'Low' | 'Mid' | 'High';
+
+export function calcTier(rawValue: number | null | undefined): Tier {
+  if (rawValue === null || rawValue === undefined) return 'Unpriced';
+  if (rawValue < 1) return 'Bulk';
+  if (rawValue < 5) return 'Low';
+  if (rawValue < 50) return 'Mid';
+  return 'High';
+}
+
+export const TIER_COLORS: Record<Tier, string> = {
+  Unpriced: '#94a3b8',
+  Bulk:     '#6b7280',
+  Low:      '#9ca3af',
+  Mid:      '#3b82f6',
+  High:     '#d4a017',
+};
+
+export const TIER_LABEL: Record<Tier, string> = {
+  Unpriced: 'Unpriced',
+  Bulk: 'Bulk', Low: 'Low', Mid: 'Mid', High: 'High',
+};
 
 export const today = () => new Date().toISOString().slice(0, 10);
 
@@ -32,12 +57,7 @@ export function calcShipping(price: number): number {
   return 1.05;
 }
 
-export function calcTier(value: number): Tier {
-  if (value >= 100) return "Gem";
-  if (value >= 25) return "Star";
-  if (value >= 5) return "Core";
-  return "Bulk";
-}
+// calcTier is defined above with the Tier type
 
 export function shouldFlagForGrading(rawValue: number, gemProb: number): boolean {
   if (rawValue < 10) return false;

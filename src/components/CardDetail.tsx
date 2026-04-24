@@ -5,7 +5,7 @@ import { Card } from "@/lib/types";
 import type { VisionResult } from "@/types/tcg";
 import { GAME_DISPLAY_NAME } from "@/lib/games";
 import { Box } from "@/hooks/useBoxes";
-import { PLATFORMS, calcNet, calcShipping } from "@/lib/utils";
+import { PLATFORMS, calcNet, calcShipping, TIER_COLORS, type Tier } from "@/lib/utils";
 import { VARIANT_LABELS, autoSelectVariant, fmtPrice, fmtDate } from "@/lib/tcg/variants";
 import { getFreshNextPosition } from "@/lib/boxPosition";
 import { Shell } from "./Shell";
@@ -265,7 +265,7 @@ export function CardDetail({ card, boxes, onBack, updateCard, deleteCard, markLi
             </div>
             <div>
               <div style={labelStyle}>TIER</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: card.tier === "Gem" ? accent : card.tier === "Star" ? green : text }}>{card.tier}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: TIER_COLORS[(card.tier ?? 'Unpriced') as Tier] ?? TIER_COLORS.Unpriced }}>{card.tier}</div>
             </div>
             <div>
               <div style={labelStyle}>STATUS</div>
