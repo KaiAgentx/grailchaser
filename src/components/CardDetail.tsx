@@ -31,9 +31,10 @@ interface Props {
   markShipped: (id: string, tracking?: string) => Promise<any>;
   updateCardPrice: (id: string, updatedRow: Card) => void;
   getNextPosition: (box: string) => number;
+  watchedCount: number;
 }
 
-export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, deleteCard, markListed, markSold, markShipped, getNextPosition }: Props) {
+export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, deleteCard, markListed, markSold, markShipped, getNextPosition, watchedCount }: Props) {
   const c = card as any; // access TCG-specific fields not in Card interface
 
   // ─── State ───
@@ -43,6 +44,7 @@ export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, d
   const [saved, setSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const [watchToast, setWatchToast] = useState<string | null>(null);
   const [showMoveBox, setShowMoveBox] = useState(false);
   const [moveConfirm, setMoveConfirm] = useState("");
   const [sellOptExpanded, setSellOptExpanded] = useState(false);
@@ -225,7 +227,26 @@ export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, d
 
         {/* ─── Identity ─── */}
         <div style={{ textAlign: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 24, fontWeight: 700, color: text }}>{card.player}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: text }}>{card.player}</div>
+            {(() => {
+              const isWatched = card.is_watched === true;
+              const atLimit = !isWatched && watchedCount >= 10;
+              return (
+                <button
+                  onClick={async () => {
+                    if (atLimit) { setWatchToast("Watchlist full (10 max) — remove one first"); setTimeout(() => setWatchToast(null), 3000); return; }
+                    await updateCard(card.id, { is_watched: !isWatched });
+                    setWatchToast(isWatched ? "Removed from watchlist" : "Added to watchlist");
+                    setTimeout(() => setWatchToast(null), 2000);
+                  }}
+                  style={{ background: "none", border: "none", cursor: atLimit ? "not-allowed" : "pointer", padding: 4, fontSize: 20, color: isWatched ? "#d4a017" : muted, lineHeight: 1 }}
+                  title={isWatched ? "Remove from watchlist" : atLimit ? "Watchlist full" : "Add to watchlist"}
+                >{isWatched ? "★" : "☆"}</button>
+              );
+            })()}
+          </div>
+          {watchToast && <div style={{ fontSize: 11, color: accent, marginTop: 4 }}>{watchToast}</div>}
           <div style={{ fontSize: 14, color: muted, marginTop: 4 }}>{card.year} · {c.set_name || card.set} · #{card.card_number}</div>
           <div style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 8 }}>
             {c.rarity && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: "rgba(212,168,67,0.1)", border: "1px solid rgba(212,168,67,0.2)", color: "#D4A843", fontWeight: 600 }}>{c.rarity}</span>}

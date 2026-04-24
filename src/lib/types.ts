@@ -29,6 +29,7 @@ export interface Card {
   graded_values: { "10": number; "9": number; "8": number; "7": number };
   status: CardStatus;
   watchlist: boolean;
+  is_watched: boolean;
   grade_candidate: boolean;
   listed_platform: string | null;
   listed_price: number | null;

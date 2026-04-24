@@ -13,12 +13,13 @@ import { StorageView } from "@/components/StorageView";
 import { CardDetail } from "@/components/CardDetail";
 import { ScanScreen } from "@/components/ScanScreen";
 import { ResultScreen } from "@/components/ResultScreen";
+import { WatchlistView } from "@/components/WatchlistView";
 import { createClient } from "@/lib/supabase";
 import { TierBadge } from "@/components/TierBadge";
 import { TIER_RANK, type Tier } from "@/lib/utils";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result";
+type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result" | "watchlist";
 
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
@@ -593,10 +594,15 @@ export default function Home() {
   // ─── STORAGE ───
   if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} updateCardPrice={updateCardPrice} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => setScreen(t.screen as Screen)} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
 
+  // ─── WATCHLIST ───
+  if (screen === "watchlist") return (
+    <><WatchlistView cards={cards.filter(c => c.is_watched === true)} onBack={() => setScreen("home")} onCardTap={(card) => goToCardDetail(card, "watchlist")} updateCardPrice={updateCardPrice} />{bottomNav}</>
+  );
+
   // ─── CARD DETAIL ───
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} updateCardPrice={updateCardPrice} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} />{bottomNav}</>;
+    return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} updateCardPrice={updateCardPrice} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} watchedCount={cards.filter(c => c.is_watched === true).length} />{bottomNav}</>;
   }
 
   return null;

@@ -58,7 +58,8 @@ export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
           <div onClick={() => setMoreOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 98 }} />
           <div style={{ position: "fixed", bottom: 56, left: 0, right: 0, zIndex: 99, display: "flex", justifyContent: "center" }}>
             <div style={{ maxWidth: 500, width: "100%", background: "#111318", borderTop: "1px solid " + border, borderRadius: "16px 16px 0 0", padding: "8px 0", animation: "scaleIn 0.15s ease" }}>
-              <button onClick={() => { setMoreOpen(false); handleSignOut(); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", color: "#ef4444", fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>Sign Out</button>
+              <button onClick={() => { setMoreOpen(false); onNavigate("watchlist"); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", borderBottom: "1px solid " + border, color: text, fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48 }}>★ Watchlist</button>
+              <button onClick={() => { setMoreOpen(false); handleSignOut(); }} style={{ width: "100%", padding: "14px 24px", background: "none", border: "none", color: "#ef4444", fontFamily: font, fontSize: 15, fontWeight: 500, cursor: "pointer", textAlign: "left", minHeight: 48, marginTop: 8 }}>Sign Out</button>
             </div>
           </div>
         </>
