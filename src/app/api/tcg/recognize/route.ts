@@ -207,7 +207,24 @@ export async function POST(req: NextRequest) {
         if (cards.length > 0) visionValidated = true;
       }
 
-      // Attempt 2: name + number (exact)
+      // Attempt 2: set_name + name (no number required — vintage cards where number=null)
+      // Fires when vision identified a set but could not read the card number.
+      if (!cards.length && normalizedSet && (!visionResult.number || visionResult.number_confidence === "low")) {
+        if (hasRarity) {
+          const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).ilike("set_name", `%${normalizedSet}%`).in("rarity", rarityValues!).order("set_code", { ascending: false }).limit(10);
+          if (filtered && filtered.length > 0) { cards = filtered; }
+          else {
+            const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).ilike("set_name", `%${normalizedSet}%`).order("set_code", { ascending: false }).limit(10);
+            cards = data || [];
+          }
+        } else {
+          const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).ilike("set_name", `%${normalizedSet}%`).order("set_code", { ascending: false }).limit(10);
+          cards = data || [];
+        }
+        // No visionValidated = true — this is a loose match, force user to pick
+      }
+
+      // Attempt 3: name + number (exact)
       if (!cards.length && visionResult.number) {
         if (hasRarity) {
           const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).in("rarity", rarityValues!).limit(5);
@@ -223,7 +240,7 @@ export async function POST(req: NextRequest) {
         if (cards.length > 0) visionValidated = true;
       }
 
-      // Attempt 3: name + number prefix (e.g., "4/102" → "4")
+      // Attempt 4: name + number prefix (e.g., "4/102" → "4")
       if (!cards.length && visionResult.number?.includes("/")) {
         const prefix = visionResult.number.split("/")[0];
         if (hasRarity) {
@@ -239,7 +256,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Attempt 4: name + zero-padded number (e.g., "4" → "004")
+      // Attempt 5: name + zero-padded number (e.g., "4" → "004")
       if (!cards.length && visionResult.number && !visionResult.number.includes("/")) {
         const padded = visionResult.number.padStart(3, "0");
         if (padded !== visionResult.number) {
@@ -257,7 +274,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Attempt 5: number-tolerant (±2) when number_confidence is low
+      // Attempt 6: number-tolerant (±2) when number_confidence is low
       // Catches single-digit misreads (1→7, 3→8). Does NOT catch large errors (8→20).
       if (!cards.length && visionResult.number && visionResult.number_confidence === "low") {
         const numBase = parseInt(visionResult.number.split("/")[0], 10);
@@ -281,7 +298,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Attempt 6: fuzzy name-only fallback (newest sets first)
+      // Attempt 7: fuzzy name-only fallback (newest sets first)
       if (!cards.length) {
         if (hasRarity) {
           const { data: filtered } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).in("rarity", rarityValues!).order("set_code", { ascending: false }).limit(10);
@@ -320,7 +337,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ── STEP 4: Build response ──
-    const confidenceBand = cards.length === 1 && visionResult.confidence === "high" ? "exact" : cards.length === 1 ? "likely" : visionResult.confidence === "high" ? "choose_version" : "unclear";
+    let confidenceBand = cards.length === 1 && visionResult.confidence === "high" ? "exact" : cards.length === 1 ? "likely" : visionResult.confidence === "high" ? "choose_version" : "unclear";
+    // Force "unclear" on loose matches with multiple candidates — user must pick.
+    // visionValidated is only set by attempts 0-1 (high-specificity matches).
+    // Attempts 2-7 (set+name, prefix, padded, ±2, fuzzy) leave it false.
+    if (!visionValidated && cards.length > 1) {
+      confidenceBand = "unclear";
+    }
     const candidates = cards.map((card: any, i: number) => ({
       rank: i + 1, catalogCardId: `${card.set_code}-${card.card_number}`, name: card.name, setName: card.set_name, setCode: card.set_code, cardNumber: card.card_number, rarity: card.rarity,
       imageSmallUrl: `https://images.pokemontcg.io/${card.set_code}/${card.card_number}.png`,
