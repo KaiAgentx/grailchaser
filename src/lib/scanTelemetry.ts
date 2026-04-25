@@ -110,6 +110,10 @@ export interface ScanResultRow {
   verifierTopDist?: number | null;
   verifierGap?: number | null;
   verifierMs?: number | null;
+  captureMethod?: string | null;
+  zoomSupported?: boolean | null;
+  torchSupported?: boolean | null;
+  probeResult?: string | null;
 }
 
 /**
@@ -145,6 +149,10 @@ export async function writeScanResult(row: ScanResultRow): Promise<string | null
         verifier_top_dist: row.verifierTopDist ?? null,
         verifier_gap: row.verifierGap ?? null,
         verifier_ms: row.verifierMs ?? null,
+        capture_method: row.captureMethod ?? null,
+        zoom_supported: row.zoomSupported ?? null,
+        torch_supported: row.torchSupported ?? null,
+        probe_result: row.probeResult ?? null,
       })
       .select("id")
       .single();

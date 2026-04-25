@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     let body: any;
     try { body = await req.json(); } catch { return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "Invalid JSON", requestId })); }
 
-    const { game, imageBase64, scanIntent, imagePreW, imagePreH, imagePostW, imagePostH } = body;
+    const { game, imageBase64, scanIntent, imagePreW, imagePreH, imagePostW, imagePostH, capture_method, zoom_supported, torch_supported, probe_result } = body;
     if (!imageBase64 || typeof imageBase64 !== "string") return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "imageBase64 required", requestId }));
     const imageTokensEst = (imagePostW && imagePostH) ? Math.round((imagePostW * imagePostH) / 750) : null;
 
@@ -443,6 +443,10 @@ export async function POST(req: NextRequest) {
         modelName: MODEL_NAME,
         visionMs,
         verifierUsed, verifierReranked, verifierTopDist, verifierGap, verifierMs,
+        captureMethod: typeof capture_method === "string" ? capture_method : null,
+        zoomSupported: typeof zoom_supported === "boolean" ? zoom_supported : null,
+        torchSupported: typeof torch_supported === "boolean" ? torch_supported : null,
+        probeResult: typeof probe_result === "string" ? probe_result : null,
       });
     }
 

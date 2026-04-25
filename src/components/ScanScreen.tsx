@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { compressImage } from "@/lib/imageCompress";
+import { LiveCamera, type CaptureMeta } from "./LiveCamera";
 import { Shell } from "./Shell";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
 
@@ -20,6 +21,10 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState("");
   const [scanSessionId, setScanSessionId] = useState<string | null>(null);
+  const [cameraMode, setCameraMode] = useState<"live" | "fallback">(() =>
+    typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia ? "live" : "fallback"
+  );
+  const [cameraFailed, setCameraFailed] = useState(false);
 
   useEffect(() => { fetch("/api/tcg/recognize/warmup").catch(() => {}); }, []);
 
@@ -34,7 +39,7 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
     };
   }, [scanSessionId]);
 
-  const handleFile = async (file: File) => {
+  const handleFile = async (file: File, captureMeta?: CaptureMeta) => {
     setScanning(true);
     setError("");
     try {
@@ -71,7 +76,13 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
 
       const headers: Record<string, string> = { "Content-Type": "application/json", "Authorization": `Bearer ${jwt}` };
       if (scanSessionId) headers["X-Scan-Session-ID"] = scanSessionId;
-      const res = await fetch("/api/tcg/recognize", { method: "POST", headers, body: JSON.stringify({ game, imageBase64: base64, scanIntent, imagePreW, imagePreH, imagePostW, imagePostH }) });
+      const res = await fetch("/api/tcg/recognize", { method: "POST", headers, body: JSON.stringify({
+        game, imageBase64: base64, scanIntent, imagePreW, imagePreH, imagePostW, imagePostH,
+        capture_method: captureMeta?.method ?? "file_input",
+        zoom_supported: captureMeta?.zoomSupported ?? null,
+        torch_supported: captureMeta?.torchSupported ?? null,
+        probe_result: captureMeta?.probeResult ?? null,
+      }) });
       const data = await res.json();
       if (data.scan_session_id) setScanSessionId(data.scan_session_id);
       if (data.ok && data.result?.candidates?.length > 0) {
@@ -101,6 +112,22 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
     );
   }
 
+  // ─── Live camera mode ───
+  if (cameraMode === "live" && !cameraFailed && !scanning) {
+    return (
+      <LiveCamera
+        onCapture={(file, meta) => handleFile(file, meta)}
+        onCancel={onBack}
+        onUnavailable={(reason) => {
+          console.log("[scan] camera unavailable:", reason);
+          setCameraFailed(true);
+          setCameraMode("fallback");
+        }}
+      />
+    );
+  }
+
+  // ─── Fallback file-input mode ───
   return (
     <Shell title={title} back={onBack}>
       <div style={{ paddingTop: 32, textAlign: "center" }}>
@@ -132,6 +159,10 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
         <button onClick={() => cameraRef.current?.click()} style={{ width: "100%", padding: "16px", minHeight: 56, background: green, border: "none", borderRadius: 12, color: "#fff", fontFamily: font, fontSize: 16, fontWeight: 700, cursor: "pointer", marginBottom: 8 }}>Open Camera</button>
 
         <button onClick={() => libraryRef.current?.click()} style={{ width: "100%", padding: "14px", minHeight: 44, background: surface, border: "1px solid " + border, borderRadius: 12, color: secondary, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Choose from Library</button>
+
+        {cameraFailed && (
+          <button onClick={() => { setCameraFailed(false); setCameraMode("live"); }} style={{ width: "100%", padding: "12px", minHeight: 40, background: "none", border: "none", color: accent, fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer", marginTop: 12 }}>Try live camera</button>
+        )}
       </div>
     </Shell>
   );
