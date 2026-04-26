@@ -627,7 +627,7 @@ export default function Home() {
 
   // ─── BATCH IMPORT ───
   if (screen === "batchImport") return (
-    <><BatchImportView boxes={boxes} userId={user?.id || ""} onBack={() => setScreen("home")} addCard={addCard} onDone={(savedCardIds) => {
+    <><BatchImportView boxes={boxes} userId={user?.id || ""} onBack={() => setScreen("home")} addCard={addCard} updateCardPrice={updateCardPrice} onDone={(savedCardIds) => {
       if (savedCardIds.length > 0) {
         setTierBreakdownScope({ cardIds: savedCardIds, label: `${savedCardIds.length} cards from last import` });
         setScreen("tierBreakdown");

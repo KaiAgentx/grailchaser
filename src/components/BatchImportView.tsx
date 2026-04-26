@@ -93,10 +93,11 @@ interface Props {
   userId: string;
   onBack: () => void;
   addCard: (row: any) => void;
+  updateCardPrice: (id: string, updatedRow: any) => void;
   onDone: (savedCardIds: string[]) => void;
 }
 
-export function BatchImportView({ boxes, userId, onBack, addCard, onDone }: Props) {
+export function BatchImportView({ boxes, userId, onBack, addCard, updateCardPrice, onDone }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>("upload");
   const [pairs, setPairs] = useState<Pair[]>([]);
@@ -281,6 +282,20 @@ export function BatchImportView({ boxes, userId, onBack, addCard, onDone }: Prop
               uploadCardScansAsync(userId, row.id, pair.front, pair.back)
                 .catch(err => console.error("[scan upload]", err));
             }
+          }
+          // Fire-and-forget price refresh: populate raw_value + tier from PPT comps
+          if (row.id && token) {
+            fetch(`/api/tcg/cards/${row.id}/refresh-price`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+            })
+              .then(r => r.json())
+              .then(data => {
+                if (data.outcome === "refreshed" && data.card) {
+                  updateCardPrice(row.id, data.card);
+                }
+              })
+              .catch(err => console.error("[BatchImport] price refresh failed:", err));
           }
           succeeded++;
           setSavedCount(s => s + 1);
