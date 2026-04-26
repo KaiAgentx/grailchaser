@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { Card } from "@/lib/types";
 import { Box } from "@/hooks/useBoxes";
@@ -111,6 +111,15 @@ export function BatchImportView({ boxes, userId, onBack, addCard, onDone }: Prop
   const [progressIndex, setProgressIndex] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([]);
+
+  // If boxes was empty at mount, targetBox defaulted to "PENDING".
+  // Once boxes hydrates, upgrade it to the first real box.
+  // Sticky: once the user picks a non-PENDING value the guard skips.
+  useEffect(() => {
+    if (targetBox === "PENDING" && boxes.length > 0 && boxes[0]?.name) {
+      setTargetBox(boxes[0].name);
+    }
+  }, [boxes]);
 
   const applyFiles = (incoming: File[]) => {
     const filtered = incoming.filter(isImageFile);
@@ -276,11 +285,13 @@ export function BatchImportView({ boxes, userId, onBack, addCard, onDone }: Prop
           succeeded++;
           setSavedCount(s => s + 1);
         } else {
+          console.error("[BatchImport] save failed:", res.status, data?.error || data?.code, data);
           failed++;
           setFailedCount(f => f + 1);
           failedIds.push(scanResultId);
         }
-      } catch {
+      } catch (err) {
+        console.error("[BatchImport] save threw:", err instanceof Error ? err.message : err);
         failed++;
         setFailedCount(f => f + 1);
         failedIds.push(scanResultId);
