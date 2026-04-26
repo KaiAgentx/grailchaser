@@ -646,7 +646,7 @@ export default function Home() {
   // ─── CARD DETAIL ───
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <><CardDetail card={liveCard} boxes={boxes} onBack={goBackFromDetail} updateCard={updateCard} updateCardPrice={updateCardPrice} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} watchedCount={cards.filter(c => c.is_watched === true).length} />{bottomNav}</>;
+    return <><CardDetail card={liveCard} boxes={boxes} userId={user?.id || ""} onBack={goBackFromDetail} updateCard={updateCard} updateCardPrice={updateCardPrice} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} watchedCount={cards.filter(c => c.is_watched === true).length} />{bottomNav}</>;
   }
 
   return null;

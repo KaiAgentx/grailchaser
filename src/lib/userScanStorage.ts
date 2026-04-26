@@ -61,7 +61,7 @@ export async function uploadCardScansAsync(
   cardId: string,
   front: File,
   back: File | null,
-): Promise<void> {
+): Promise<{ frontPath: string | null; backPath: string | null; replacedAt: string } | null> {
   const [frontPath, backPath] = await Promise.all([
     uploadCardScan(userId, cardId, "front", front),
     back ? uploadCardScan(userId, cardId, "back", back) : Promise.resolve(null),
@@ -70,12 +70,17 @@ export async function uploadCardScansAsync(
   const updates: Record<string, string | null> = {};
   if (frontPath) updates.user_scan_front_url = frontPath;
   if (backPath) updates.user_scan_back_url = backPath;
-  if (Object.keys(updates).length === 0) return;
-  updates.user_scan_replaced_at = new Date().toISOString();
+  if (Object.keys(updates).length === 0) return null;
+  const replacedAt = new Date().toISOString();
+  updates.user_scan_replaced_at = replacedAt;
 
   const sb = createClient();
   const { error } = await sb.from("cards").update(updates).eq("id", cardId);
-  if (error) console.error("[userScanStorage] cards update failed:", error.message);
+  if (error) {
+    console.error("[userScanStorage] cards update failed:", error.message);
+    return null;
+  }
+  return { frontPath, backPath, replacedAt };
 }
 
 export async function getSignedScanUrl(path: string): Promise<string | null> {

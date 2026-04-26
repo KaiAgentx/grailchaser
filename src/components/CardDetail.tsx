@@ -9,7 +9,17 @@ import { PLATFORMS, calcNet, calcShipping, TIER_COLORS, type Tier } from "@/lib/
 import { VARIANT_LABELS, autoSelectVariant, fmtPrice, fmtDate } from "@/lib/tcg/variants";
 import { getFreshNextPosition } from "@/lib/boxPosition";
 import { Shell } from "./Shell";
+import { LiveCamera } from "./LiveCamera";
+import { getSignedScanUrl, uploadCardScansAsync } from "@/lib/userScanStorage";
 import { surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
+
+type ImageSource = "catalog" | "user_front" | "user_back";
+
+function loadInitialImageSource(): ImageSource {
+  if (typeof window === "undefined") return "catalog";
+  const saved = window.localStorage.getItem("cardDetail.imageSource");
+  return saved === "user_front" || saved === "user_back" || saved === "catalog" ? saved : "catalog";
+}
 
 // NOTE: this picker writes into the sports-shaped `cards.condition` column
 // (via `as any` below), not `cards.tcg_condition`. The TCG-flavored shorthand
@@ -23,6 +33,7 @@ const btnSmall = { padding: "10px 14px", minHeight: 44, border: "none", borderRa
 interface Props {
   card: Card;
   boxes: Box[];
+  userId: string;
   onBack: () => void;
   updateCard: (id: string, updates: Partial<Card>) => Promise<any>;
   deleteCard: (id: string) => Promise<any>;
@@ -34,7 +45,7 @@ interface Props {
   watchedCount: number;
 }
 
-export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, deleteCard, markListed, markSold, markShipped, getNextPosition, watchedCount }: Props) {
+export function CardDetail({ card, boxes, userId, onBack, updateCard, updateCardPrice, deleteCard, markListed, markSold, markShipped, getNextPosition, watchedCount }: Props) {
   const c = card as any; // access TCG-specific fields not in Card interface
 
   // ─── State ───
@@ -63,6 +74,74 @@ export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, d
   const [imgError, setImgError] = useState(false);
   const fetchGen = useRef(0);
 
+  // ─── User-scan toggle + replace state ───
+  const [imageSource, setImageSource] = useState<ImageSource>(loadInitialImageSource);
+  const [signedFrontUrl, setSignedFrontUrl] = useState<string | null>(null);
+  const [signedBackUrl, setSignedBackUrl] = useState<string | null>(null);
+  const [scanCapturing, setScanCapturing] = useState(false);
+  const [scanUploading, setScanUploading] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+
+  const hasFront = !!c.user_scan_front_url;
+  const hasBack = !!c.user_scan_back_url;
+  // Honor user preference but fall back to catalog if THIS card lacks the chosen source
+  const effectiveSource: ImageSource =
+    imageSource === "user_front" && !hasFront ? "catalog" :
+    imageSource === "user_back" && !hasBack ? "catalog" :
+    imageSource;
+
+  const selectImageSource = (next: ImageSource) => {
+    setImageSource(next);
+    setImgError(false);
+    if (typeof window !== "undefined") window.localStorage.setItem("cardDetail.imageSource", next);
+  };
+
+  // Resolve signed URLs whenever path or replaced_at changes (timestamp bump busts the displayed image after replace)
+  useEffect(() => {
+    let cancelled = false;
+    setSignedFrontUrl(null);
+    const path = c.user_scan_front_url;
+    if (!path) return;
+    getSignedScanUrl(path).then(url => { if (!cancelled) setSignedFrontUrl(url); });
+    return () => { cancelled = true; };
+  }, [c.user_scan_front_url, c.user_scan_replaced_at]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSignedBackUrl(null);
+    const path = c.user_scan_back_url;
+    if (!path) return;
+    getSignedScanUrl(path).then(url => { if (!cancelled) setSignedBackUrl(url); });
+    return () => { cancelled = true; };
+  }, [c.user_scan_back_url, c.user_scan_replaced_at]);
+
+  const handleCaptureBoth = async (front: File, back: File | null) => {
+    setScanCapturing(false);
+    setScanUploading(true);
+    setScanMsg(null);
+    try {
+      const result = await uploadCardScansAsync(userId, card.id, front, back);
+      if (!result) {
+        setScanMsg("Upload failed — try again");
+        setScanUploading(false);
+        return;
+      }
+      // Sync local card state so the new image renders without a refetch
+      // (user_scan_* fields aren't in the Card type yet — cast through any)
+      const updates: Record<string, unknown> = { user_scan_replaced_at: result.replacedAt };
+      if (result.frontPath) updates.user_scan_front_url = result.frontPath;
+      if (result.backPath) updates.user_scan_back_url = result.backPath;
+      await updateCard(card.id, updates as Partial<Card>);
+      // Show what they just captured
+      selectImageSource("user_front");
+      setScanMsg(back ? "Saved front + back" : "Saved front");
+      setTimeout(() => setScanMsg(null), 2500);
+    } catch (err) {
+      setScanMsg(err instanceof Error ? err.message : "Upload failed");
+    }
+    setScanUploading(false);
+  };
+
   // ─── Derived ───
   // boxes is pre-filtered to TCG by useBoxes; no client-side filter needed.
   const modeBoxes = boxes;
@@ -76,7 +155,11 @@ export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, d
   // ─── Card image ───
   let imgSrc: string | null = null;
   if (!imgError) {
-    if (c.scan_image_url) {
+    if (effectiveSource === "user_front") {
+      imgSrc = signedFrontUrl;
+    } else if (effectiveSource === "user_back") {
+      imgSrc = signedBackUrl;
+    } else if (c.scan_image_url) {
       imgSrc = c.scan_image_url;
     } else if (catalogCardId) {
       const [setCode, ...numParts] = catalogCardId.split("-");
@@ -217,12 +300,57 @@ export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, d
         {saved && <div style={{ background: green + "15", border: "1px solid " + green + "30", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: green, textAlign: "center", fontWeight: 600 }}>Saved</div>}
 
         {/* ─── Card Image ─── */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
           {imgSrc ? (
             <img src={imgSrc} alt={card.player} loading="eager" onError={() => setImgError(true)} style={{ width: 200, height: 280, objectFit: "contain", borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.6)" }} />
           ) : (
             <div style={{ width: 200, height: 280, background: surface2, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 48, color: muted }}>🎴</div>
           )}
+        </div>
+
+        {/* ─── Image source toggle ─── */}
+        <div style={{ display: "flex", gap: 6, justifyContent: "center", marginBottom: 10 }}>
+          {([
+            { key: "catalog" as const, label: "Catalog", enabled: true },
+            { key: "user_front" as const, label: "My Front", enabled: hasFront },
+            { key: "user_back" as const, label: "My Back", enabled: hasBack },
+          ]).map(opt => {
+            const isActive = effectiveSource === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => opt.enabled && selectImageSource(opt.key)}
+                disabled={!opt.enabled}
+                style={{
+                  padding: "6px 12px", borderRadius: 16,
+                  border: isActive ? "1px solid " + accent : "1px solid " + border,
+                  background: isActive ? accent + "15" : surface2,
+                  color: isActive ? accent : muted,
+                  fontFamily: font, fontSize: 11, fontWeight: isActive ? 700 : 600,
+                  cursor: opt.enabled ? "pointer" : "not-allowed",
+                  opacity: opt.enabled ? 1 : 0.4,
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ─── Add / Replace scan ─── */}
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <button
+            onClick={() => { setScanMsg(null); setScanCapturing(true); }}
+            disabled={scanUploading || !userId}
+            style={{
+              padding: "8px 16px", borderRadius: 10, border: "1px solid " + border,
+              background: surface2, color: secondary, fontFamily: font, fontSize: 12, fontWeight: 600,
+              cursor: scanUploading || !userId ? "wait" : "pointer", opacity: scanUploading || !userId ? 0.5 : 1,
+            }}
+          >
+            {scanUploading ? "Uploading…" : hasFront ? "Replace scan" : "Add scan"}
+          </button>
+          {scanMsg && <div style={{ fontSize: 11, color: accent, marginTop: 6 }}>{scanMsg}</div>}
         </div>
 
         {/* ─── Identity ─── */}
@@ -573,6 +701,22 @@ export function CardDetail({ card, boxes, onBack, updateCard, updateCardPrice, d
         {isSold && <div style={{ fontSize: 11, color: red, textAlign: "center", marginTop: 12, marginBottom: 4 }}>This card is marked sold. Delete anyway?</div>}
         <button onClick={async () => { await deleteCard(card.id); onBack(); }} style={{ width: "100%", padding: "14px", background: red + "15", border: "1px solid " + red + "30", borderRadius: 12, color: red, fontFamily: font, fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: isSold ? 0 : 8 }}>Delete Card</button>
       </div>
+
+      {/* Replace/Add scan overlay */}
+      {scanCapturing && (
+        <LiveCamera
+          mode="front_and_back"
+          onCapture={() => { /* unused in front_and_back mode */ }}
+          onCaptureBoth={(front, back) => { void handleCaptureBoth(front, back); }}
+          onCancel={() => setScanCapturing(false)}
+          onUnavailable={(reason) => {
+            console.log("[CardDetail] camera unavailable:", reason);
+            setScanCapturing(false);
+            setScanMsg("Camera unavailable on this device");
+            setTimeout(() => setScanMsg(null), 3000);
+          }}
+        />
+      )}
     </Shell>
   );
 }
