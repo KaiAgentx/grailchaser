@@ -119,7 +119,17 @@ export async function POST(req: NextRequest) {
       p_card_data: cardData,
     });
     if (rpcError) {
-      console.error("[TcgAPI] RPC FAILED:", { requestId, userId, game: cardData.game, catalogCardId: cardData.catalog_card_id, error: rpcError });
+      // Destructure PostgrestError so every field prints regardless of how Vercel serializes the object.
+      console.error("[TcgAPI] RPC FAILED:", JSON.stringify({
+        requestId,
+        userId,
+        game: cardData.game,
+        catalogCardId: cardData.catalog_card_id,
+        rpc_error_message: (rpcError as any)?.message ?? null,
+        rpc_error_code: (rpcError as any)?.code ?? null,
+        rpc_error_details: (rpcError as any)?.details ?? null,
+        rpc_error_hint: (rpcError as any)?.hint ?? null,
+      }));
       return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: "Could not save card to collection. Please try again.", requestId }));
     }
     console.log("[TcgAPI] RPC SUCCESS — rowId:", rpcData?.id, "game:", rpcData?.game);
@@ -128,7 +138,13 @@ export async function POST(req: NextRequest) {
     await writeIdempotency(userId, idemKey, ROUTE, reqHash, 201, responseBody);
     return respond(NextResponse.json(responseBody, { status: 201 }));
   } catch (err: any) {
-    console.error(`[${ROUTE}] unhandled:`, err?.message);
+    console.error(`[${ROUTE}] unhandled:`, JSON.stringify({
+      requestId,
+      userId,
+      err_name: err?.name ?? null,
+      err_message: err?.message ?? null,
+      err_stack: err?.stack ?? null,
+    }));
     return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));
   }
 }

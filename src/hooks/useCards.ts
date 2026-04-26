@@ -64,6 +64,11 @@ export function useCards(userId?: string, game?: 'pokemon' | 'mtg' | 'one_piece'
     return { error };
   };
 
+  // TODO(scan-storage): also delete card-scans storage objects for this card.
+  // Trigger-based cleanup was dropped (Supabase blocks raw DELETE on storage.objects).
+  // Plan: before/after the row delete, call supabase.storage.from('card-scans')
+  // .remove(['<userId>/<id>/front.jpg', '<userId>/<id>/back.jpg']). Same for deleteCards.
+  // Orphans are harmless (private bucket, RLS-gated) until this is implemented.
   const deleteCard = async (id: string) => {
     const { error } = await supabase.from("cards").delete().eq("id", id);
     if (!error) setCards(prev => prev.filter(c => c.id !== id));
