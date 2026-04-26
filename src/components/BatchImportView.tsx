@@ -235,6 +235,7 @@ export function BatchImportView({ boxes, userId, onBack, addCard, updateCardPric
     const { data: session } = await sb.auth.getSession();
     const token = session?.session?.access_token;
     if (!token) { setErrorMsg("Not authenticated"); setPhase("verify"); return; }
+    const tokenSnapshot = token; // capture before loop iteration
 
     let succeeded = 0;
     let failed = 0;
@@ -273,6 +274,7 @@ export function BatchImportView({ boxes, userId, onBack, addCard, updateCardPric
         const data = await res.json().catch(() => ({}));
         if (res.ok && (data.card || data.replay)) {
           const row = data.card || data;
+          console.log("[BatchImport.save] success branch entered for", row.id, "token present:", !!tokenSnapshot);
           addCard(row);
           if (row.id) savedCardIds.push(row.id);
           // Fire-and-forget user-scan upload; loop continues immediately
@@ -284,18 +286,22 @@ export function BatchImportView({ boxes, userId, onBack, addCard, updateCardPric
             }
           }
           // Fire-and-forget price refresh: populate raw_value + tier from PPT comps
-          if (row.id && token) {
+          if (row.id && tokenSnapshot) {
+            console.log("[BatchImport.refresh] firing for", row.id);
             fetch(`/api/tcg/cards/${row.id}/refresh-price`, {
               method: "POST",
-              headers: { Authorization: `Bearer ${token}` },
+              headers: { Authorization: `Bearer ${tokenSnapshot}` },
             })
               .then(r => r.json())
               .then(data => {
+                console.log("[BatchImport.refresh] response for", row.id, ":", data.outcome, "raw_value:", data.card?.raw_value);
                 if (data.outcome === "refreshed" && data.card) {
                   updateCardPrice(row.id, data.card);
                 }
               })
               .catch(err => console.error("[BatchImport] price refresh failed:", err));
+          } else {
+            console.warn("[BatchImport.refresh] SKIPPED for", row.id, "token:", !!tokenSnapshot);
           }
           succeeded++;
           setSavedCount(s => s + 1);
