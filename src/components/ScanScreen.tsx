@@ -13,9 +13,11 @@ interface Props {
   scanIntent: "check" | "collect";
   onBack: () => void;
   onResult: (result: any, intent: "check" | "collect") => void;
+  onFrontCaptured?: (front: File) => void;
+  onBackCaptured?: (back: Blob | null) => void;
 }
 
-export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
+export function ScanScreen({ game, scanIntent, onBack, onResult, onFrontCaptured, onBackCaptured }: Props) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
@@ -39,7 +41,7 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
     };
   }, [scanSessionId]);
 
-  const handleFile = async (file: File, captureMeta?: CaptureMeta) => {
+  const handleFile = async (file: File, captureMeta?: CaptureMeta, back?: Blob | null) => {
     setScanning(true);
     setError("");
     try {
@@ -86,6 +88,12 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
       const data = await res.json();
       if (data.scan_session_id) setScanSessionId(data.scan_session_id);
       if (data.ok && data.result?.candidates?.length > 0) {
+        // Hand the captured front (and optional back) up to page.tsx
+        // for storage upload after the user confirms the save.
+        if (scanIntent === "collect") {
+          onFrontCaptured?.(file);
+          onBackCaptured?.(back ?? null);
+        }
         onResult(data, scanIntent);
       } else {
         setError(data.error || "Could not identify card. Try a clearer photo.");
@@ -116,7 +124,9 @@ export function ScanScreen({ game, scanIntent, onBack, onResult }: Props) {
   if (cameraMode === "live" && !cameraFailed && !scanning) {
     return (
       <LiveCamera
+        mode={scanIntent === "collect" ? "front_and_back" : "front_only"}
         onCapture={(file, meta) => handleFile(file, meta)}
+        onCaptureBoth={(front, back, meta) => handleFile(front, meta, back)}
         onCancel={onBack}
         onUnavailable={(reason) => {
           console.log("[scan] camera unavailable:", reason);

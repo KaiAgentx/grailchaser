@@ -32,12 +32,23 @@ export default function Home() {
   const [screen, setScreen] = useState<Screen>("home");
   const [scanIntent, setScanIntent] = useState<"check" | "collect">("check");
   const [recognizeResult, setRecognizeResult] = useState<any>(null);
+  const [pendingFront, setPendingFront] = useState<File | null>(null);
+  const [pendingBack, setPendingBack] = useState<Blob | null>(null);
   const [tierBreakdownScope, setTierBreakdownScope] = useState<{ cardIds: string[]; label: string } | null>(null);
   const [tcgCardCount, setTcgCardCount] = useState<number | null>(null);
   const [tcgTotalValue, setTcgTotalValue] = useState<number>(0);
   const [tcgRecentActivity, setTcgRecentActivity] = useState<any[]>([]);
   const [tcgRecentlyAdded, setTcgRecentlyAdded] = useState<any[]>([]);
   const [tcgHomeLoading, setTcgHomeLoading] = useState(true);
+
+  // Clear any pending front/back captures whenever we (re-)enter the scan screen.
+  // Prevents a leftover blob from a prior collect scan polluting a quick check.
+  useEffect(() => {
+    if (screen === "scan") {
+      setPendingFront(null);
+      setPendingBack(null);
+    }
+  }, [screen]);
 
   // ─── Home data fetch ───
   useEffect(() => {
@@ -512,6 +523,8 @@ export default function Home() {
       scanIntent={scanIntent}
       onBack={() => setScreen("home")}
       onResult={(result, intent) => { setRecognizeResult(result); setScanIntent(intent); setScreen("result"); }}
+      onFrontCaptured={(front) => setPendingFront(front)}
+      onBackCaptured={(back) => setPendingBack(back)}
     />{bottomNav}</>
   );
 
@@ -529,6 +542,8 @@ export default function Home() {
       boxes={boxes}
       addBox={addBox}
       addCard={addCard}
+      pendingFront={pendingFront}
+      pendingBack={pendingBack}
     />{bottomNav}</>
   );
 

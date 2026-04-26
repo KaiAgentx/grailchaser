@@ -7,6 +7,7 @@ import { fmtPrice } from "@/lib/tcg/variants";
 import { GAME_DISPLAY_NAME, type TcgGame } from "@/lib/games";
 import type { GradedComps, GradedCompsOutcome } from "@/lib/ppt/client";
 import type { Box, BoxType } from "@/hooks/useBoxes";
+import { uploadCardScansAsync } from "@/lib/userScanStorage";
 
 interface Props {
   result: RecognitionSuccess;
@@ -20,6 +21,8 @@ interface Props {
   boxes: Box[];
   addBox: (name: string, numRows: number, dividerSize: number, boxType: BoxType) => Promise<any>;
   addCard: (row: any) => void;
+  pendingFront?: File | null;
+  pendingBack?: Blob | null;
 }
 
 type CompsState =
@@ -58,7 +61,7 @@ async function jwt(): Promise<string | null> {
   return data?.session?.access_token ?? null;
 }
 
-export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId, boxes, addBox, addCard }: Props) {
+export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId, boxes, addBox, addCard, pendingFront, pendingBack }: Props) {
   const candidates: CandidateCard[] = result.result?.candidates || [];
   const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
   const selected = candidates.find(c => c.catalogCardId === selectedCardId) || candidates[0];
@@ -273,6 +276,18 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
 
       // Push saved card into useCards state so boxes/detail/counts reflect it immediately
       if (data.card) addCard(data.card);
+
+      // Fire-and-forget user-scan upload.
+      // Capture pendingFront/pendingBack via closure here.
+      // Even if parent state clears on navigation, this
+      // closure retains its reference until upload completes.
+      if (data.card?.id && userId && pendingFront) {
+        const backFile = pendingBack
+          ? new File([pendingBack], "back.jpg", { type: pendingBack.type || "image/jpeg" })
+          : null;
+        uploadCardScansAsync(userId, data.card.id, pendingFront, backFile)
+          .catch(err => console.error("[scan upload]", err));
+      }
 
       await postDecision("purchased", true, askNumeric ?? price);
       navigator.vibrate?.(80);

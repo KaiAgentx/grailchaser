@@ -15,9 +15,11 @@ interface Props {
   onCapture: (file: File, meta: CaptureMeta) => void;
   onCancel: () => void;
   onUnavailable: (reason: "permission_denied" | "no_camera" | "unsupported") => void;
+  mode?: "front_only" | "front_and_back";
+  onCaptureBoth?: (front: File, back: File | null, meta: CaptureMeta) => void;
 }
 
-export function LiveCamera({ onCapture, onCancel, onUnavailable }: Props) {
+export function LiveCamera({ onCapture, onCancel, onUnavailable, mode = "front_only", onCaptureBoth }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<"starting" | "ready" | "capturing" | "error">("starting");
@@ -27,7 +29,11 @@ export function LiveCamera({ onCapture, onCancel, onUnavailable }: Props) {
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number }>({ min: 1, max: 1, step: 0.1 });
   const [torchOn, setTorchOn] = useState(false);
   const [probeResult, setProbeResult] = useState("pending");
+  const [frontCapture, setFrontCapture] = useState<{ file: File; meta: CaptureMeta; thumbUrl: string } | null>(null);
   const trackRef = useRef<MediaStreamTrack | null>(null);
+
+  // Revoke front thumbnail URL when component unmounts or capture is replaced
+  useEffect(() => () => { if (frontCapture?.thumbUrl) URL.revokeObjectURL(frontCapture.thumbUrl); }, [frontCapture?.thumbUrl]);
 
   // Start camera on mount
   useEffect(() => {
@@ -148,12 +154,32 @@ export function LiveCamera({ onCapture, onCancel, onUnavailable }: Props) {
 
     const file = new File([blob], `scan-${Date.now()}.jpg`, { type: "image/jpeg" });
     const meta: CaptureMeta = { method, width: w, height: h, zoomSupported, torchSupported, probeResult };
+
+    if (mode === "front_and_back") {
+      if (!frontCapture) {
+        // First shot is the front: stash and prompt for the back
+        const thumbUrl = URL.createObjectURL(file);
+        setFrontCapture({ file, meta, thumbUrl });
+        setStatus("ready");
+        return;
+      }
+      // Second shot is the back
+      onCaptureBoth?.(frontCapture.file, file, frontCapture.meta);
+      return;
+    }
+
     onCapture(file, meta);
-  }, [status, zoomSupported, torchSupported, onCapture]);
+  }, [status, mode, frontCapture, zoomSupported, torchSupported, probeResult, onCapture, onCaptureBoth]);
+
+  const handleSkipBack = useCallback(() => {
+    if (!frontCapture) return;
+    onCaptureBoth?.(frontCapture.file, null, frontCapture.meta);
+  }, [frontCapture, onCaptureBoth]);
 
   // Guide overlay dimensions: 63:88 aspect ratio (Pokémon card), ~80vw, max 400px
   const guideW = "min(80vw, 400px)";
   const guideH = `calc(${guideW} * 88 / 63)`;
+  const inFlipPrompt = mode === "front_and_back" && frontCapture != null;
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#000" }}>
@@ -187,10 +213,19 @@ export function LiveCamera({ onCapture, onCancel, onUnavailable }: Props) {
         </button>
       )}
 
+      {/* Front-capture thumbnail (only during flip prompt) */}
+      {inFlipPrompt && frontCapture && (
+        <div style={{ position: "absolute", bottom: 200, left: 16, zIndex: 202, display: "flex", alignItems: "center", gap: 8 }}>
+          <img src={frontCapture.thumbUrl} alt="" style={{ width: 48, height: 67, objectFit: "cover", borderRadius: 4, border: "2px solid rgba(255,255,255,0.5)", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }} />
+          <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontFamily: font, fontWeight: 600 }}>Front ✓</span>
+        </div>
+      )}
+
       {/* Bottom area */}
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 32, zIndex: 201 }}>
         {/* Hint text */}
-        {status === "ready" && <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, fontFamily: font, marginBottom: 12 }}>Position card within frame</div>}
+        {status === "ready" && !inFlipPrompt && <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, fontFamily: font, marginBottom: 12 }}>Position card within frame</div>}
+        {status === "ready" && inFlipPrompt && <div style={{ color: "#fff", fontSize: 14, fontFamily: font, fontWeight: 600, marginBottom: 12, textAlign: "center", padding: "0 24px" }}>Now flip the card and scan the back</div>}
         {status === "starting" && <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, fontFamily: font, marginBottom: 12 }}>Starting camera…</div>}
         {status === "capturing" && <div style={{ color: accent, fontSize: 13, fontFamily: font, fontWeight: 600, marginBottom: 12 }}>Capturing…</div>}
 
@@ -206,10 +241,19 @@ export function LiveCamera({ onCapture, onCancel, onUnavailable }: Props) {
         {/* Capture button */}
         <button onClick={handleCapture} disabled={status !== "ready"} style={{ width: 72, height: 72, borderRadius: "50%", background: "#fff", border: `4px solid ${accent}`, cursor: status === "ready" ? "pointer" : "wait", opacity: status === "ready" ? 1 : 0.5, boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }} />
 
-        {/* Fallback link */}
-        <button onClick={() => onUnavailable("unsupported")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: font, cursor: "pointer", marginTop: 12, padding: 4 }}>
-          Use photo upload instead
-        </button>
+        {/* Skip-back link (only during flip prompt) */}
+        {inFlipPrompt && status === "ready" && (
+          <button onClick={handleSkipBack} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontSize: 13, fontFamily: font, fontWeight: 600, cursor: "pointer", marginTop: 12, padding: 8 }}>
+            Skip back
+          </button>
+        )}
+
+        {/* Fallback link (hidden during flip prompt to keep UI clean) */}
+        {!inFlipPrompt && (
+          <button onClick={() => onUnavailable("unsupported")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: font, cursor: "pointer", marginTop: 12, padding: 4 }}>
+            Use photo upload instead
+          </button>
+        )}
       </div>
     </div>
   );
