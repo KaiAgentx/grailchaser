@@ -1,28 +1,32 @@
 /**
  * POST /api/tcg/scan-results/[id]/decision
- * Records the user's Session G in-person decision for a scan:
- * user_decision, dealer_ask, decision_at, and a PPT comps snapshot.
+ *
+ * Show Mode decision endpoint. Records walked|negotiated|purchased,
+ * stamps decision metadata, and (when purchased) chains card creation
+ * via createCardFromScanResult.
+ *
+ * REPLACES the Session G endpoint that took skip|purchased|walked +
+ * dealer_ask + ppt_*. Quick Check decisions in the existing ResultScreen
+ * silently fail until that UI migrates to this contract in Phase B-ui-1
+ * (or Show Mode replaces Quick Check entirely).
+ *
+ * Legacy compat: dealer_ask is mirror-written from ask_price_usd until a
+ * future cleanup commit confirms no readers depend on it (see processDecision).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { extractUserId, serviceRoleClient } from "@/lib/collectionItemsApi";
 import { ErrorCode, errorResponse } from "@/lib/errors";
 import { getOrCreateRequestId, logRequest } from "@/lib/logging";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { processDecision } from "@/lib/scanResults/processDecision";
 
 const ROUTE = "/api/tcg/scan-results/[id]/decision";
 const ECOSYSTEM = "tcg";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const VALID_DECISIONS = new Set(["skip", "purchased", "walked"]);
-
-function numOrNull(v: unknown): number | null {
-  if (v == null) return null;
-  if (typeof v !== "number" || !Number.isFinite(v)) return null;
-  return v;
-}
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> },
 ) {
   const requestId = getOrCreateRequestId(req.headers);
   const startedAt = Date.now();
@@ -47,42 +51,22 @@ export async function POST(
     let body: any;
     try { body = await req.json(); } catch { return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "Invalid JSON", requestId })); }
 
-    const decision = body.user_decision;
-    if (typeof decision !== "string" || !VALID_DECISIONS.has(decision)) {
-      return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: "user_decision must be one of: skip, purchased, walked", requestId }));
-    }
-
-    const update: Record<string, unknown> = {
-      user_decision: decision,
-      decision_at: new Date().toISOString(),
-    };
-    const dealerAsk = numOrNull(body.dealer_ask);
-    if (dealerAsk != null) update.dealer_ask = dealerAsk;
-    const rawMarket = numOrNull(body.ppt_raw_market);
-    if (rawMarket != null) update.ppt_raw_market = rawMarket;
-    const psa10 = numOrNull(body.ppt_psa10_avg);
-    if (psa10 != null) update.ppt_psa10_avg = psa10;
-    const psa9 = numOrNull(body.ppt_psa9_avg);
-    if (psa9 != null) update.ppt_psa9_avg = psa9;
-    const psa8 = numOrNull(body.ppt_psa8_avg);
-    if (psa8 != null) update.ppt_psa8_avg = psa8;
-    if (typeof body.ppt_trend30d === "string" && body.ppt_trend30d.length > 0) {
-      update.ppt_trend30d = body.ppt_trend30d;
-    }
-
     const svc = serviceRoleClient();
-    const { data, error } = await svc
-      .from("scan_results")
-      .update(update)
-      .eq("id", scanResultId)
-      .eq("user_id", userId)
-      .select("id")
-      .maybeSingle();
+    const result = await processDecision({ userId, scanResultId, body, supabase: svc });
 
-    if (error) { console.error(`[${ROUTE}] update error:`, error.message); return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: error.message, requestId })); }
-    if (!data) return respond(errorResponse({ code: ErrorCode.NOT_FOUND, details: "scan result not found", requestId }));
+    if (!result.ok) {
+      // Map helper error codes onto the existing ErrorCode enum where possible;
+      // surface custom show_* codes via INVALID_BODY/NOT_FOUND with details.
+      if (result.errorCode === "not_found" || result.errorCode === "show_not_found") {
+        return respond(errorResponse({ code: ErrorCode.NOT_FOUND, details: result.errorMessage, requestId }));
+      }
+      if (result.errorCode === "invalid_body" || result.errorCode === "show_ended") {
+        return respond(errorResponse({ code: ErrorCode.INVALID_BODY, details: result.errorMessage, requestId }));
+      }
+      return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: result.errorMessage, requestId }));
+    }
 
-    return respond(NextResponse.json({ ok: true, id: data.id }, { status: 200 }));
+    return respond(NextResponse.json({ scan_result: result.scanResult, card: result.card }));
   } catch (err: any) {
     console.error(`[${ROUTE}] unhandled:`, err?.message);
     return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));

@@ -10,7 +10,7 @@
  * Both are intentional v1 trade-offs, revisit only if production traffic shows they matter.
  */
 
-export type RouteClass = "save" | "recognize" | "catalog_read" | "bulk" | "default";
+export type RouteClass = "save" | "recognize" | "catalog_read" | "bulk" | "batch_decisions" | "default";
 
 interface BucketConfig { max: number; windowMs: number }
 
@@ -19,6 +19,8 @@ const CONFIGS: Record<RouteClass, BucketConfig> = {
   recognize: { max: 30, windowMs: 60_000 },
   catalog_read: { max: 120, windowMs: 60_000 },
   bulk: { max: 5, windowMs: 60_000 },
+  // Offline-queue replay: 2/min ≈ 1 batch per 30s.
+  batch_decisions: { max: 2, windowMs: 60_000 },
   default: { max: 60, windowMs: 60_000 },
 };
 
