@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Cormorant+Garamond:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Cinzel+Decorative:wght@700;900&family=JetBrains+Mono:wght@400;500;600;700&family=Cormorant+Garamond:wght@600;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -42,6 +42,114 @@
   --gold-base: #c89a2b;
   --gold-deep: #9a7421;
   --gold-accent: #d4af52;
+
+  /* ──────────────────────────────────────────────────────────
+   * GrailChaser design tokens (Phase B-ui-1)
+   * Source: grailchaser_design_tokens.json v1.0.0-beta
+   * Naming: --gc-{group}-{name} per spec
+   * --gc-* live alongside legacy variables; both palettes coexist
+   *   during the beta. Legacy components keep using styles.ts /
+   *   --bg-primary etc.; new components use --gc-* via Tailwind.
+   * ────────────────────────────────────────────────────────── */
+
+  /* Neutrals */
+  --gc-bg-canvas:      #05080D;
+  --gc-bg-surface-1:   #0B1220;
+  --gc-bg-surface-2:   #121A2A;
+  --gc-bg-surface-3:   #182235;
+  --gc-border-subtle:  #24324A;
+  --gc-border-strong:  #334155;
+  --gc-text-primary:   #F8FAFC;
+  --gc-text-secondary: #CBD5E1;
+  --gc-text-muted:     #94A3B8;
+  --gc-text-disabled:  #64748B;
+  --gc-overlay-scrim:  #020617CC;
+
+  /* Brand */
+  --gc-brand-gold-500:   #CFA34A;
+  --gc-brand-gold-600:   #B78935;
+  --gc-brand-gold-300:   #E8C97A;
+  --gc-brand-silver-300: #D7DCE5;
+
+  /* Zones */
+  --gc-zone-hub-500:        #8B5CF6;
+  --gc-zone-scan-500:       #3B82F6;
+  --gc-zone-show-500:       #FF7A59;
+  --gc-zone-collection-500: #14B8A6;
+  --gc-zone-actions-500:    #D4A434;
+  --gc-zone-secondary-500:  #EC4899;
+
+  /* Semantic */
+  --gc-semantic-success: #22C55E;
+  --gc-semantic-warning: #F59E0B;
+  --gc-semantic-danger:  #EF4444;
+  --gc-semantic-info:    #38BDF8;
+  --gc-semantic-offline: #F97316;
+  --gc-semantic-focus:   #60A5FA;
+
+  /* Tiers */
+  --gc-tier-bulk:     #94A3B8;
+  --gc-tier-low:      #3B82F6;
+  --gc-tier-mid:      #22C55E;
+  --gc-tier-high:     #CFA34A;
+  --gc-tier-unpriced: #64748B;
+
+  /* Typography families */
+  --gc-font-display: "Cinzel Decorative", "Cinzel", Georgia, serif;
+  --gc-font-ui:      "Inter", "SF Pro Text", "Segoe UI", Arial, sans-serif;
+  --gc-font-mono:    "JetBrains Mono", "SF Mono", Consolas, monospace;
+
+  /* Spacing (8pt rhythm) */
+  --gc-space-xs:  4px;
+  --gc-space-sm:  8px;
+  --gc-space-md:  12px;
+  --gc-space-lg:  16px;
+  --gc-space-xl:  20px;
+  --gc-space-2xl: 24px;
+  --gc-space-3xl: 32px;
+  --gc-space-4xl: 40px;
+  --gc-space-5xl: 48px;
+  --gc-space-6xl: 64px;
+
+  /* Radii */
+  --gc-radius-sm:   10px;
+  --gc-radius-md:   14px;
+  --gc-radius-lg:   18px;
+  --gc-radius-xl:   24px;
+  --gc-radius-pill: 9999px;
+
+  /* Strokes */
+  --gc-stroke-hairline: 1px;
+  --gc-stroke-regular:  1.5px;
+  --gc-stroke-strong:   2px;
+
+  /* Shadows */
+  --gc-shadow-sm: 0 2px 8px  0 #00000040;
+  --gc-shadow-md: 0 8px 24px 0 #00000052;
+  --gc-shadow-lg: 0 16px 48px 0 #00000066;
+  --gc-glow-hub:        0 12px 32px 0 #8B5CF633;
+  --gc-glow-scan:       0 12px 32px 0 #3B82F633;
+  --gc-glow-show:       0 12px 32px 0 #FF7A5933;
+  --gc-glow-collection: 0 12px 32px 0 #14B8A633;
+  --gc-glow-actions:    0 12px 32px 0 #D4A43433;
+  --gc-glow-secondary:  0 12px 32px 0 #EC489933;
+
+  /* Motion */
+  --gc-duration-instant:  80ms;
+  --gc-duration-micro:    120ms;
+  --gc-duration-fast:     180ms;
+  --gc-duration-standard: 240ms;
+  --gc-duration-emphasis: 320ms;
+  --gc-duration-modal:    420ms;
+
+  --gc-ease-standard: cubic-bezier(0.19, 1, 0.22, 1);
+  --gc-ease-enter:    cubic-bezier(0.22, 1, 0.36, 1);
+  --gc-ease-exit:     cubic-bezier(0.4, 0, 1, 1);
+
+  /* Layout constants */
+  --gc-touch-target-min: 44px;
+  --gc-screen-width-base: 393px;
+  --gc-screen-height-base: 852px;
 }
 
 .premium-input::placeholder { color: #8a847d; opacity: 1; }
@@ -51,6 +159,95 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-body);
+
+  /* ──────────────────────────────────────────────────────────
+   * GrailChaser tokens → Tailwind v4 utilities.
+   * Color theme variables generate bg-/text-/border-/ring- utilities;
+   * spacing → p-/m-/gap-; radius → rounded-; shadow → shadow-;
+   * font → font-; duration → duration-.
+   * Naming follows the spec: utilities are named gc-{semantic}.
+   * ────────────────────────────────────────────────────────── */
+
+  /* Colors → bg-gc-*, text-gc-*, border-gc-* */
+  --color-gc-canvas:      var(--gc-bg-canvas);
+  --color-gc-surface-1:   var(--gc-bg-surface-1);
+  --color-gc-surface-2:   var(--gc-bg-surface-2);
+  --color-gc-surface-3:   var(--gc-bg-surface-3);
+  --color-gc-subtle:      var(--gc-border-subtle);
+  --color-gc-strong:      var(--gc-border-strong);
+  --color-gc-primary:     var(--gc-text-primary);
+  --color-gc-secondary:   var(--gc-text-secondary);
+  --color-gc-muted:       var(--gc-text-muted);
+  --color-gc-disabled:    var(--gc-text-disabled);
+  --color-gc-scrim:       var(--gc-overlay-scrim);
+
+  --color-gc-gold-500:   var(--gc-brand-gold-500);
+  --color-gc-gold-600:   var(--gc-brand-gold-600);
+  --color-gc-gold-300:   var(--gc-brand-gold-300);
+  --color-gc-silver-300: var(--gc-brand-silver-300);
+
+  --color-gc-zone-hub:        var(--gc-zone-hub-500);
+  --color-gc-zone-scan:       var(--gc-zone-scan-500);
+  --color-gc-zone-show:       var(--gc-zone-show-500);
+  --color-gc-zone-collection: var(--gc-zone-collection-500);
+  --color-gc-zone-actions:    var(--gc-zone-actions-500);
+  --color-gc-zone-secondary:  var(--gc-zone-secondary-500);
+
+  --color-gc-success: var(--gc-semantic-success);
+  --color-gc-warning: var(--gc-semantic-warning);
+  --color-gc-danger:  var(--gc-semantic-danger);
+  --color-gc-info:    var(--gc-semantic-info);
+  --color-gc-offline: var(--gc-semantic-offline);
+  --color-gc-focus:   var(--gc-semantic-focus);
+
+  --color-gc-tier-bulk:     var(--gc-tier-bulk);
+  --color-gc-tier-low:      var(--gc-tier-low);
+  --color-gc-tier-mid:      var(--gc-tier-mid);
+  --color-gc-tier-high:     var(--gc-tier-high);
+  --color-gc-tier-unpriced: var(--gc-tier-unpriced);
+
+  /* Fonts → font-gc-* */
+  --font-gc-display: var(--gc-font-display);
+  --font-gc-ui:      var(--gc-font-ui);
+  --font-gc-mono:    var(--gc-font-mono);
+
+  /* Spacing → p-gc-*, m-gc-*, gap-gc-* */
+  --spacing-gc-xs:  var(--gc-space-xs);
+  --spacing-gc-sm:  var(--gc-space-sm);
+  --spacing-gc-md:  var(--gc-space-md);
+  --spacing-gc-lg:  var(--gc-space-lg);
+  --spacing-gc-xl:  var(--gc-space-xl);
+  --spacing-gc-2xl: var(--gc-space-2xl);
+  --spacing-gc-3xl: var(--gc-space-3xl);
+  --spacing-gc-4xl: var(--gc-space-4xl);
+  --spacing-gc-5xl: var(--gc-space-5xl);
+  --spacing-gc-6xl: var(--gc-space-6xl);
+
+  /* Radii → rounded-gc-* */
+  --radius-gc-sm:   var(--gc-radius-sm);
+  --radius-gc-md:   var(--gc-radius-md);
+  --radius-gc-lg:   var(--gc-radius-lg);
+  --radius-gc-xl:   var(--gc-radius-xl);
+  --radius-gc-pill: var(--gc-radius-pill);
+
+  /* Shadows → shadow-gc-* */
+  --shadow-gc-sm:   var(--gc-shadow-sm);
+  --shadow-gc-md:   var(--gc-shadow-md);
+  --shadow-gc-lg:   var(--gc-shadow-lg);
+  --shadow-gc-glow-hub:        var(--gc-glow-hub);
+  --shadow-gc-glow-scan:       var(--gc-glow-scan);
+  --shadow-gc-glow-show:       var(--gc-glow-show);
+  --shadow-gc-glow-collection: var(--gc-glow-collection);
+  --shadow-gc-glow-actions:    var(--gc-glow-actions);
+  --shadow-gc-glow-secondary:  var(--gc-glow-secondary);
+
+  /* Durations → duration-gc-* */
+  --duration-gc-instant:  var(--gc-duration-instant);
+  --duration-gc-micro:    var(--gc-duration-micro);
+  --duration-gc-fast:     var(--gc-duration-fast);
+  --duration-gc-standard: var(--gc-duration-standard);
+  --duration-gc-emphasis: var(--gc-duration-emphasis);
+  --duration-gc-modal:    var(--gc-duration-modal);
 }
 
 body {
