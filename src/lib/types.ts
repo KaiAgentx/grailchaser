@@ -101,7 +101,7 @@ export interface Card {
   avg_sale_30d_usd: number | null;
   time_to_sell_days: number | null;
   // Source attribution + freshness
-  price_source: "tcgplayer" | "ebay" | "mixed" | null;
+  price_source: PriceSource | null;
   price_data_updated_at: string | null;
   // Grade-check state
   last_grade_check_at: string | null;
@@ -239,12 +239,17 @@ export type DecisionState =
   | "lot_candidate";
 
 // Where a price came from. eBay is never primary for raw TCG.
+// Phase A pricing extension: 'tcgplayer'|'mixed'|'ppt' added to the
+// existing price_source_t enum to cover multi-source pricing payloads.
 export type PriceSource =
   | "pokemon_tcg_api"
   | "scryfall"
   | "one_piece_provider"
   | "ebay"
-  | "manual";
+  | "manual"
+  | "tcgplayer"
+  | "mixed"
+  | "ppt";
 
 // Status of a batch import job (e.g. scanning 800 MTG cards at once).
 export type BatchStatus =

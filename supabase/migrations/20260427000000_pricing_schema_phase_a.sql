@@ -35,6 +35,30 @@ ALTER TABLE cards ADD COLUMN IF NOT EXISTS avg_sale_30d_usd numeric(10,2);
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS time_to_sell_days integer;
 
 -- Source attribution + freshness
+-- IMPORTANT: cards.price_source pre-exists as an enum type
+-- price_source_t. The Phase A spec assumed a fresh text
+-- column. This migration extends the enum with the new
+-- values needed by the Phase A pricing payload labels.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'price_source_t') THEN
+    BEGIN
+      ALTER TYPE price_source_t ADD VALUE IF NOT EXISTS 'tcgplayer';
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
+      ALTER TYPE price_source_t ADD VALUE IF NOT EXISTS 'mixed';
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
+      ALTER TYPE price_source_t ADD VALUE IF NOT EXISTS 'ppt';
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+  END IF;
+END $$;
+-- ADD COLUMN IF NOT EXISTS is a no-op when the column already exists as
+-- price_source_t enum. Kept for fresh-DB setups where the enum doesn't exist
+-- (column lands as text, accepts the same string values).
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS price_source text;
   -- which source drove raw_value: 'tcgplayer'|'ebay'|'mixed'
 ALTER TABLE cards ADD COLUMN IF NOT EXISTS price_data_updated_at timestamptz;
