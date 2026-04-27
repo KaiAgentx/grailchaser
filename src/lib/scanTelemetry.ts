@@ -114,6 +114,10 @@ export interface ScanResultRow {
   zoomSupported?: boolean | null;
   torchSupported?: boolean | null;
   probeResult?: string | null;
+  /** Active show id when scanning in show_mode. Stamped at recognize time so
+   *  scans that never receive a decision still trace back to their show.
+   *  Decision endpoint also writes this column — belt and suspenders. */
+  showId?: string | null;
 }
 
 /**
@@ -153,6 +157,7 @@ export async function writeScanResult(row: ScanResultRow): Promise<string | null
         zoom_supported: row.zoomSupported ?? null,
         torch_supported: row.torchSupported ?? null,
         probe_result: row.probeResult ?? null,
+        show_id: row.showId ?? null,
       })
       .select("id")
       .single();

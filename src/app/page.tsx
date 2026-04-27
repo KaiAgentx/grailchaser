@@ -14,7 +14,7 @@ import { CollectionHomeScreen } from "@/components/collection/CollectionHomeScre
 import { ProfileScreen } from "@/components/profile/ProfileScreen";
 import { ShowModeHomeIdle } from "@/components/show-mode/ShowModeHomeIdle";
 import { ShowModeHomeActive } from "@/components/show-mode/ShowModeHomeActive";
-import { ShowModeResult } from "@/components/show-mode/ShowModeResult";
+import { ShowModeResult, type ShowModePreload } from "@/components/show-mode/ShowModeResult";
 import { useActiveShow } from "@/hooks/useActiveShow";
 import { StorageView } from "@/components/StorageView";
 import { CardDetail } from "@/components/CardDetail";
@@ -50,6 +50,7 @@ export default function Home() {
   // ─── Show Mode state (Phase B-ui-1 Commit 4) ───
   const { activeShow, refetch: refetchActiveShow } = useActiveShow();
   const [showResultScanId, setShowResultScanId] = useState<string | null>(null);
+  const [showResultPreload, setShowResultPreload] = useState<ShowModePreload | null>(null);
   const [tierBreakdownScope, setTierBreakdownScope] = useState<{ cardIds: string[]; label: string } | null>(null);
   const [tcgCardCount, setTcgCardCount] = useState<number | null>(null);
   const [tcgTotalValue, setTcgTotalValue] = useState<number>(0);
@@ -598,6 +599,18 @@ export default function Home() {
           // not the user's capture, so these would just dangle in state otherwise.
           setPendingFront(null);
           setPendingBack(null);
+          // Pass the rank-1 candidate through so ShowModeResult skips the
+          // scan_results + catalog_cards SELECTs (eliminates the read-after-write
+          // race that bit us on iPhone testing).
+          const c = result?.result?.candidates?.[0];
+          setShowResultPreload(c ? {
+            catalogCardId: c.catalogCardId,
+            name: c.name,
+            setName: c.setName,
+            cardNumber: c.cardNumber,
+            rarity: c.rarity ?? null,
+            imageLargeUrl: c.imageLargeUrl ?? null,
+          } : null);
           setShowResultScanId(result.scan_result_id);
           setScreen("showResult");
         } else {
@@ -700,8 +713,9 @@ export default function Home() {
         <ShowModeResult
           scanResultId={showResultScanId}
           showId={activeShow.id}
-          onBack={() => { setShowResultScanId(null); setScreen("showHomeActive"); }}
-          onDecided={() => { setShowResultScanId(null); setScreen("showHomeActive"); }}
+          preloaded={showResultPreload ?? undefined}
+          onBack={() => { setShowResultScanId(null); setShowResultPreload(null); setScreen("showHomeActive"); }}
+          onDecided={() => { setShowResultScanId(null); setShowResultPreload(null); setScreen("showHomeActive"); }}
         />
       </AppShell>
     );

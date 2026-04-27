@@ -34,9 +34,28 @@ import type { ScanDecision } from "@/lib/types";
  * negotiated_price_usd?, comp_at_decision_usd, show_id).
  */
 
+/**
+ * Pre-loaded scan + catalog data passed via state from the recognize response.
+ * When present, ShowModeResult skips both the scan_results and catalog_cards
+ * queries — the recognize response already has every field we need. Eliminates
+ * the read-after-write race that bit us in iPhone testing (scan_results SELECT
+ * returning "not found" immediately after recognize INSERT).
+ *
+ * Absent → fall back to fetch (dev-inject path).
+ */
+export interface ShowModePreload {
+  catalogCardId: string;
+  name: string;
+  setName: string;
+  cardNumber: string;
+  rarity: string | null;
+  imageLargeUrl: string | null;
+}
+
 interface Props {
   scanResultId: string;
   showId: string;
+  preloaded?: ShowModePreload;
   onBack: () => void;
   /** Called after a successful decision — caller should refetch show stats + return. */
   onDecided: (decision: ScanDecision) => void;
@@ -69,7 +88,7 @@ interface PricingResp {
 
 const fmtUsd = (v: number | null) => v != null ? `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
 
-export function ShowModeResult({ scanResultId, showId, onBack, onDecided }: Props) {
+export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDecided }: Props) {
   const [scan, setScan] = useState<ScanResultRow | null>(null);
   const [catalog, setCatalog] = useState<CatalogRow | null>(null);
   const [pricing, setPricing] = useState<PricingResp | null>(null);
@@ -82,7 +101,13 @@ export function ShowModeResult({ scanResultId, showId, onBack, onDecided }: Prop
   const [toast, setToast] = useState<{ msg: string; variant: ToastVariant } | null>(null);
   const [negotiateOpen, setNegotiateOpen] = useState(false);
 
-  // Load scan + catalog + pricing in sequence on mount
+  // Load scan + catalog + pricing on mount.
+  // Two paths:
+  //   (A) preloaded prop present (normal Show Mode flow) → use the recognize
+  //       response data directly; skip both DB queries; jump to pricing fetch.
+  //       Eliminates the read-after-write race we hit on iPhone testing.
+  //   (B) preloaded absent (dev-inject path) → fetch scan_results + catalog
+  //       like before.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -94,32 +119,54 @@ export function ShowModeResult({ scanResultId, showId, onBack, onDecided }: Prop
         const token = session?.session?.access_token;
         if (!token) { setLoadError("Not signed in."); setLoading(false); return; }
 
-        // 1) Scan result row (RLS-gated)
-        const { data: sr, error: srErr } = await sb
-          .from("scan_results")
-          .select("id, catalog_match_id, catalog_match_name, final_catalog_id, final_catalog_name")
-          .eq("id", scanResultId)
-          .maybeSingle();
-        if (cancelled) return;
-        if (srErr || !sr) { setLoadError("Scan result not found."); setLoading(false); return; }
-        setScan(sr as ScanResultRow);
+        let catalogId: string | null = null;
 
-        // 2) Catalog row for set/number/image — prefer corrected catalog id
-        const catalogId = sr.final_catalog_id ?? sr.catalog_match_id;
-        if (catalogId) {
-          const [setCode, ...numParts] = catalogId.split("-");
-          const cardNumber = numParts.join("-");
-          const { data: cat } = await sb
-            .from("catalog_cards")
-            .select("set_name, card_number, rarity, image_large_url, image_small_url")
-            .eq("set_code", setCode)
-            .eq("card_number", cardNumber)
-            .limit(1)
+        if (preloaded) {
+          // Path A — synthesize ScanResult + CatalogRow from preloaded data.
+          setScan({
+            id: scanResultId,
+            catalog_match_id: preloaded.catalogCardId,
+            catalog_match_name: preloaded.name,
+            final_catalog_id: null,
+            final_catalog_name: null,
+          });
+          setCatalog({
+            set_name: preloaded.setName,
+            card_number: preloaded.cardNumber,
+            rarity: preloaded.rarity,
+            image_large_url: preloaded.imageLargeUrl,
+            image_small_url: null,
+          });
+          catalogId = preloaded.catalogCardId;
+        } else {
+          // Path B — fetch scan_results row (RLS-gated)
+          const { data: sr, error: srErr } = await sb
+            .from("scan_results")
+            .select("id, catalog_match_id, catalog_match_name, final_catalog_id, final_catalog_name")
+            .eq("id", scanResultId)
             .maybeSingle();
           if (cancelled) return;
-          if (cat) setCatalog(cat as CatalogRow);
+          if (srErr || !sr) { setLoadError("Scan result not found."); setLoading(false); return; }
+          setScan(sr as ScanResultRow);
 
-          // 3) Pricing via /api/tcg/price
+          catalogId = sr.final_catalog_id ?? sr.catalog_match_id;
+          if (catalogId) {
+            const [setCode, ...numParts] = catalogId.split("-");
+            const cardNumber = numParts.join("-");
+            const { data: cat } = await sb
+              .from("catalog_cards")
+              .select("set_name, card_number, rarity, image_large_url, image_small_url")
+              .eq("set_code", setCode)
+              .eq("card_number", cardNumber)
+              .limit(1)
+              .maybeSingle();
+            if (cancelled) return;
+            if (cat) setCatalog(cat as CatalogRow);
+          }
+        }
+
+        // Pricing fetch — both paths need this (external Pokemon TCG API)
+        if (catalogId) {
           const priceRes = await fetch(`/api/tcg/price?cardId=${encodeURIComponent(catalogId)}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -136,7 +183,7 @@ export function ShowModeResult({ scanResultId, showId, onBack, onDecided }: Prop
       }
     })();
     return () => { cancelled = true; };
-  }, [scanResultId]);
+  }, [scanResultId, preloaded]);
 
   // Derived values
   const player = scan?.final_catalog_name ?? scan?.catalog_match_name ?? null;

@@ -84,6 +84,22 @@ export async function POST(req: NextRequest) {
     // ── Telemetry: session ──
     const sessionIdHeader = req.headers.get("x-scan-session-id");
     const sessionId = await getOrCreateScanSession(userId, game, sessionType, sessionIdHeader);
+
+    // ── Show Mode: stamp active show on scan_results so orphan scans (no decision)
+    //    still trace back to their show. The decision endpoint writes this column too;
+    //    this is the recognize-time belt to that suspenders.
+    let activeShowId: string | null = null;
+    if (scanIntent === "show_mode" && userId) {
+      const { data: activeShow } = await supabase
+        .from("shows")
+        .select("id")
+        .eq("user_id", userId)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (activeShow) activeShowId = activeShow.id;
+    }
     let visionValidated = false;
     let visionMs: number | null = null;
     let verifierUsed = false;
@@ -330,6 +346,7 @@ export async function POST(req: NextRequest) {
           confidenceBand: hashResult.result?.confidenceBand ?? null,
           topDistance: hashResult.result?.topDistance != null ? Math.round(hashResult.result.topDistance) : null,
           latencyMs: Date.now() - startedAt,
+          showId: activeShowId,
         });
       }
 
@@ -447,6 +464,7 @@ export async function POST(req: NextRequest) {
         zoomSupported: typeof zoom_supported === "boolean" ? zoom_supported : null,
         torchSupported: typeof torch_supported === "boolean" ? torch_supported : null,
         probeResult: typeof probe_result === "string" ? probe_result : null,
+        showId: activeShowId,
       });
     }
 
