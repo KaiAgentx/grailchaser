@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { Card } from "@/lib/types";
-import { Shell } from "./Shell";
+import { Shell } from "./shell/Shell";
 import { TierBadge } from "./TierBadge";
 import { surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
 

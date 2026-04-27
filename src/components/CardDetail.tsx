@@ -8,7 +8,7 @@ import { Box } from "@/hooks/useBoxes";
 import { PLATFORMS, calcNet, calcShipping, TIER_COLORS, type Tier } from "@/lib/utils";
 import { VARIANT_LABELS, autoSelectVariant, fmtPrice, fmtDate } from "@/lib/tcg/variants";
 import { getFreshNextPosition } from "@/lib/boxPosition";
-import { Shell } from "./Shell";
+import { Shell } from "./shell/Shell";
 import { LiveCamera } from "./LiveCamera";
 import { getSignedScanUrl, uploadCardScansAsync } from "@/lib/userScanStorage";
 import { surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";

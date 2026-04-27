@@ -7,8 +7,11 @@ import { useActiveGame } from "@/hooks/useActiveGame";
 import { DEFAULT_BOX_NAME, GAME_DISPLAY_NAME } from "@/lib/games";
 import type { Game } from "@/lib/types";
 import { LoginScreen } from "@/components/LoginScreen";
-import { Shell } from "@/components/Shell";
-import { BottomNav } from "@/components/BottomNav";
+import { Shell } from "@/components/shell/Shell";
+import { AppShell } from "@/components/shell/AppShell";
+import { SearchScreen } from "@/components/search/SearchScreen";
+import { CollectionHomeScreen } from "@/components/collection/CollectionHomeScreen";
+import { ProfileScreen } from "@/components/profile/ProfileScreen";
 import { StorageView } from "@/components/StorageView";
 import { CardDetail } from "@/components/CardDetail";
 import { ScanScreen } from "@/components/ScanScreen";
@@ -21,7 +24,11 @@ import { TierBadge } from "@/components/TierBadge";
 import { TIER_RANK, type Tier } from "@/lib/utils";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "@/components/styles";
 
-type Screen = "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result" | "watchlist" | "batchImport" | "tierBreakdown";
+type Screen =
+  | "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result"
+  | "watchlist" | "batchImport" | "tierBreakdown"
+  // Phase B-ui-1 additions: 5-tab system + new sub-screens
+  | "search" | "collection" | "profile";
 
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
@@ -172,12 +179,20 @@ export default function Home() {
     else if (s === "home") setScreen("home");
     else if (s === "myCards") { setStatusFilter(""); setScreen("myCards"); }
     else if (s === "storage") { setStorageInitialBox(""); setScreen("storage"); }
+    else if (s === "search") setScreen("search");
+    else if (s === "collection") setScreen("collection");
+    else if (s === "profile") setScreen("profile");
+    else if (s === "watchlist") setScreen("watchlist");
+    else if (s === "batchImport") setScreen("batchImport");
     else setScreen(s as Screen);
   };
 
-  const bottomNav = <BottomNav currentScreen={screen} prevScreen={prevScreen} onNavigate={handleBottomNav} />;
+  // Each branch wraps its content in <AppShell {...navProps}>...</AppShell>.
+  // AppShell renders the persistent BottomNav at the bottom of the viewport.
+  const navProps = { currentScreen: screen, prevScreen, onNavigate: handleBottomNav };
 
   // ─── HOME (TCG dashboard) ───
+  // Each branch returns <AppShell {...navProps}>{content}</AppShell>.
   if (screen === "home") {
     const gameDisplayName = GAME_DISPLAY_NAME[activeGame] || "TCG";
     const hasData = (tcgCardCount ?? 0) > 0;
@@ -203,7 +218,7 @@ export default function Home() {
     const isComingSoon = (g: Game) => g === "mtg" || g === "one_piece";
 
     return (
-      <>
+      <AppShell {...navProps}>
         <div style={{ background: "#060606", minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden", color: "#f4f1ea", fontFamily: font }}>
           <style>{`
             .tcg-action-btn { transition: border-color 220ms ease, color 220ms ease, background 220ms ease; }
@@ -511,26 +526,25 @@ export default function Home() {
             )}
           </div>
         </div>
-        {bottomNav}
-      </>
+      </AppShell>
     );
   }
 
   // ─── SCAN ───
   if (screen === "scan") return (
-    <><ScanScreen
+    <AppShell {...navProps}><ScanScreen
       game={activeGame}
       scanIntent={scanIntent}
       onBack={() => setScreen("home")}
       onResult={(result, intent) => { setRecognizeResult(result); setScanIntent(intent); setScreen("result"); }}
       onFrontCaptured={(front) => setPendingFront(front)}
       onBackCaptured={(back) => setPendingBack(back)}
-    />{bottomNav}</>
+    /></AppShell>
   );
 
   // ─── RESULT ───
   if (screen === "result" && recognizeResult) return (
-    <><ResultScreen
+    <AppShell {...navProps}><ResultScreen
       result={recognizeResult}
       scanIntent={scanIntent}
       onBack={() => setScreen("scan")}
@@ -544,12 +558,12 @@ export default function Home() {
       addCard={addCard}
       pendingFront={pendingFront}
       pendingBack={pendingBack}
-    />{bottomNav}</>
+    /></AppShell>
   );
 
   // ─── SCAN CHOOSER ───
   if (screen === "scanChooser") return (
-    <>
+    <AppShell {...navProps}>
       <Shell title="What are you doing?" back={() => setScreen("home")}>
         <div style={{ paddingTop: 24 }}>
           <button onClick={() => { setScanIntent("check"); setScreen("scan"); }} style={{ width: "100%", background: surface, border: "1px solid " + border, borderRadius: 16, padding: "24px 20px", cursor: "pointer", textAlign: "left", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>
@@ -562,12 +576,20 @@ export default function Home() {
           </button>
         </div>
       </Shell>
-      {bottomNav}
-    </>
+    </AppShell>
   );
 
+  // ─── SEARCH (stub) ───
+  if (screen === "search") return (<AppShell {...navProps}><SearchScreen /></AppShell>);
+
+  // ─── COLLECTION (hub stub) ───
+  if (screen === "collection") return (<AppShell {...navProps}><CollectionHomeScreen onNavigate={handleBottomNav} /></AppShell>);
+
+  // ─── PROFILE (stub) ───
+  if (screen === "profile") return (<AppShell {...navProps}><ProfileScreen email={user?.email ?? null} onNavigate={handleBottomNav} /></AppShell>);
+
   // ─── MY CARDS ───
-  if (screen === "myCards") return (<>
+  if (screen === "myCards") return (<AppShell {...navProps}>
     <Shell title={"My Cards (" + filteredCards.length + ")"} back={() => { setStatusFilter(""); setFilterGame("All"); setScreen("home"); }}>
       <div style={{ paddingTop: 12 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -606,11 +628,11 @@ export default function Home() {
         ))}
       </div>
     </Shell>
-    {bottomNav}</>
+  </AppShell>
   );
 
   // ─── STORAGE ───
-  if (screen === "storage") return <><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} updateCardPrice={updateCardPrice} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => {
+  if (screen === "storage") return <AppShell {...navProps}><StorageView cards={cards} boxes={boxes} initialBoxName={storageInitialBox} onBack={() => { setStorageInitialBox(""); setScreen("home"); }} addBox={addBox} updateBox={updateBox} deleteBox={deleteBox} updateCard={updateCard} updateCardPrice={updateCardPrice} onCardTap={(card, boxName) => goToCardDetail(card, "storage", { boxName })} onNavigate={(t: any) => {
     if (t.screen === "tierBreakdown" && t.boxName) {
       const boxCards = getBoxCards(t.boxName);
       setTierBreakdownScope({ cardIds: boxCards.map(c => c.id), label: t.boxName });
@@ -618,35 +640,35 @@ export default function Home() {
     } else {
       setScreen(t.screen as Screen);
     }
-  }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} />{bottomNav}</>;
+  }} getNextPosition={getBoxNextPosition} getBoxCards={getBoxCards} /></AppShell>;
 
   // ─── WATCHLIST ───
   if (screen === "watchlist") return (
-    <><WatchlistView cards={cards.filter(c => c.is_watched === true)} onBack={() => setScreen("home")} onCardTap={(card) => goToCardDetail(card, "watchlist")} updateCardPrice={updateCardPrice} />{bottomNav}</>
+    <AppShell {...navProps}><WatchlistView cards={cards.filter(c => c.is_watched === true)} onBack={() => setScreen("home")} onCardTap={(card) => goToCardDetail(card, "watchlist")} updateCardPrice={updateCardPrice} /></AppShell>
   );
 
   // ─── BATCH IMPORT ───
   if (screen === "batchImport") return (
-    <><BatchImportView boxes={boxes} userId={user?.id || ""} onBack={() => setScreen("home")} addCard={addCard} updateCardPrice={updateCardPrice} onDone={(savedCardIds) => {
+    <AppShell {...navProps}><BatchImportView boxes={boxes} userId={user?.id || ""} onBack={() => setScreen("home")} addCard={addCard} updateCardPrice={updateCardPrice} onDone={(savedCardIds) => {
       if (savedCardIds.length > 0) {
         setTierBreakdownScope({ cardIds: savedCardIds, label: `${savedCardIds.length} cards from last import` });
         setScreen("tierBreakdown");
       } else {
         setScreen("home");
       }
-    }} />{bottomNav}</>
+    }} /></AppShell>
   );
 
   // ─── TIER BREAKDOWN ───
   if (screen === "tierBreakdown" && tierBreakdownScope) {
     const scopeCards = cards.filter(c => tierBreakdownScope.cardIds.includes(c.id));
-    return <><TierBreakdownView cards={scopeCards} boxes={boxes} scopeLabel={tierBreakdownScope.label} onBack={() => { setTierBreakdownScope(null); setScreen("home"); }} onCardTap={c => goToCardDetail(c, "tierBreakdown")} updateCard={updateCard} />{bottomNav}</>;
+    return <AppShell {...navProps}><TierBreakdownView cards={scopeCards} boxes={boxes} scopeLabel={tierBreakdownScope.label} onBack={() => { setTierBreakdownScope(null); setScreen("home"); }} onCardTap={c => goToCardDetail(c, "tierBreakdown")} updateCard={updateCard} /></AppShell>;
   }
 
   // ─── CARD DETAIL ───
   if (screen === "cardDetail" && selectedCard) {
     const liveCard = cards.find(c => c.id === selectedCard.id) || selectedCard;
-    return <><CardDetail card={liveCard} boxes={boxes} userId={user?.id || ""} onBack={goBackFromDetail} updateCard={updateCard} updateCardPrice={updateCardPrice} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} watchedCount={cards.filter(c => c.is_watched === true).length} />{bottomNav}</>;
+    return <AppShell {...navProps}><CardDetail card={liveCard} boxes={boxes} userId={user?.id || ""} onBack={goBackFromDetail} updateCard={updateCard} updateCardPrice={updateCardPrice} deleteCard={async (id) => { await deleteCard(id); goBackFromDetail(); }} markListed={markListed} markSold={markSold} markShipped={markShipped} getNextPosition={getBoxNextPosition} watchedCount={cards.filter(c => c.is_watched === true).length} /></AppShell>;
   }
 
   return null;

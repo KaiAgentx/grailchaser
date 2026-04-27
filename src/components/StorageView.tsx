@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Card } from "@/lib/types";
 import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
 import { createClient } from "@/lib/supabase";
-import { Shell } from "./Shell";
+import { Shell } from "./shell/Shell";
 import { TierBadge } from "./TierBadge";
 import { surface, surface2, border, accent, green, red, cyan, muted, secondary, text, font, mono } from "./styles";
 

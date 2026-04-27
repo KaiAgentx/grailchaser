@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { compressImage } from "@/lib/imageCompress";
 import { LiveCamera, type CaptureMeta } from "./LiveCamera";
-import { Shell } from "./Shell";
+import { Shell } from "./shell/Shell";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
 
 // ─── Component ───

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Card } from "@/lib/types";
 import { Box } from "@/hooks/useBoxes";
 import { TierBadge } from "./TierBadge";
-import { Shell } from "./Shell";
+import { Shell } from "./shell/Shell";
 import { TIER_RANK, TIER_COLORS, type Tier } from "@/lib/utils";
 import { surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
 

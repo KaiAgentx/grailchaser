@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { Card } from "@/lib/types";
 import { Box } from "@/hooks/useBoxes";
-import { Shell } from "./Shell";
+import { Shell } from "./shell/Shell";
 import { TierBadge } from "./TierBadge";
 import { calcTier } from "@/lib/utils";
 import { uploadCardScansAsync } from "@/lib/userScanStorage";
