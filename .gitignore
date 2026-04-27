@@ -43,3 +43,7 @@ benchmarks/images/
 *.tsbuildinfo
 next-env.d.ts
 .claude/
+
+# Design references — kept outside the repo
+grailchaser_*
+ultimate_tcg_app_flow_diagram.*
