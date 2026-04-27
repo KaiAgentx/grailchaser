@@ -4,7 +4,7 @@ import { Card } from "@/lib/types";
 import { Box, BoxType, BOX_TYPE_LABELS } from "@/hooks/useBoxes";
 import { createClient } from "@/lib/supabase";
 import { Shell } from "./shell/Shell";
-import { TierBadge } from "./TierBadge";
+import { TierBadge } from "./atoms/TierBadge";
 import { surface, surface2, border, accent, green, red, cyan, muted, secondary, text, font, mono } from "./styles";
 
 const inputStyle = { background: surface2, border: "1px solid " + border, borderRadius: 10, padding: "12px 14px", minHeight: 44, color: text, fontFamily: font, fontSize: 15, outline: "none", boxSizing: "border-box" as const, width: "100%" };

@@ -20,7 +20,7 @@ import { WatchlistView } from "@/components/WatchlistView";
 import { BatchImportView } from "@/components/BatchImportView";
 import { TierBreakdownView } from "@/components/TierBreakdownView";
 import { createClient } from "@/lib/supabase";
-import { TierBadge } from "@/components/TierBadge";
+import { TierBadge } from "@/components/atoms/TierBadge";
 import { TIER_RANK, type Tier } from "@/lib/utils";
 import { bg, surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "@/components/styles";
 

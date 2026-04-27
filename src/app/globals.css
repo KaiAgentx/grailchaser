@@ -279,6 +279,32 @@ button:active, a:active, [role="button"]:active {
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes bounceIn { 0% { transform: scale(0); } 60% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
+/* ── Shared animations (Phase B-ui-1) ──
+ * Used by atoms in src/components/atoms and the elevated Scan tab in
+ * src/components/shell/BottomNav. Centralizing here removes inline <style>
+ * blocks from the components.
+ */
+@keyframes gcScanPulse {
+  0%, 100% { transform: translateY(-12px) scale(1); box-shadow: var(--gc-glow-scan); }
+  50% { transform: translateY(-12px) scale(1.05); box-shadow: 0 16px 40px 0 #3B82F666; }
+}
+@keyframes gcSkeletonPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+@keyframes gcToastIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes gcSheetEnter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes gcScrimEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Range slider styling */
 input[type="range"] { -webkit-appearance: none; background: transparent; }
 input[type="range"]::-webkit-slider-track { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; }

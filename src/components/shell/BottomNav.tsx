@@ -68,7 +68,12 @@ const ProfileIcon = () => (
 );
 
 export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
-  let activeTab = tabScreenMap[currentScreen] || "home";
+  // activeTab can be null when currentScreen doesn't match any known screen
+  // (e.g. /design-system passes "__none__"). null → no tab highlighted.
+  let activeTab: string | null = tabScreenMap[currentScreen] ?? null;
+  if (activeTab == null && currentScreen !== "__none__") {
+    activeTab = "home"; // fallback for unknown but legit screens
+  }
   if (currentScreen === "cardDetail") {
     activeTab = tabScreenMap[prevScreen] || "collection";
   }
@@ -82,20 +87,7 @@ export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
   ];
 
   return (
-    <>
-      <style>{`
-        @keyframes gcScanPulse {
-          0%, 100% {
-            transform: translateY(-12px) scale(1);
-            box-shadow: var(--gc-glow-scan);
-          }
-          50% {
-            transform: translateY(-12px) scale(1.05);
-            box-shadow: 0 16px 40px 0 #3B82F666;
-          }
-        }
-      `}</style>
-      <nav
+    <nav
         className="fixed inset-x-0 bottom-0 z-[100] flex justify-center backdrop-blur"
         style={{
           background: "color-mix(in srgb, var(--gc-bg-canvas) 95%, transparent)",
@@ -120,6 +112,5 @@ export function BottomNav({ currentScreen, prevScreen, onNavigate }: Props) {
           ))}
         </div>
       </nav>
-    </>
   );
 }

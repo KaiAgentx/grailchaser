@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase";
 import { Card } from "@/lib/types";
 import { Box } from "@/hooks/useBoxes";
 import { Shell } from "./shell/Shell";
-import { TierBadge } from "./TierBadge";
+import { TierBadge } from "./atoms/TierBadge";
 import { calcTier } from "@/lib/utils";
 import { uploadCardScansAsync } from "@/lib/userScanStorage";
 import { surface, surface2, border, accent, green, red, muted, secondary, text, font, mono } from "./styles";
