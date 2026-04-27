@@ -110,6 +110,11 @@ export interface Card {
   // Watchlist alert thresholds (per-card)
   price_alert_threshold_usd: number | null;
   price_alert_direction: "above" | "below" | null;
+
+  // ── Phase B-data: links the card back to the scan_result that produced it.
+  // NULL for legacy cards and manual imports. Set by createCardFromScanResult
+  // when the show-mode decision endpoint chains card creation.
+  scan_result_id: string | null;
 }
 
 export type NewCard = Omit<Card, "id" | "user_id" | "created_at" | "updated_at"> & {
@@ -264,3 +269,79 @@ export type SessionType = "quick_check" | "collection_save" | "batch_import";
 
 // Status of a card on the user's Watchlist (the "Maybe" pile).
 export type WatchlistStatus = "active" | "acquired" | "dismissed";
+
+// =====================================================================
+// Phase B-data: Show Mode types
+// =====================================================================
+
+// A card show / convention session. The user starts a show before
+// browsing dealer tables and ends it when they leave. Decisions
+// (walked / negotiated / purchased) are tagged with the active show
+// for per-show stats aggregation.
+export interface Show {
+  id: string;
+  user_id: string;
+  name: string | null;
+  started_at: string;     // ISO timestamp
+  ended_at: string | null; // null while the show is active
+  notes: string | null;
+  created_at: string;
+}
+
+// What the user did with a recognized card at a dealer's table.
+// Note: 'skip' exists in the underlying scan_decision_t enum (legacy)
+// but is rejected by the API. Migrated to 'walked' in the schema.
+export type ScanDecision = "walked" | "negotiated" | "purchased";
+
+// Aggregate stats for a single show. Computed on-demand by the
+// /api/tcg/shows/[id]/stats endpoint.
+export interface ShowStats {
+  bought_count: number;
+  walked_count: number;
+  negotiated_count: number;
+  total_spent_usd: number;
+  // Average % off comp on bought cards. Computed only over rows where
+  // comp_at_decision_usd was captured at decision time.
+  avg_discount_pct: number;
+  decisions: ShowDecisionTimelineEntry[];
+}
+
+// One row in the show's decision timeline. Includes a card_id link
+// (nullable) when the decision created a card row via the chained
+// insert path. Stats endpoint LEFT JOINs cards on scan_result_id.
+export interface ShowDecisionTimelineEntry {
+  scan_result_id: string;
+  player: string | null;
+  decision: ScanDecision;
+  ask_price_usd: number | null;
+  final_price_usd: number | null;
+  comp_at_decision_usd: number | null;
+  // Computed at read time from comp + final: (comp - final) / comp × 100
+  pct_off_comp: number | null;
+  created_at: string;
+  card_id: string | null;
+}
+
+// Row shape for the scan_results table. Used by createCardFromScanResult
+// and the decision endpoints. Does not exhaustively enumerate every
+// telemetry column on the table — only the fields callers consume.
+export interface ScanResult {
+  id: string;
+  session_id: string | null;
+  user_id: string;
+  game: Game;
+  catalog_match_id: string | null;
+  catalog_match_name: string | null;
+  final_catalog_id: string | null;
+  final_catalog_name: string | null;
+  vision_output: unknown;
+  user_decision: ScanDecision | null;
+  decision_at: string | null;
+  // Phase A + B-data fields for show-mode decisions
+  ask_price_usd: number | null;
+  negotiated_price_usd: number | null;
+  final_price_usd: number | null;
+  show_id: string | null;
+  comp_at_decision_usd: number | null;
+  created_at: string;
+}
