@@ -84,6 +84,12 @@ interface PricingResp {
   mid: number | null;
   high: number | null;
   tcgplayerUrl?: string | null;
+  /** Which waterfall stage produced the market value:
+   *    "tcgplayer"     — Pokemon TCG API (USD, primary)
+   *    "ppt"           — Pokemon Price Tracker (USD, fallback for older promos)
+   *    "cardmarket_eur" — CardMarket avg7 × 1.05 (rough USD est. for SV Black Star promos)
+   *    null            — no source yielded a price (Unpriced) */
+  source?: "tcgplayer" | "ppt" | "cardmarket_eur" | null;
 }
 
 const fmtUsd = (v: number | null) => v != null ? `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
@@ -335,11 +341,23 @@ export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDeci
           {/* Canonical pricing zone */}
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
             {/* Market Value */}
-            <div style={{ background: "var(--gc-bg-surface-1)", border: "1px solid var(--gc-border-subtle)", borderRadius: "var(--gc-radius-md)", padding: 16, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <span style={{ fontSize: 11, color: "var(--gc-text-muted)", textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Market Value</span>
-              <span className="font-gc-mono" style={{ fontSize: 22, fontWeight: 700, color: marketValue != null ? "var(--gc-brand-gold-500)" : "var(--gc-text-muted)" }}>
-                {fmtUsd(marketValue)}
-              </span>
+            <div style={{ background: "var(--gc-bg-surface-1)", border: "1px solid var(--gc-border-subtle)", borderRadius: "var(--gc-radius-md)", padding: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: 11, color: "var(--gc-text-muted)", textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Market Value</span>
+                <span className="font-gc-mono" style={{ fontSize: 22, fontWeight: 700, color: marketValue != null ? "var(--gc-brand-gold-500)" : "var(--gc-text-muted)" }}>
+                  {fmtUsd(marketValue)}
+                </span>
+              </div>
+              {pricing?.source === "ppt" && (
+                <div style={{ fontSize: 10, color: "var(--gc-text-muted)", textAlign: "right", marginTop: 4 }}>
+                  PPT estimate
+                </div>
+              )}
+              {pricing?.source === "cardmarket_eur" && (
+                <div style={{ fontSize: 10, color: "var(--gc-text-muted)", textAlign: "right", marginTop: 4 }}>
+                  EU estimate
+                </div>
+              )}
             </div>
 
             {/* Dealer Ask (editable) */}

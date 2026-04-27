@@ -8,6 +8,9 @@
 
 const BASE_URL = "https://www.pokemonpricetracker.com/api/v2";
 const TIMEOUT_MS = 5000;
+// Tighter timeout for the show-mode pricing waterfall — keeps total
+// /api/tcg/price latency under ~1s in the rare miss case.
+const RAW_TIMEOUT_MS = 800;
 
 export interface GradedComps {
   raw_market: number | null;
@@ -109,6 +112,102 @@ export async function getCardGradedComps(input: {
       return { status: "timeout" };
     }
     console.warn("[ppt] fetch failed:", err instanceof Error ? err.message : err);
+    return { status: "error", message: err instanceof Error ? err.message : "fetch failed" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ─── Raw market prices (TCGPlayer-shape) — used by /api/tcg/price waterfall ───
+//
+// Different return shape from getCardGradedComps because the show-mode pricing
+// path wants TCGPlayer-style market/low (PPT's prices.* section) for dealer-
+// anchor consistency, NOT eBay sold-comp data. PPT often has TCGPlayer pricing
+// for promos and older sets that the Pokemon TCG API misses.
+
+export interface PptRawPrices {
+  market: number | null;
+  low: number | null;
+  lastUpdated: string | null;
+}
+
+export type PptRawOutcome =
+  | { status: "ok"; prices: PptRawPrices }
+  | { status: "not_found" }
+  | { status: "error"; message?: string };
+
+/**
+ * Fetch TCGPlayer-style raw market prices from PPT for a single catalog card.
+ * Returns "not_found" when PPT has no row matching name+cardNumber, "error" on
+ * transport failure / missing API key. Never throws. Used as waterfall stage 2
+ * in /api/tcg/price.
+ *
+ * Per Show Mode pricing decision: explicitly does NOT fall back to PPT's
+ * eBay smartMarketPrice — that runs higher than TCGPlayer market and breaks
+ * dealer-anchor consistency with stage 1 (Pokemon TCG API → TCGPlayer).
+ * If PPT row exists but prices.market is null → status: "not_found",
+ * so the waterfall can continue to CardMarket.
+ */
+export async function getCardRawPrices(input: {
+  name: string;
+  setName: string;
+  cardNumber: string;
+}): Promise<PptRawOutcome> {
+  const apiKey = process.env.POKEMON_PRICE_TRACKER_API_KEY;
+  if (!apiKey) {
+    console.warn("[ppt-raw] POKEMON_PRICE_TRACKER_API_KEY not set");
+    return { status: "error", message: "api key not configured" };
+  }
+
+  const url = new URL(`${BASE_URL}/cards`);
+  url.searchParams.set("search", `${input.name} ${input.cardNumber}`);
+  url.searchParams.set("set", input.setName);
+  // Skip includeEbay — we don't read it on this path; saves payload size.
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), RAW_TIMEOUT_MS);
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      console.warn(`[ppt-raw] non-ok response: ${res.status}`);
+      return { status: "error", message: `upstream ${res.status}` };
+    }
+    const body = await res.json();
+    const rows: any[] = Array.isArray(body?.data) ? body.data : [];
+    if (rows.length === 0) return { status: "not_found" };
+
+    // Filter to exact cardNumber matches; pick the one with name match.
+    const target = normalizeCardNumber(input.cardNumber);
+    const exactNum = rows.filter(r => normalizeCardNumber(r?.cardNumber) === target);
+    if (exactNum.length === 0) return { status: "not_found" };
+
+    const wantName = input.name.trim().toLowerCase();
+    const match = exactNum.find(r => (r?.name ?? "").trim().toLowerCase() === wantName) ?? exactNum[0];
+
+    const market = num(match?.prices?.market);
+    const low = num(match?.prices?.low);
+
+    // No TCGPlayer market price on this row → don't fall back to eBay sold-comp;
+    // bubble up "not_found" so the waterfall can continue to CardMarket.
+    if (market == null && low == null) return { status: "not_found" };
+
+    return {
+      status: "ok",
+      prices: {
+        market,
+        low,
+        lastUpdated: typeof match?.prices?.lastUpdated === "string" ? match.prices.lastUpdated : null,
+      },
+    };
+  } catch (err) {
+    if ((err as any)?.name === "AbortError" || controller.signal.aborted) {
+      console.warn(`[ppt-raw] timed out after ${RAW_TIMEOUT_MS}ms`);
+      return { status: "error", message: "timeout" };
+    }
+    console.warn("[ppt-raw] fetch failed:", err instanceof Error ? err.message : err);
     return { status: "error", message: err instanceof Error ? err.message : "fetch failed" };
   } finally {
     clearTimeout(timeout);
