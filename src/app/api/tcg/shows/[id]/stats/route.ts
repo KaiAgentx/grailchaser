@@ -71,9 +71,13 @@ export async function GET(
     // → scan_results.id). Supabase resolves nested via the foreign key
     // relationship; "cards (id, player)" returns the linked card row when one
     // exists or null otherwise (LEFT-JOIN semantics).
+    // Pull catalog_match_name + final_catalog_name so walked decisions
+    // (which never create a card row → no `cards.player` LEFT JOIN value)
+    // still surface a player name in the timeline. Fallback chain:
+    //   linkedCard?.player ?? final_catalog_name ?? catalog_match_name ?? null
     const { data: rows, error: queryErr } = await svc
       .from("scan_results")
-      .select("id, user_decision, ask_price_usd, final_price_usd, comp_at_decision_usd, created_at, cards (id, player)")
+      .select("id, user_decision, ask_price_usd, final_price_usd, comp_at_decision_usd, created_at, catalog_match_name, final_catalog_name, cards (id, player)")
       .eq("show_id", showId)
       .in("user_decision", ["walked", "negotiated", "purchased"])
       .order("created_at", { ascending: true });
@@ -108,7 +112,9 @@ export async function GET(
 
       decisions.push({
         scan_result_id: r.id,
-        player: linkedCard?.player ?? null,
+        // Walked decisions don't create cards → linkedCard is null. Fall back
+        // to scan_results' own name fields so the UI can render a player name.
+        player: linkedCard?.player ?? (r as any).final_catalog_name ?? (r as any).catalog_match_name ?? null,
         decision,
         ask_price_usd: ask,
         final_price_usd: final_price,

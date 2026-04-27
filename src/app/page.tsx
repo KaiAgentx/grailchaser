@@ -12,6 +12,10 @@ import { AppShell } from "@/components/shell/AppShell";
 import { SearchScreen } from "@/components/search/SearchScreen";
 import { CollectionHomeScreen } from "@/components/collection/CollectionHomeScreen";
 import { ProfileScreen } from "@/components/profile/ProfileScreen";
+import { ShowModeHomeIdle } from "@/components/show-mode/ShowModeHomeIdle";
+import { ShowModeHomeActive } from "@/components/show-mode/ShowModeHomeActive";
+import { ShowModeResult } from "@/components/show-mode/ShowModeResult";
+import { useActiveShow } from "@/hooks/useActiveShow";
 import { StorageView } from "@/components/StorageView";
 import { CardDetail } from "@/components/CardDetail";
 import { ScanScreen } from "@/components/ScanScreen";
@@ -28,7 +32,9 @@ type Screen =
   | "home" | "myCards" | "cardDetail" | "storage" | "scanChooser" | "scan" | "result"
   | "watchlist" | "batchImport" | "tierBreakdown"
   // Phase B-ui-1 additions: 5-tab system + new sub-screens
-  | "search" | "collection" | "profile";
+  | "search" | "collection" | "profile"
+  // Phase B-ui-1 Commit 4: Show Mode flow
+  | "showHomeIdle" | "showHomeActive" | "showResult";
 
 export default function Home() {
   const { user, loading: authLoading, signIn, signUp } = useAuth();
@@ -37,10 +43,13 @@ export default function Home() {
   const { boxes, loading: boxesLoading, addBox, updateBox, deleteBox, getNextPosition: getBoxNextPosition, getBoxCards } = useBoxes(user?.id, cards);
 
   const [screen, setScreen] = useState<Screen>("home");
-  const [scanIntent, setScanIntent] = useState<"check" | "collect">("check");
+  const [scanIntent, setScanIntent] = useState<"check" | "collect" | "show_mode">("check");
   const [recognizeResult, setRecognizeResult] = useState<any>(null);
   const [pendingFront, setPendingFront] = useState<File | null>(null);
   const [pendingBack, setPendingBack] = useState<Blob | null>(null);
+  // ─── Show Mode state (Phase B-ui-1 Commit 4) ───
+  const { activeShow, refetch: refetchActiveShow } = useActiveShow();
+  const [showResultScanId, setShowResultScanId] = useState<string | null>(null);
   const [tierBreakdownScope, setTierBreakdownScope] = useState<{ cardIds: string[]; label: string } | null>(null);
   const [tcgCardCount, setTcgCardCount] = useState<number | null>(null);
   const [tcgTotalValue, setTcgTotalValue] = useState<number>(0);
@@ -329,6 +338,47 @@ export default function Home() {
               </div>
             </div>
 
+            {/* ─── Show Mode CTA (full-width above Quick Actions) ─── */}
+            <button
+              onClick={() => setScreen(activeShow ? "showHomeActive" : "showHomeIdle")}
+              className="font-gc-ui"
+              style={{
+                position: "relative",
+                zIndex: 1,
+                width: "100%",
+                minHeight: 80,
+                marginBottom: 16,
+                padding: "16px 20px",
+                background: activeShow
+                  ? "transparent"
+                  : "color-mix(in srgb, var(--gc-zone-show-500) 12%, var(--gc-bg-surface-1))",
+                border: `1.5px solid ${activeShow
+                  ? "color-mix(in srgb, var(--gc-zone-show-500) 50%, transparent)"
+                  : "color-mix(in srgb, var(--gc-zone-show-500) 35%, transparent)"}`,
+                borderRadius: "var(--gc-radius-lg)",
+                color: "var(--gc-text-primary)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                textAlign: "left",
+                boxShadow: activeShow ? "none" : "var(--gc-glow-show)",
+              }}
+            >
+              <span style={{ fontSize: 28 }}>{activeShow ? "🎴" : "⚡"}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--gc-text-primary)", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  {activeShow ? "Resume Active Show" : "Start Show Mode"}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--gc-text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {activeShow
+                    ? (activeShow.name || "Untitled show")
+                    : "Track buys, walks, negotiations"}
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "var(--gc-zone-show-500)" }}>→</span>
+            </button>
+
             {/* ─── Quick Actions ─── */}
             <div className="tcg-quick-actions" style={{ position: "relative", zIndex: 1, display: "flex", gap: 12, marginBottom: 32 }}>
               {[
@@ -535,7 +585,7 @@ export default function Home() {
     <AppShell {...navProps}><ScanScreen
       game={activeGame}
       scanIntent={scanIntent}
-      onBack={() => setScreen("home")}
+      onBack={() => setScreen(scanIntent === "show_mode" ? "showHomeActive" : "home")}
       onResult={(result, intent) => { setRecognizeResult(result); setScanIntent(intent); setScreen("result"); }}
       onFrontCaptured={(front) => setPendingFront(front)}
       onBackCaptured={(back) => setPendingBack(back)}
@@ -548,7 +598,7 @@ export default function Home() {
       result={recognizeResult}
       scanIntent={scanIntent}
       onBack={() => setScreen("scan")}
-      onSaved={() => setScreen("home")}
+      onSaved={() => setScreen(scanIntent === "show_mode" ? "showHomeActive" : "home")}
       onScanAnother={() => { setRecognizeResult(null); setScreen("scan"); }}
       userId={user?.id || ""}
       scanResultId={recognizeResult?.scan_result_id}
@@ -587,6 +637,58 @@ export default function Home() {
 
   // ─── PROFILE (stub) ───
   if (screen === "profile") return (<AppShell {...navProps}><ProfileScreen email={user?.email ?? null} onNavigate={handleBottomNav} /></AppShell>);
+
+  // ─── SHOW MODE — IDLE (no active show) ───
+  if (screen === "showHomeIdle") return (
+    <AppShell {...navProps}>
+      <ShowModeHomeIdle
+        userId={user?.id || ""}
+        onBack={() => setScreen("home")}
+        onStarted={() => { refetchActiveShow(); setScreen("showHomeActive"); }}
+      />
+    </AppShell>
+  );
+
+  // ─── SHOW MODE — ACTIVE (show in progress) ───
+  if (screen === "showHomeActive") {
+    if (!activeShow) {
+      // Defensive: no active show but we ended up on this screen — bounce to idle.
+      return (
+        <AppShell {...navProps}>
+          <ShowModeHomeIdle
+            userId={user?.id || ""}
+            onBack={() => setScreen("home")}
+            onStarted={() => { refetchActiveShow(); setScreen("showHomeActive"); }}
+          />
+        </AppShell>
+      );
+    }
+    return (
+      <AppShell {...navProps}>
+        <ShowModeHomeActive
+          show={activeShow}
+          onBack={() => setScreen("home")}
+          onOpenCamera={() => { setScanIntent("show_mode"); setScreen("scan"); }}
+          onEnded={() => { refetchActiveShow(); setScreen("home"); }}
+          onTestInjectScanResult={(scanResultId) => { setShowResultScanId(scanResultId); setScreen("showResult"); }}
+        />
+      </AppShell>
+    );
+  }
+
+  // ─── SHOW MODE — RESULT (post-scan decision) ───
+  if (screen === "showResult" && showResultScanId && activeShow) {
+    return (
+      <AppShell {...navProps}>
+        <ShowModeResult
+          scanResultId={showResultScanId}
+          showId={activeShow.id}
+          onBack={() => { setShowResultScanId(null); setScreen("showHomeActive"); }}
+          onDecided={() => { setShowResultScanId(null); setScreen("showHomeActive"); }}
+        />
+      </AppShell>
+    );
+  }
 
   // ─── MY CARDS ───
   if (screen === "myCards") return (<AppShell {...navProps}>

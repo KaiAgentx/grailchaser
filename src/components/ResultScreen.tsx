@@ -11,7 +11,7 @@ import { uploadCardScansAsync } from "@/lib/userScanStorage";
 
 interface Props {
   result: RecognitionSuccess;
-  scanIntent: "check" | "collect";
+  scanIntent: "check" | "collect" | "show_mode";
   onBack: () => void;
   onSaved: () => void;
   onScanAnother: () => void;

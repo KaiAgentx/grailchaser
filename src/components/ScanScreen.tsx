@@ -10,9 +10,9 @@ import { bg, surface, surface2, border, accent, green, red, muted, secondary, te
 
 interface Props {
   game: string;
-  scanIntent: "check" | "collect";
+  scanIntent: "check" | "collect" | "show_mode";
   onBack: () => void;
-  onResult: (result: any, intent: "check" | "collect") => void;
+  onResult: (result: any, intent: "check" | "collect" | "show_mode") => void;
   onFrontCaptured?: (front: File) => void;
   onBackCaptured?: (back: Blob | null) => void;
 }
@@ -90,7 +90,7 @@ export function ScanScreen({ game, scanIntent, onBack, onResult, onFrontCaptured
       if (data.ok && data.result?.candidates?.length > 0) {
         // Hand the captured front (and optional back) up to page.tsx
         // for storage upload after the user confirms the save.
-        if (scanIntent === "collect") {
+        if (scanIntent !== "check") {
           onFrontCaptured?.(file);
           onBackCaptured?.(back ?? null);
         }
@@ -124,7 +124,7 @@ export function ScanScreen({ game, scanIntent, onBack, onResult, onFrontCaptured
   if (cameraMode === "live" && !cameraFailed && !scanning) {
     return (
       <LiveCamera
-        mode={scanIntent === "collect" ? "front_and_back" : "front_only"}
+        mode={scanIntent !== "check" ? "front_and_back" : "front_only"}
         onCapture={(file, meta) => handleFile(file, meta)}
         onCaptureBoth={(front, back, meta) => handleFile(front, meta, back)}
         onCancel={onBack}
