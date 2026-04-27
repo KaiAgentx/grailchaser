@@ -74,6 +74,42 @@ export interface Card {
   date_added: string;
   created_at: string;
   updated_at: string;
+
+  // ── Phase A: multi-source pricing ──
+  // TCGPlayer (from Scrydex / Pokemon TCG API)
+  tcgplayer_market_usd: number | null;
+  tcgplayer_low_usd: number | null;
+  tcgplayer_mid_usd: number | null;
+  tcgplayer_high_usd: number | null;
+  tcgplayer_avg7_usd: number | null;
+  tcgplayer_avg30_usd: number | null;
+  tcgplayer_listings_count: number | null;
+  tcgplayer_sellers_count: number | null;
+  // eBay raw + graded (from PPT)
+  ebay_raw_avg_usd: number | null;
+  psa10_avg_usd: number | null;
+  psa9_avg_usd: number | null;
+  psa8_avg_usd: number | null;
+  // Population (PPT Business tier — null in Phase A)
+  psa10_pop: number | null;
+  psa9_pop: number | null;
+  psa8_pop: number | null;
+  // Trend & volatility (computed once history accumulates)
+  trend_30d_direction: "up" | "down" | "flat" | null;
+  trend_30d_pct: number | null;
+  volatility_30d: number | null;
+  avg_sale_30d_usd: number | null;
+  time_to_sell_days: number | null;
+  // Source attribution + freshness
+  price_source: "tcgplayer" | "ebay" | "mixed" | null;
+  price_data_updated_at: string | null;
+  // Grade-check state
+  last_grade_check_at: string | null;
+  last_psa10_probability: number | null;
+  last_assessed_condition: string | null;
+  // Watchlist alert thresholds (per-card)
+  price_alert_threshold_usd: number | null;
+  price_alert_direction: "above" | "below" | null;
 }
 
 export type NewCard = Omit<Card, "id" | "user_id" | "created_at" | "updated_at"> & {
