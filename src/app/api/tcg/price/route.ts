@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { extractUserId } from "@/lib/collectionItemsApi";
+import { extractUserId, serviceRoleClient } from "@/lib/collectionItemsApi";
 import { ErrorCode, errorResponse } from "@/lib/errors";
 import { getOrCreateRequestId, logRequest } from "@/lib/logging";
 import { checkRateLimit } from "@/lib/rateLimit";
@@ -63,22 +63,78 @@ export async function GET(req: NextRequest) {
       return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, details: "POKEMONTCG_API_KEY not configured", requestId }));
     }
 
-    let apiRes: Response;
+    // ── Upstream Pokemon TCG API fetch with graceful degradation ──
+    // When upstream returns non-ok OR throws, mark as missed and fall back to
+    // the local catalog_cards row. The waterfall (stages 2 + 3) then runs
+    // against whatever name/set_name/card_number we can synthesize. This
+    // recovers from transient upstream blips (rate limits, brief 5xx, stale
+    // CDN 404s) without showing the user "Unpriced" when we have a perfectly
+    // good catalog row locally.
+    //
+    // apiRes.status is logged explicitly so future failures are diagnosable
+    // (today we were flying blind on whether upstream returned 401/404/429).
+    let card: any = null;
+    let upstreamMissed = false;
     try {
-      apiRes = await fetch(`https://api.pokemontcg.io/v2/cards/${cardId}`, {
+      const apiRes = await fetch(`https://api.pokemontcg.io/v2/cards/${cardId}`, {
         headers: { "X-Api-Key": apiKey },
       });
+      if (apiRes.ok) {
+        const body = await apiRes.json();
+        card = body?.data ?? null;
+        if (!card) {
+          upstreamMissed = true;
+          console.warn(`[tcg/price] upstream 200 but body.data missing for ${cardId} — falling back to local catalog`);
+        }
+      } else {
+        upstreamMissed = true;
+        console.warn(`[tcg/price] upstream non-ok status=${apiRes.status} for ${cardId} — falling back to local catalog`);
+      }
     } catch (fetchErr: any) {
-      console.error(`[tcg/price] Pokemon API fetch failed for ${cardId}:`, fetchErr.message);
-      return respond(NextResponse.json({ ok: false, error: "price_fetch_failed", message: "Could not fetch pricing data" }, { status: 502 }));
+      upstreamMissed = true;
+      console.warn(`[tcg/price] upstream fetch threw for ${cardId}:`, fetchErr?.message ?? fetchErr);
     }
 
-    if (!apiRes.ok) {
-      console.log(`[tcg/price] Pokemon API ${apiRes.status} for ${cardId}`);
-      return respond(NextResponse.json({ ok: false, error: "card_not_found", message: `Card not found: ${cardId}` }, { status: 404 }));
+    // ── Local catalog fallback ──
+    if (upstreamMissed) {
+      const [setCode, ...numParts] = cardId.split("-");
+      const cardNumber = numParts.join("-");
+      if (setCode && cardNumber) {
+        try {
+          const sb = serviceRoleClient();
+          const { data: row } = await sb
+            .from("catalog_cards")
+            .select("name, set_name, card_number")
+            .eq("set_code", setCode)
+            .eq("card_number", cardNumber)
+            .limit(1)
+            .maybeSingle();
+          if (row) {
+            // Synthesize a Pokemon-TCG-API-shaped object so the existing
+            // waterfall code reads .name / .set.name / .number identically.
+            // tcgplayer + cardmarket are absent → stages 1 and 3 skip naturally.
+            card = {
+              name: row.name,
+              set: { name: row.set_name },
+              number: row.card_number,
+            };
+            console.warn(`[tcg/price] catalog-fallback hit for ${cardId} — running stage 2 (PPT) only`);
+          }
+        } catch (catalogErr: any) {
+          console.warn(`[tcg/price] catalog lookup threw for ${cardId}:`, catalogErr?.message ?? catalogErr);
+        }
+      }
     }
 
-    const { data: card } = await apiRes.json();
+    // Genuine miss — both upstream and catalog have nothing.
+    // Skip cache write: cardId might be a typo OR a future catalog row that
+    // gets backfilled later; we don't want a 15min poison value.
+    if (!card) {
+      return respond(NextResponse.json(
+        { ok: false, error: "card_not_found", message: `Card not found: ${cardId}` },
+        { status: 404 }
+      ));
+    }
 
     // Extract TCGPlayer prices — pick best available price type
     const tcgPrices = card?.tcgplayer?.prices || {};
