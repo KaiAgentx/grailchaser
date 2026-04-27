@@ -586,7 +586,24 @@ export default function Home() {
       game={activeGame}
       scanIntent={scanIntent}
       onBack={() => setScreen(scanIntent === "show_mode" ? "showHomeActive" : "home")}
-      onResult={(result, intent) => { setRecognizeResult(result); setScanIntent(intent); setScreen("result"); }}
+      onResult={(result, intent) => {
+        setRecognizeResult(result);
+        setScanIntent(intent);
+        // Show Mode auto-routes past ResultScreen straight into the canonical decision UI.
+        // Falls through to result screen if scan_result_id is missing (rare telemetry-DB
+        // write failure) or activeShow disappeared mid-scan. Stats refresh is automatic
+        // on return: showHomeActive remounts and useShowStats refetches on mount.
+        if (intent === "show_mode" && result?.scan_result_id && activeShow) {
+          // Clear collect-flow pending captures — ShowModeResult uses the catalog image,
+          // not the user's capture, so these would just dangle in state otherwise.
+          setPendingFront(null);
+          setPendingBack(null);
+          setShowResultScanId(result.scan_result_id);
+          setScreen("showResult");
+        } else {
+          setScreen("result");
+        }
+      }}
       onFrontCaptured={(front) => setPendingFront(front)}
       onBackCaptured={(back) => setPendingBack(back)}
     /></AppShell>
