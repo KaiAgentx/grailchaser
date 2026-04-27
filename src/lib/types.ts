@@ -265,7 +265,7 @@ export type BatchStatus =
   | "failed";
 
 // What kind of scanning session is happening.
-export type SessionType = "quick_check" | "collection_save" | "batch_import";
+export type SessionType = "quick_check" | "collection_save" | "batch_import" | "show_mode";
 
 // Status of a card on the user's Watchlist (the "Maybe" pile).
 export type WatchlistStatus = "active" | "acquired" | "dismissed";

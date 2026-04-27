@@ -66,8 +66,9 @@ export async function POST(req: NextRequest) {
     const imageTokensEst = (imagePostW && imagePostH) ? Math.round((imagePostW * imagePostH) / 750) : null;
 
     // Map client scanIntent to session_type for telemetry
-    let sessionType: "quick_check" | "collection_save" | "batch_import" = "quick_check";
+    let sessionType: "quick_check" | "collection_save" | "batch_import" | "show_mode" = "quick_check";
     if (scanIntent === "collect") sessionType = "collection_save";
+    else if (scanIntent === "show_mode") sessionType = "show_mode";
     else if (scanIntent !== "check" && scanIntent != null) console.warn(`[${ROUTE}] unexpected scanIntent: ${scanIntent}, defaulting to quick_check`);
     if (game !== "pokemon") {
       return respond(errorResponse({ code: game === "mtg" || game === "one_piece" ? ErrorCode.NOT_FOUND : ErrorCode.INVALID_BODY, details: game === "mtg" || game === "one_piece" ? "Game not yet supported" : "Invalid game", requestId }));

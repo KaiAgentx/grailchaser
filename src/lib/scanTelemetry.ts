@@ -5,7 +5,7 @@
  */
 import { serviceRoleClient } from "@/lib/collectionItemsApi";
 
-type SessionType = "quick_check" | "collection_save" | "batch_import";
+type SessionType = "quick_check" | "collection_save" | "batch_import" | "show_mode";
 type Game = "pokemon" | "mtg" | "one_piece";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
