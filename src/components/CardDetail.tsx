@@ -482,6 +482,18 @@ export function CardDetail({ card, boxes, userId, onBack, updateCard, updateCard
                 </div>
               )}
               <div style={{ marginBottom: 12 }}>
+                <div style={labelStyle}>COST BASIS</div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  inputMode="decimal"
+                  value={val("cost_basis") ?? ""}
+                  onChange={e => setEdits({ ...edits, cost_basis: e.target.value === "" ? null : parseFloat(e.target.value) } as any)}
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ marginBottom: 12 }}>
                 <div style={labelStyle}>Notes</div>
                 <textarea value={val("notes") || ""} onChange={e => setEdits({ ...edits, notes: e.target.value })} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
               </div>
