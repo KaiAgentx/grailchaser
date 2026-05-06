@@ -118,6 +118,9 @@ export interface ScanResultRow {
    *  scans that never receive a decision still trace back to their show.
    *  Decision endpoint also writes this column — belt and suspenders. */
   showId?: string | null;
+  /** Which catalog-lookup attempt (0-7) populated cards. NULL for hash-only path.
+   *  See migration 20260506000000 for the value mapping. */
+  matchAttempt?: number | null;
 }
 
 /**
@@ -158,6 +161,7 @@ export async function writeScanResult(row: ScanResultRow): Promise<string | null
         torch_supported: row.torchSupported ?? null,
         probe_result: row.probeResult ?? null,
         show_id: row.showId ?? null,
+        match_attempt: row.matchAttempt ?? null,
       })
       .select("id")
       .single();

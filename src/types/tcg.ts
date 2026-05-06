@@ -32,6 +32,9 @@ export interface RecognitionResult {
   confidenceBand: "exact" | "likely" | "choose_version" | "unclear";
   topDistance: number;
   candidates: CandidateCard[];
+  // Set when the name-only fuzzy fallback (attempt 7) returned >3 candidates.
+  // Client must show a Pick Your Version picker with no auto-select.
+  force_pick_required?: boolean;
 }
 
 export interface RecognitionSuccess {

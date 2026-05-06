@@ -599,17 +599,22 @@ export default function Home() {
           // not the user's capture, so these would just dangle in state otherwise.
           setPendingFront(null);
           setPendingBack(null);
-          // Pass the rank-1 candidate through so ShowModeResult skips the
-          // scan_results + catalog_cards SELECTs (eliminates the read-after-write
-          // race that bit us on iPhone testing).
-          const c = result?.result?.candidates?.[0];
-          setShowResultPreload(c ? {
-            catalogCardId: c.catalogCardId,
-            name: c.name,
-            setName: c.setName,
-            cardNumber: c.cardNumber,
-            rarity: c.rarity ?? null,
-            imageLargeUrl: c.imageLargeUrl ?? null,
+          // Pass all candidates + force-pick flag through so ShowModeResult can
+          // render the Pick Your Version picker when the fuzzy fallback fired.
+          // Skipping the scan_results + catalog_cards SELECTs also avoids the
+          // read-after-write race that bit us on iPhone testing.
+          const allCandidates = result?.result?.candidates ?? [];
+          setShowResultPreload(allCandidates.length > 0 ? {
+            candidates: allCandidates.map((c: any) => ({
+              catalogCardId: c.catalogCardId,
+              name: c.name,
+              setName: c.setName,
+              cardNumber: c.cardNumber,
+              rarity: c.rarity ?? null,
+              imageLargeUrl: c.imageLargeUrl ?? null,
+              imageSmallUrl: c.imageSmallUrl ?? null,
+            })),
+            forcePickRequired: result?.result?.force_pick_required ?? false,
           } : null);
           setShowResultScanId(result.scan_result_id);
           setScreen("showResult");

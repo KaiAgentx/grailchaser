@@ -7,6 +7,7 @@ import { MoneyInput } from "@/components/atoms/MoneyInput";
 import { LoadingSkeleton } from "@/components/atoms/LoadingSkeleton";
 import { ErrorBanner } from "@/components/atoms/ErrorBanner";
 import { Toast, type ToastVariant } from "@/components/atoms/Toast";
+import { VariantPickerStrip } from "@/components/atoms/VariantPickerStrip";
 import { DecisionMathPanel } from "./DecisionMathPanel";
 import { NegotiateModal } from "./NegotiateModal";
 import { computeDecisionMetrics } from "@/lib/pricing/decision";
@@ -42,14 +43,24 @@ import type { ScanDecision } from "@/lib/types";
  * returning "not found" immediately after recognize INSERT).
  *
  * Absent → fall back to fetch (dev-inject path).
+ *
+ * `candidates` carries all candidates from the recognize response. Normal
+ * flow has just rank-1; force-pick flow (fuzzy fallback >3) has up to 6 and
+ * `forcePickRequired=true` so the user must pick before pricing renders.
  */
-export interface ShowModePreload {
+export interface ShowModePreloadCandidate {
   catalogCardId: string;
   name: string;
   setName: string;
-  cardNumber: string;
+  cardNumber: string | null;
   rarity: string | null;
   imageLargeUrl: string | null;
+  imageSmallUrl: string | null;
+}
+
+export interface ShowModePreload {
+  candidates: ShowModePreloadCandidate[];
+  forcePickRequired: boolean;
 }
 
 interface Props {
@@ -101,17 +112,25 @@ export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDeci
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Force-pick mode starts unselected; normal mode preselects rank-1 (the only
+  // candidate in the non-force-pick preload).
+  const initialSelected = preloaded
+    ? (preloaded.forcePickRequired ? null : (preloaded.candidates[0]?.catalogCardId ?? null))
+    : null;
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(initialSelected);
+  const selectedCandidate = preloaded?.candidates.find(c => c.catalogCardId === selectedCandidateId) ?? null;
+
   const [askPrice, setAskPrice] = useState(0);
   const [submitting, setSubmitting] = useState<ScanDecision | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; variant: ToastVariant } | null>(null);
   const [negotiateOpen, setNegotiateOpen] = useState(false);
 
-  // Load scan + catalog + pricing on mount.
+  // Load scan + catalog + pricing.
   // Two paths:
-  //   (A) preloaded prop present (normal Show Mode flow) → use the recognize
-  //       response data directly; skip both DB queries; jump to pricing fetch.
-  //       Eliminates the read-after-write race we hit on iPhone testing.
+  //   (A) preloaded prop present (normal Show Mode flow) → synthesize from the
+  //       selected candidate; skip both DB queries; jump to pricing fetch.
+  //       Re-fires when the user picks a different candidate (force-pick path).
   //   (B) preloaded absent (dev-inject path) → fetch scan_results + catalog
   //       like before.
   useEffect(() => {
@@ -128,22 +147,30 @@ export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDeci
         let catalogId: string | null = null;
 
         if (preloaded) {
-          // Path A — synthesize ScanResult + CatalogRow from preloaded data.
+          if (!selectedCandidate) {
+            // Force-pick mode, user hasn't picked yet — clear synth state.
+            setScan(null);
+            setCatalog(null);
+            setPricing(null);
+            setLoading(false);
+            return;
+          }
+          // Path A — synthesize ScanResult + CatalogRow from selected candidate.
           setScan({
             id: scanResultId,
-            catalog_match_id: preloaded.catalogCardId,
-            catalog_match_name: preloaded.name,
+            catalog_match_id: selectedCandidate.catalogCardId,
+            catalog_match_name: selectedCandidate.name,
             final_catalog_id: null,
             final_catalog_name: null,
           });
           setCatalog({
-            set_name: preloaded.setName,
-            card_number: preloaded.cardNumber,
-            rarity: preloaded.rarity,
-            image_large_url: preloaded.imageLargeUrl,
-            image_small_url: null,
+            set_name: selectedCandidate.setName,
+            card_number: selectedCandidate.cardNumber,
+            rarity: selectedCandidate.rarity,
+            image_large_url: selectedCandidate.imageLargeUrl,
+            image_small_url: selectedCandidate.imageSmallUrl,
           });
-          catalogId = preloaded.catalogCardId;
+          catalogId = selectedCandidate.catalogCardId;
         } else {
           // Path B — fetch scan_results row (RLS-gated)
           const { data: sr, error: srErr } = await sb
@@ -189,7 +216,7 @@ export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDeci
       }
     })();
     return () => { cancelled = true; };
-  }, [scanResultId, preloaded]);
+  }, [scanResultId, preloaded, selectedCandidate?.catalogCardId]);
 
   // Derived values
   const player = scan?.final_catalog_name ?? scan?.catalog_match_name ?? null;
@@ -281,6 +308,27 @@ export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDeci
     setNegotiateOpen(false);
     postDecision("negotiated", { negotiated_price_usd: counterOffer });
   };
+
+  // Force-pick: user must pick a candidate before pricing/decision UI renders.
+  if (preloaded?.forcePickRequired && !selectedCandidate) {
+    return (
+      <Shell title="Pick Your Version" back={onBack}>
+        <div className="font-gc-ui" style={{ paddingTop: 12, paddingBottom: 16 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--gc-text-primary)", marginBottom: 6 }}>
+            Which version is this?
+          </div>
+          <div style={{ fontSize: 13, color: "var(--gc-text-muted)", marginBottom: 16 }}>
+            We weren{"'"}t sure — tap the card you have to see Market Value.
+          </div>
+          <VariantPickerStrip
+            candidates={preloaded.candidates}
+            selectedId={selectedCandidateId}
+            onSelect={setSelectedCandidateId}
+          />
+        </div>
+      </Shell>
+    );
+  }
 
   if (loading) {
     return (

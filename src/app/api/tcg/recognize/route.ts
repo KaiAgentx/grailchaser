@@ -102,6 +102,9 @@ export async function POST(req: NextRequest) {
       if (activeShow) activeShowId = activeShow.id;
     }
     let visionValidated = false;
+    // Tracks which catalog-lookup attempt (0-7) populated `cards`.
+    // Each attempt is gated by !cards.length, so once set it never moves.
+    let attemptHit: number | null = null;
     let visionMs: number | null = null;
     let verifierUsed = false;
     let verifierReranked = false;
@@ -201,7 +204,7 @@ export async function POST(req: NextRequest) {
             const { data } = await query.limit(5);
             cards = data || [];
           }
-          if (cards.length > 0) visionValidated = true;
+          if (cards.length > 0) { visionValidated = true; attemptHit = 0; }
         }
       }
 
@@ -221,7 +224,7 @@ export async function POST(req: NextRequest) {
           const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).ilike("set_name", `%${normalizedSet}%`).limit(5);
           cards = data || [];
         }
-        if (cards.length > 0) visionValidated = true;
+        if (cards.length > 0) { visionValidated = true; attemptHit = 1; }
       }
 
       // Attempt 2: set_name + name (no number required — vintage cards where number=null)
@@ -239,6 +242,7 @@ export async function POST(req: NextRequest) {
           cards = data || [];
         }
         // No visionValidated = true — this is a loose match, force user to pick
+        if (cards.length > 0) attemptHit = 2;
       }
 
       // Attempt 3: name + number (exact)
@@ -254,7 +258,7 @@ export async function POST(req: NextRequest) {
           const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", visionResult.number).limit(5);
           cards = data || [];
         }
-        if (cards.length > 0) visionValidated = true;
+        if (cards.length > 0) { visionValidated = true; attemptHit = 3; }
       }
 
       // Attempt 4: name + number prefix (e.g., "4/102" → "4")
@@ -271,6 +275,7 @@ export async function POST(req: NextRequest) {
           const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", prefix).limit(5);
           cards = data || [];
         }
+        if (cards.length > 0) attemptHit = 4;
       }
 
       // Attempt 5: name + zero-padded number (e.g., "4" → "004")
@@ -288,6 +293,7 @@ export async function POST(req: NextRequest) {
             const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).eq("card_number", padded).limit(5);
             cards = data || [];
           }
+          if (cards.length > 0) attemptHit = 5;
         }
       }
 
@@ -312,6 +318,7 @@ export async function POST(req: NextRequest) {
             const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", visionResult.name).in("card_number", allVariants).limit(10);
             cards = data || [];
           }
+          if (cards.length > 0) attemptHit = 6;
         }
       }
 
@@ -328,6 +335,7 @@ export async function POST(req: NextRequest) {
           const { data } = await supabase.from("catalog_cards").select(CATALOG_SELECT).eq("game", game).ilike("name", `%${visionResult.name}%`).order("set_code", { ascending: false }).limit(10);
           cards = data || [];
         }
+        if (cards.length > 0) attemptHit = 7;
       }
     }
 
@@ -362,6 +370,12 @@ export async function POST(req: NextRequest) {
     if (!visionValidated && cards.length > 1) {
       confidenceBand = "unclear";
     }
+    // Force-pick: when the name-only fuzzy fallback (attempt 7) returns >3
+    // candidates, holo-glare phash is unreliable so we never auto-pick. Cap
+    // candidates at 6 (post-rerank), force band='unclear', let the client
+    // surface a Pick Your Version picker with no auto-select.
+    const forcePickRequired = attemptHit === 7 && cards.length > 3;
+    if (forcePickRequired) confidenceBand = "unclear";
     const candidates = cards.map((card: any, i: number) => ({
       rank: i + 1, catalogCardId: `${card.set_code}-${card.card_number}`, name: card.name, setName: card.set_name, setCode: card.set_code, cardNumber: card.card_number, rarity: card.rarity,
       imageSmallUrl: `https://images.pokemontcg.io/${card.set_code}/${card.card_number}.png`,
@@ -411,6 +425,10 @@ export async function POST(req: NextRequest) {
         } else if (topDist <= 26 && visionWeak) {
           // Weak match — only trust verifier when vision was uncertain
           shouldRerank = true;
+        } else if (forcePickRequired) {
+          // Force-pick: distances are unreliable but ordering still helps the
+          // user — best phash distance first nudges their first instinct.
+          shouldRerank = true;
         }
         // else: likely mismatch — preserve vision ranking
 
@@ -441,6 +459,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Cap candidates returned in the force-pick path. 6 is a tractable picker
+    // strip width; more would be visually overwhelming on mobile.
+    if (forcePickRequired && candidates.length > 6) {
+      candidates.splice(6);
+      candidates.forEach((c, i) => { c.rank = i + 1; });
+    }
+
     // Telemetry: vision success (uses post-rerank candidate order)
     const topDistance = candidates[0]?.weightedDistance ?? 0;
     let scanResultId: string | null = null;
@@ -466,10 +491,11 @@ export async function POST(req: NextRequest) {
         torchSupported: typeof torch_supported === "boolean" ? torch_supported : null,
         probeResult: typeof probe_result === "string" ? probe_result : null,
         showId: activeShowId,
+        matchAttempt: attemptHit,
       });
     }
 
-    return respond(NextResponse.json({ ok: true, method: "vision", visionResult, result: { confidenceBand, topDistance, candidates }, scan_session_id: sessionId, scan_result_id: scanResultId }));
+    return respond(NextResponse.json({ ok: true, method: "vision", visionResult, result: { confidenceBand, topDistance, candidates, force_pick_required: forcePickRequired }, scan_session_id: sessionId, scan_result_id: scanResultId }));
   } catch (err: any) {
     console.error(`[${ROUTE}] unhandled:`, err?.message);
     return respond(errorResponse({ code: ErrorCode.SERVER_ERROR, requestId }));

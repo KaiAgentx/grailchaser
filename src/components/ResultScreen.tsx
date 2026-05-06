@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase";
 import { bg, surface, surface2, border, green, red, amber, muted, text, font, mono } from "./styles";
 import type { RecognitionSuccess, CandidateCard } from "@/types/tcg";
+import { VariantPickerStrip } from "./atoms/VariantPickerStrip";
 import { fmtPrice } from "@/lib/tcg/variants";
 import { GAME_DISPLAY_NAME, type TcgGame } from "@/lib/games";
 import type { GradedComps, GradedCompsOutcome } from "@/lib/ppt/client";
@@ -63,8 +64,11 @@ async function jwt(): Promise<string | null> {
 
 export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId, scanResultId, rank1CatalogCardId, boxes, addBox, addCard, pendingFront, pendingBack }: Props) {
   const candidates: CandidateCard[] = result.result?.candidates || [];
-  const [selectedCardId, setSelectedCardId] = useState(candidates[0]?.catalogCardId || "");
-  const selected = candidates.find(c => c.catalogCardId === selectedCardId) || candidates[0];
+  const forcePickRequired = result.result?.force_pick_required ?? false;
+  // Force-pick mode starts unselected so the user is forced to pick one of
+  // the fuzzy-fallback candidates. Normal flow auto-selects rank-1.
+  const [selectedCardId, setSelectedCardId] = useState(forcePickRequired ? "" : (candidates[0]?.catalogCardId || ""));
+  const selected = candidates.find(c => c.catalogCardId === selectedCardId) ?? null;
 
   const [compsState, setCompsState] = useState<CompsState>({ kind: "loading" });
   const [compsRetryToken, setCompsRetryToken] = useState(0);
@@ -316,6 +320,26 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
     );
   }
 
+  // ─── Force pick (fuzzy fallback returned >3 candidates) ───
+  if (forcePickRequired && !selected) {
+    return (
+      <div style={{ background: bg, color: text, fontFamily: font, minHeight: "100vh", maxWidth: 500, margin: "0 auto" }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: "rgba(8,9,13,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderBottom: "1px solid " + border, padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <button onClick={onBack} aria-label="Back" style={{ background: "none", border: "none", color: muted, cursor: "pointer", padding: "8px 4px", lineHeight: 1, display: "flex", alignItems: "center" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#D4A843", textTransform: "uppercase", letterSpacing: 1.5 }}>Pokémon</span>
+          <button onClick={onScanAnother} style={{ background: "rgba(53,99,233,0.12)", border: "1px solid rgba(53,99,233,0.25)", borderRadius: 8, padding: "8px 14px", color: "#5B8DEF", fontFamily: font, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Scan Another</button>
+        </div>
+        <div style={{ padding: "16px 20px 80px" }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 6 }}>Which version is this?</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", marginBottom: 16 }}>We weren{"'"}t sure — tap the card you have to see comps.</div>
+          <VariantPickerStrip candidates={candidates} selectedId={selectedCardId || null} onSelect={setSelectedCardId} />
+        </div>
+      </div>
+    );
+  }
+
   const imgSrc = selected?.imageSmallUrl || selected?.imageLargeUrl;
 
   return (
@@ -357,24 +381,7 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
 
         {/* Pick Your Version (candidate disambiguation) */}
         {candidates.length >= 2 && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: "rgba(255,255,255,0.3)", fontWeight: 600, marginBottom: 8 }}>Pick Your Version</div>
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 6, WebkitOverflowScrolling: "touch" }}>
-              {candidates.map(c => {
-                const isSel = c.catalogCardId === selectedCardId;
-                return (
-                  <button key={c.catalogCardId} onClick={() => setSelectedCardId(c.catalogCardId)} style={{ position: "relative", flex: "0 0 auto", minWidth: 110, scrollSnapAlign: "start", background: isSel ? "rgba(212,168,67,0.06)" : "rgba(255,255,255,0.02)", border: isSel ? "2px solid #D4A843" : "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: 6, cursor: "pointer", textAlign: "center" }}>
-                    {(c.imageSmallUrl || c.imageLargeUrl) ? (
-                      <img src={c.imageSmallUrl || c.imageLargeUrl || ""} alt="" loading="lazy" onError={e => (e.currentTarget.style.display = "none")} style={{ width: 96, height: 134, objectFit: "contain", borderRadius: 5, marginBottom: 4 }} />
-                    ) : (
-                      <div style={{ width: 96, height: 134, background: surface2, borderRadius: 5, marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: muted, margin: "0 auto" }}>🎴</div>
-                    )}
-                    <div style={{ fontSize: 11, color: isSel ? "#D4A843" : "rgba(255,255,255,0.8)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.setName}</div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <VariantPickerStrip candidates={candidates} selectedId={selectedCardId || null} onSelect={setSelectedCardId} />
         )}
 
         {/* Comps panel */}
