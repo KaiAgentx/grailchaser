@@ -445,7 +445,7 @@ export function CardDetail({ card, boxes, userId, onBack, updateCard, updateCard
             </div>
             <div>
               <div style={labelStyle}>COST BASIS</div>
-              <div style={{ fontFamily: mono, fontSize: 22, fontWeight: 700 }}>${card.cost_basis}</div>
+              <div style={{ fontFamily: mono, fontSize: 22, fontWeight: 700 }}>${(card.cost_basis ?? 0).toFixed(2)}</div>
             </div>
             <div>
               <div style={labelStyle}>TIER</div>
