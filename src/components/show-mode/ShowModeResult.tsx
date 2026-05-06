@@ -9,7 +9,9 @@ import { ErrorBanner } from "@/components/atoms/ErrorBanner";
 import { Toast, type ToastVariant } from "@/components/atoms/Toast";
 import { VariantPickerStrip } from "@/components/atoms/VariantPickerStrip";
 import { DecisionMathPanel } from "./DecisionMathPanel";
+import { GradedCompsCard } from "./GradedCompsCard";
 import { NegotiateModal } from "./NegotiateModal";
+import { useGradedComps } from "@/hooks/useGradedComps";
 import { computeDecisionMetrics } from "@/lib/pricing/decision";
 import { calcTier, TIER_LABEL } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
@@ -217,6 +219,15 @@ export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDeci
     })();
     return () => { cancelled = true; };
   }, [scanResultId, preloaded, selectedCandidate?.catalogCardId]);
+
+  // Graded comps — eBay sold + PSA tier averages from PPT. Render-only-when-
+  // grade-worthy: GradedCompsCard mounts only if state is ok AND psa10_avg is
+  // non-null. Bulk commons get nothing; no taps required at the show floor.
+  const { state: compsState } = useGradedComps({
+    name: selectedCandidate?.name,
+    setName: selectedCandidate?.setName,
+    cardNumber: selectedCandidate?.cardNumber,
+  });
 
   // Derived values
   const player = scan?.final_catalog_name ?? scan?.catalog_match_name ?? null;
@@ -432,6 +443,11 @@ export function ShowModeResult({ scanResultId, showId, preloaded, onBack, onDeci
               <VerdictStrip state={verdictState} detail={verdictDetail} />
             )}
           </div>
+
+          {/* Graded comps — only when grade-worthy (PSA 10 average present) */}
+          {compsState.kind === "ok" && compsState.comps.psa10_avg != null && (
+            <GradedCompsCard comps={compsState.comps} />
+          )}
 
           {/* Math panel */}
           <div style={{ marginBottom: 20 }}>

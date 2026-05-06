@@ -6,7 +6,7 @@ import type { RecognitionSuccess, CandidateCard } from "@/types/tcg";
 import { VariantPickerStrip } from "./atoms/VariantPickerStrip";
 import { fmtPrice } from "@/lib/tcg/variants";
 import { GAME_DISPLAY_NAME, type TcgGame } from "@/lib/games";
-import type { GradedComps, GradedCompsOutcome } from "@/lib/ppt/client";
+import { useGradedComps } from "@/hooks/useGradedComps";
 import type { Box, BoxType } from "@/hooks/useBoxes";
 import { uploadCardScansAsync } from "@/lib/userScanStorage";
 
@@ -25,14 +25,6 @@ interface Props {
   pendingFront?: File | null;
   pendingBack?: Blob | null;
 }
-
-type CompsState =
-  | { kind: "loading" }
-  | { kind: "ok"; comps: GradedComps }
-  | { kind: "not_found" }
-  | { kind: "timeout" }
-  | { kind: "rate_limited"; retryAfterSeconds?: number }
-  | { kind: "error"; message?: string };
 
 type PurchaseStage = "idle" | "confirming" | "saving";
 
@@ -70,8 +62,11 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
   const [selectedCardId, setSelectedCardId] = useState(forcePickRequired ? "" : (candidates[0]?.catalogCardId || ""));
   const selected = candidates.find(c => c.catalogCardId === selectedCardId) ?? null;
 
-  const [compsState, setCompsState] = useState<CompsState>({ kind: "loading" });
-  const [compsRetryToken, setCompsRetryToken] = useState(0);
+  const { state: compsState, retry: retryComps } = useGradedComps({
+    name: selected?.name,
+    setName: selected?.setName,
+    cardNumber: selected?.cardNumber,
+  });
   const [ownedCount, setOwnedCount] = useState<number | null>(null);
   const [dealerAsk, setDealerAsk] = useState<string>("");
   const [purchaseStage, setPurchaseStage] = useState<PurchaseStage>("idle");
@@ -79,53 +74,6 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
   const [decisionInFlight, setDecisionInFlight] = useState<null | "skip" | "walked" | "purchased">(null);
   const [toast, setToast] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // ─── Fetch comps whenever the confirmed candidate (or retry token) changes ───
-  useEffect(() => {
-    if (!selected?.catalogCardId) return;
-    if (!selected.cardNumber) {
-      setCompsState({ kind: "not_found" });
-      return;
-    }
-    let cancelled = false;
-    setCompsState({ kind: "loading" });
-
-    (async () => {
-      const token = await jwt();
-      if (!token) { if (!cancelled) setCompsState({ kind: "error", message: "not authenticated" }); return; }
-      const params = new URLSearchParams({
-        name: selected.name,
-        setName: selected.setName,
-        cardNumber: selected.cardNumber!,
-      });
-      try {
-        const res = await fetch(`/api/tcg/graded-comps?${params}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          if (cancelled) return;
-          if (res.status === 429) setCompsState({ kind: "rate_limited" });
-          else setCompsState({ kind: "error", message: `HTTP ${res.status}` });
-          return;
-        }
-        const body = await res.json();
-        const outcome: GradedCompsOutcome | undefined = body?.outcome;
-        if (cancelled) return;
-        if (!outcome) { setCompsState({ kind: "error", message: "no outcome" }); return; }
-        switch (outcome.status) {
-          case "ok": setCompsState({ kind: "ok", comps: outcome.comps }); break;
-          case "not_found": setCompsState({ kind: "not_found" }); break;
-          case "timeout": setCompsState({ kind: "timeout" }); break;
-          case "rate_limited": setCompsState({ kind: "rate_limited", retryAfterSeconds: outcome.retryAfterSeconds }); break;
-          case "error": setCompsState({ kind: "error", message: outcome.message }); break;
-        }
-      } catch (err) {
-        if (!cancelled) setCompsState({ kind: "error", message: err instanceof Error ? err.message : "fetch failed" });
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [selected?.catalogCardId, selected?.name, selected?.setName, selected?.cardNumber, compsRetryToken]);
 
   // ─── Owned count (cards table) ───
   useEffect(() => {
@@ -404,7 +352,7 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
           )}
           {compsState.kind === "timeout" && (
             <div style={{ fontSize: 13, color: amber, textAlign: "center", padding: "12px 0" }}>
-              Comps lookup timed out. <button onClick={() => setCompsRetryToken(t => t + 1)} style={{ background: "none", border: "none", color: amber, fontFamily: font, fontSize: 13, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Retry</button>
+              Comps lookup timed out. <button onClick={() => retryComps()} style={{ background: "none", border: "none", color: amber, fontFamily: font, fontSize: 13, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Retry</button>
             </div>
           )}
           {compsState.kind === "rate_limited" && (
@@ -414,7 +362,7 @@ export function ResultScreen({ result, scanIntent, onBack, onScanAnother, userId
           )}
           {compsState.kind === "error" && (
             <div style={{ fontSize: 13, color: red, textAlign: "center", padding: "12px 0" }}>
-              Comps error{compsState.message ? `: ${compsState.message}` : ""}. <button onClick={() => setCompsRetryToken(t => t + 1)} style={{ background: "none", border: "none", color: red, fontFamily: font, fontSize: 13, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Retry</button>
+              Comps error{compsState.message ? `: ${compsState.message}` : ""}. <button onClick={() => retryComps()} style={{ background: "none", border: "none", color: red, fontFamily: font, fontSize: 13, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>Retry</button>
             </div>
           )}
           {compsState.kind === "ok" && (
