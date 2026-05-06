@@ -488,7 +488,7 @@ export function CardDetail({ card, boxes, userId, onBack, updateCard, updateCard
                   step="0.01"
                   min="0"
                   inputMode="decimal"
-                  value={val("cost_basis") ?? ""}
+                  value={('cost_basis' in edits ? edits.cost_basis : card.cost_basis) ?? ""}
                   onChange={e => setEdits({ ...edits, cost_basis: e.target.value === "" ? null : parseFloat(e.target.value) } as any)}
                   style={inputStyle}
                 />
