@@ -8,12 +8,13 @@ interface Props {
 /**
  * ShowModeBanner — dramatic full-width CTA above Quick Actions.
  *
- * Hardcoded red/orange gradient (one-off, not a gc-* token). Two states:
- *   - idle: "START SHOW MODE" + "Track buys, walks, negotiations"
- *   - resume: "RESUME ACTIVE SHOW" + show name (or "Untitled show")
+ * Style A (metallic gloss): vertical red/orange gradient with a horizontal
+ * white sheen midway and a thin top highlight stripe to suggest brushed
+ * metal. Centered icon-and-text stack; whole banner is the tappable surface.
  *
- * Both states share the same visual treatment per locked spec — copy is
- * the only difference.
+ * Two states differ only in copy:
+ *   - idle:  "START SHOW MODE" + "Track buys, walks, negotiations"
+ *   - resume: "RESUME ACTIVE SHOW" + show name (or "Untitled show")
  */
 export function ShowModeBanner({ activeShow, onClick }: Props) {
   const title = activeShow ? "RESUME ACTIVE SHOW" : "START SHOW MODE";
@@ -22,52 +23,99 @@ export function ShowModeBanner({ activeShow, onClick }: Props) {
   return (
     <button
       onClick={onClick}
-      className="font-gc-ui show-mode-banner"
+      className="font-gc-ui"
       style={{
         position: "relative",
-        zIndex: 1,
         width: "100%",
-        minHeight: 88,
+        minHeight: 108,
         marginBottom: 16,
-        padding: "16px 20px",
-        background: "linear-gradient(135deg, #3a0a0a 0%, #8b1a0a 45%, #ff5722 100%)",
-        border: "1px solid rgba(255, 100, 50, 0.4)",
-        borderRadius: 16,
-        boxShadow: "0 0 24px rgba(255, 80, 30, 0.3)",
-        color: "#ffffff",
+        padding: 0,
+        border: "0.5px solid rgba(255, 180, 150, 0.5)",
+        borderRadius: 14,
+        background: "linear-gradient(180deg, #5a0000 0%, #a01010 22%, #e23a1a 48%, #ff5224 52%, #a01010 78%, #3a0000 100%)",
+        boxShadow: "0 0 32px rgba(255, 80, 30, 0.35)",
         cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        textAlign: "left",
         overflow: "hidden",
+        color: "#ffffff",
       }}
     >
-      <span style={{ flexShrink: 0, color: "var(--gc-brand-gold-500)", display: "inline-flex" }}>
+      {/* Top highlight stripe — brushed-metal cue */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: "rgba(255, 200, 180, 0.45)",
+          pointerEvents: "none",
+        }}
+      />
+      {/* Horizontal sheen overlay */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 45%, rgba(255,255,255,0) 55%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Centered content stack */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          padding: "18px 16px",
+        }}
+      >
         <LightningIcon />
-      </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "#ffffff", textTransform: "uppercase", letterSpacing: 0.8 }}>
+        <div
+          style={{
+            color: "#fff",
+            fontSize: 17,
+            fontWeight: 800,
+            letterSpacing: 3,
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+          }}
+        >
           {title}
         </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.78)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div
+          style={{
+            color: "rgba(255, 230, 220, 0.85)",
+            fontSize: 12,
+            fontWeight: 500,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            maxWidth: "100%",
+          }}
+        >
           {subtitle}
         </div>
       </div>
-      <span aria-hidden style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", border: "1.5px solid var(--gc-brand-gold-500)", display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#ffffff" }}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="5" y1="12" x2="19" y2="12" />
-          <polyline points="12 5 19 12 12 19" />
-        </svg>
-      </span>
     </button>
   );
 }
 
 function LightningIcon() {
   return (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
+    <svg width="22" height="28" viewBox="0 0 22 28" aria-hidden="true">
+      <defs>
+        <linearGradient id="boltGoldA" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fde68a" />
+          <stop offset="100%" stopColor="#9c7e1c" />
+        </linearGradient>
+      </defs>
+      <path d="M 14 0 L 22 0 L 8 14 L 18 14 L 4 28 L 10 16 L 0 16 Z" fill="url(#boltGoldA)" stroke="#7d5e10" strokeWidth="0.5" strokeLinejoin="round" />
     </svg>
   );
 }

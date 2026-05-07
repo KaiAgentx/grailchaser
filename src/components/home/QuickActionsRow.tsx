@@ -7,11 +7,11 @@ interface Props {
 }
 
 /**
- * QuickActionsRow — three icon-tile buttons under the home header.
+ * QuickActionsRow — three heraldic-crest tiles under the Show Mode banner.
  *
- * Quick Check (camera scan, no save) / Add Card (camera scan, save to box) /
- * Batch Import (CSV/multi-card upload). All wired to existing screen routes
- * via the parent's navigation callbacks.
+ * Each tile displays a unique shield silhouette (Style A: heraldic crest)
+ * with the action's icon embedded inside, drawn entirely as a single SVG.
+ * The shield is the frame — no separate icon-circle.
  */
 export function QuickActionsRow({ onQuickCheck, onAddCard, onBatchImport }: Props) {
   return (
@@ -26,21 +26,21 @@ export function QuickActionsRow({ onQuickCheck, onAddCard, onBatchImport }: Prop
           .quick-actions-row button:active { transform: scale(0.98); }
         }
       `}</style>
-      <Tile label="Quick Check" onClick={onQuickCheck} icon={<SearchIcon />} />
-      <Tile label="Add Card" onClick={onAddCard} icon={<PlusIcon />} />
-      <Tile label="Batch Import" onClick={onBatchImport} icon={<StackIcon />} />
+      <Tile label="Quick Check" onClick={onQuickCheck} emblem={<QuickCheckCrest />} />
+      <Tile label="Add Card" onClick={onAddCard} emblem={<AddCardCrest />} />
+      <Tile label="Batch Import" onClick={onBatchImport} emblem={<BatchImportCrest />} />
     </div>
   );
 }
 
-function Tile({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
+function Tile({ label, emblem, onClick }: { label: string; emblem: React.ReactNode; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       className="font-gc-ui"
       style={{
         flex: 1,
-        minHeight: 110,
+        minHeight: 130,
         background: "var(--gc-bg-surface-1)",
         border: "1px solid var(--gc-border-subtle)",
         borderRadius: 14,
@@ -51,53 +51,76 @@ function Tile({ label, icon, onClick }: { label: string; icon: React.ReactNode; 
         alignItems: "center",
         justifyContent: "center",
         gap: 12,
-        padding: "18px 12px",
+        padding: "16px 12px",
       }}
     >
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: "50%",
-          background: "color-mix(in srgb, var(--gc-brand-gold-500) 10%, transparent)",
-          border: "1.5px solid color-mix(in srgb, var(--gc-brand-gold-500) 45%, transparent)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--gc-brand-gold-500)",
-        }}
-      >
-        {icon}
-      </div>
+      {emblem}
       <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", textAlign: "center", color: "var(--gc-brand-gold-500)" }}>{label}</span>
     </button>
   );
 }
 
-function SearchIcon() {
+function QuickCheckCrest() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <svg width="56" height="64" viewBox="0 0 72 80" aria-hidden="true">
+      <defs>
+        <linearGradient id="crestQCgold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fde68a" />
+          <stop offset="50%" stopColor="#d4af3c" />
+          <stop offset="100%" stopColor="#7d5e10" />
+        </linearGradient>
+        <linearGradient id="crestQCrim" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f5d76e" />
+          <stop offset="100%" stopColor="#9c7e1c" />
+        </linearGradient>
+      </defs>
+      <path d="M 4 4 L 68 4 L 68 28 Q 68 60 36 76 Q 4 60 4 28 Z" fill="#0e0e0e" stroke="url(#crestQCrim)" strokeWidth="2.5" />
+      <circle cx="32" cy="34" r="14" fill="none" stroke="url(#crestQCgold)" strokeWidth="3" />
+      <line x1="42" y1="44" x2="54" y2="56" stroke="url(#crestQCgold)" strokeWidth="4" strokeLinecap="round" />
     </svg>
   );
 }
 
-function PlusIcon() {
+function AddCardCrest() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="8" x2="12" y2="16" />
-      <line x1="8" y1="12" x2="16" y2="12" />
+    <svg width="56" height="64" viewBox="0 0 72 80" aria-hidden="true">
+      <defs>
+        <linearGradient id="crestACgold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fde68a" />
+          <stop offset="50%" stopColor="#d4af3c" />
+          <stop offset="100%" stopColor="#7d5e10" />
+        </linearGradient>
+        <linearGradient id="crestACrim" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f5d76e" />
+          <stop offset="100%" stopColor="#9c7e1c" />
+        </linearGradient>
+      </defs>
+      <path d="M 4 4 Q 36 -2 68 4 L 68 28 Q 68 60 36 76 Q 4 60 4 28 Z" fill="#0e0e0e" stroke="url(#crestACrim)" strokeWidth="2.5" />
+      <rect x="22" y="22" width="28" height="36" rx="3" fill="none" stroke="url(#crestACgold)" strokeWidth="2.5" />
+      <line x1="36" y1="32" x2="36" y2="50" stroke="url(#crestACgold)" strokeWidth="3.5" strokeLinecap="round" />
+      <line x1="27" y1="41" x2="45" y2="41" stroke="url(#crestACgold)" strokeWidth="3.5" strokeLinecap="round" />
     </svg>
   );
 }
 
-function StackIcon() {
+function BatchImportCrest() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="13" height="13" rx="2" />
-      <path d="M8 8h13v13a2 2 0 0 1-2 2H8" />
+    <svg width="56" height="64" viewBox="0 0 72 80" aria-hidden="true">
+      <defs>
+        <linearGradient id="crestBIgold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fde68a" />
+          <stop offset="50%" stopColor="#d4af3c" />
+          <stop offset="100%" stopColor="#7d5e10" />
+        </linearGradient>
+        <linearGradient id="crestBIrim" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f5d76e" />
+          <stop offset="100%" stopColor="#9c7e1c" />
+        </linearGradient>
+      </defs>
+      <path d="M 4 4 L 68 4 L 62 28 L 68 48 L 62 64 L 36 76 L 10 64 L 4 48 L 10 28 Z" fill="#0e0e0e" stroke="url(#crestBIrim)" strokeWidth="2.5" />
+      <rect x="20" y="20" width="22" height="30" rx="3" fill="none" stroke="url(#crestBIgold)" strokeWidth="1.6" opacity="0.6" />
+      <rect x="26" y="26" width="22" height="30" rx="3" fill="none" stroke="url(#crestBIgold)" strokeWidth="1.8" opacity="0.8" />
+      <rect x="32" y="32" width="22" height="30" rx="3" fill="#0e0e0e" stroke="url(#crestBIgold)" strokeWidth="2.5" />
     </svg>
   );
 }

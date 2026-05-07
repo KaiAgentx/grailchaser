@@ -69,10 +69,11 @@ export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, boxe
             letterSpacing: "0.01em",
             lineHeight: 1.05,
             color: "var(--gc-text-primary)",
+            textAlign: "center",
           }}>{gameDisplayName}</h1>
 
           {/* Game pills */}
-          <div className="home-game-pills" style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "nowrap", paddingTop: 4, paddingBottom: 4 }}>
+          <div className="home-game-pills" style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "nowrap", justifyContent: "center", paddingTop: 4, paddingBottom: 4 }}>
             {TCG_GAME_LIST.map(g => {
               const isActive = activeGame === g;
               const dimmed = isComingSoon(g);
