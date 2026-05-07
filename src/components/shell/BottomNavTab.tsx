@@ -36,9 +36,10 @@ export function BottomNavTab({ id, label, icon, active, elevated, onTap }: Props
           style={{
             width: 56,
             height: 56,
-            background: "var(--gc-zone-scan-500)",
+            background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
             color: "var(--gc-text-primary)",
             transform: "translateY(-12px)",
+            boxShadow: "0 8px 24px rgba(91, 109, 246, 0.35)",
             /* Pulse duration per design tokens motion.use.showModeCapturePulse */
             animation: "gcScanPulse 1800ms cubic-bezier(0.19, 1, 0.22, 1) infinite",
           }}

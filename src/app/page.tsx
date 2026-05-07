@@ -153,6 +153,7 @@ export default function Home() {
         activeGame={activeGame}
         setActiveGame={setActiveGame}
         activeShow={activeShow}
+        boxesCount={boxes.length}
         onStartOrResumeShow={() => setScreen(activeShow ? "showHomeActive" : "showHomeIdle")}
         onQuickCheck={() => { setScanIntent("check"); setScreen("scan"); }}
         onAddCard={() => { setScanIntent("collect"); setScreen("scan"); }}
@@ -161,6 +162,7 @@ export default function Home() {
           const card = cards.find(c => c.id === cardId);
           if (card) goToCardDetail(card, "home");
         }}
+        onViewAllCards={() => { setStatusFilter(""); setScreen("myCards"); }}
       />
     </AppShell>
   );

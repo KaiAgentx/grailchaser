@@ -15,7 +15,17 @@ interface Props {
  */
 export function QuickActionsRow({ onQuickCheck, onAddCard, onBatchImport }: Props) {
   return (
-    <div style={{ display: "flex", gap: 12, marginBottom: 32 }}>
+    <div className="quick-actions-row" style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+      <style>{`
+        .quick-actions-row button { transition: transform 120ms ease, filter 220ms ease; }
+        @media (hover: none) {
+          .quick-actions-row button:active { transform: scale(0.97); filter: brightness(1.08); }
+        }
+        @media (hover: hover) {
+          .quick-actions-row button:hover { filter: brightness(1.08); }
+          .quick-actions-row button:active { transform: scale(0.98); }
+        }
+      `}</style>
       <Tile label="Quick Check" onClick={onQuickCheck} icon={<SearchIcon />} />
       <Tile label="Add Card" onClick={onAddCard} icon={<PlusIcon />} />
       <Tile label="Batch Import" onClick={onBatchImport} icon={<StackIcon />} />
@@ -30,27 +40,27 @@ function Tile({ label, icon, onClick }: { label: string; icon: React.ReactNode; 
       className="font-gc-ui"
       style={{
         flex: 1,
-        minHeight: 96,
+        minHeight: 110,
         background: "var(--gc-bg-surface-1)",
         border: "1px solid var(--gc-border-subtle)",
-        borderRadius: "var(--gc-radius-md)",
+        borderRadius: 14,
         color: "var(--gc-text-primary)",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 10,
-        padding: "16px 12px",
+        gap: 12,
+        padding: "18px 12px",
       }}
     >
       <div
         style={{
-          width: 36,
-          height: 36,
+          width: 44,
+          height: 44,
           borderRadius: "50%",
-          background: "color-mix(in srgb, var(--gc-brand-gold-500) 12%, transparent)",
-          border: "1px solid color-mix(in srgb, var(--gc-brand-gold-500) 35%, transparent)",
+          background: "color-mix(in srgb, var(--gc-brand-gold-500) 10%, transparent)",
+          border: "1.5px solid color-mix(in srgb, var(--gc-brand-gold-500) 45%, transparent)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -59,7 +69,7 @@ function Tile({ label, icon, onClick }: { label: string; icon: React.ReactNode; 
       >
         {icon}
       </div>
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", textTransform: "uppercase", textAlign: "center", color: "var(--gc-text-secondary)" }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", textAlign: "center", color: "var(--gc-brand-gold-500)" }}>{label}</span>
     </button>
   );
 }

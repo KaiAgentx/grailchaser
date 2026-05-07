@@ -1,10 +1,13 @@
 "use client";
-import type { CSSProperties } from "react";
 import type { Game } from "@/lib/types";
 import { GAME_DISPLAY_NAME } from "@/lib/games";
 import { LoadingSkeleton } from "@/components/atoms/LoadingSkeleton";
+import { CollapsibleSection } from "@/components/atoms/CollapsibleSection";
+import { TopBrandBar } from "./TopBrandBar";
+import { ShowModeBanner } from "./ShowModeBanner";
 import { QuickActionsRow } from "./QuickActionsRow";
 import { RecentActivityFeed } from "./RecentActivityFeed";
+import { CollectionSummaryCard } from "./CollectionSummaryCard";
 import { useHomeData } from "@/hooks/useHomeData";
 
 interface Props {
@@ -12,83 +15,64 @@ interface Props {
   activeGame: Game;
   setActiveGame: (g: Game) => void;
   activeShow: { name: string | null } | null;
+  /** Total count of TCG boxes for the user (any game). Sourced from useBoxes
+   *  in page.tsx so we don't double-fetch — see techdebt note. */
+  boxesCount: number;
   onStartOrResumeShow: () => void;
   onQuickCheck: () => void;
   onAddCard: () => void;
   onBatchImport: () => void;
   onCardSelect: (cardId: string) => void;
+  /** Routes to the full collection list (myCards). */
+  onViewAllCards: () => void;
 }
 
 const TCG_GAME_LIST: Game[] = ["pokemon", "mtg", "one_piece"];
 const isComingSoon = (g: Game) => g === "mtg" || g === "one_piece";
 
-const PANEL_BG = "linear-gradient(180deg, rgba(18,22,28,0.92) 0%, rgba(10,13,18,0.92) 100%)";
-const PANEL_BORDER = "1px solid rgba(255,255,255,0.07)";
-const PANEL_SHADOW = "0 12px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 1px rgba(255,255,255,0.02)";
-const sectionLabelStyle: CSSProperties = {
-  fontFamily: "'Cormorant Garamond', Georgia, serif",
-  fontWeight: 600,
-  fontSize: 18,
-  color: "#b5afa6",
-  marginBottom: 14,
-};
-
 const fmtMoney = (v: number) => `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, onStartOrResumeShow, onQuickCheck, onAddCard, onBatchImport, onCardSelect }: Props) {
-  const { cardCount, totalValue, recentlyAdded, recentActivity, loading } = useHomeData(userId, activeGame);
+export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, boxesCount, onStartOrResumeShow, onQuickCheck, onAddCard, onBatchImport, onCardSelect, onViewAllCards }: Props) {
+  const { cardCount, totalValue, gradedCount, roiPct, avgCardValue, recentlyAdded, recentActivity, loading } = useHomeData(userId, activeGame);
   const gameDisplayName = GAME_DISPLAY_NAME[activeGame] || "TCG";
   const hasData = (cardCount ?? 0) > 0;
 
   return (
-    <div style={{ background: "#060606", minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden", color: "#f4f1ea" }}>
+    <div style={{ background: "var(--gc-bg-canvas)", minHeight: "100vh", width: "100%", position: "relative", overflow: "hidden", color: "var(--gc-text-primary)" }}>
       <style>{`
-        .tcg-zero-cta { transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease; }
-        .tcg-zero-cta:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 14px 32px rgba(146,107,23,0.32), inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.10) !important; }
-        .tcg-thumbs-row { scrollbar-width: none; -ms-overflow-style: none; }
-        .tcg-thumbs-row::-webkit-scrollbar { display: none; }
-        .tcg-game-pills::-webkit-scrollbar { display: none; }
+        .home-thumbs-row { scrollbar-width: none; -ms-overflow-style: none; }
+        .home-thumbs-row::-webkit-scrollbar { display: none; }
+        .home-game-pills::-webkit-scrollbar { display: none; }
+        .home-zero-cta { transition: transform 220ms ease, filter 220ms ease; }
+        .home-zero-cta:active { transform: scale(0.985); filter: brightness(1.08); }
 
         @media (max-width: 720px) {
-          .tcg-home-wrapper { padding: 40px 20px 80px !important; }
-          .tcg-title { font-size: 30px !important; }
-          .tcg-hero { padding: 24px 22px !important; }
-          .tcg-hero-number { font-size: 44px !important; }
-          .tcg-hero-value { font-size: 22px !important; }
-        }
-
-        @media (hover: none) {
-          .tcg-zero-cta:hover { transform: none !important; box-shadow: revert !important; filter: none !important; }
-          .tcg-zero-cta:active { transform: scale(0.985) !important; transition: transform 120ms ease !important; }
+          .home-wrapper { padding: 12px 20px 80px !important; }
+          .home-page-title { font-size: 36px !important; }
         }
       `}</style>
 
-      <div className="tcg-home-wrapper" style={{ maxWidth: 1040, margin: "0 auto", padding: "6vh 24px 100px", position: "relative", display: "flex", flexDirection: "column" }}>
-        {/* Atmosphere layers */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse 80% 50% at 50% 25%, rgba(212,175,82,0.07) 0%, transparent 60%)" }} />
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at 50% 50%, rgba(20,15,8,0.35) 0%, transparent 70%)" }} />
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.55) 100%)" }} />
+      <div className="home-wrapper" style={{ maxWidth: 720, margin: "0 auto", padding: "12px 24px 100px", position: "relative", display: "flex", flexDirection: "column" }}>
+        {/* Atmosphere — subtle gold wash behind hero, kept from prior version for warmth */}
+        <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, background: "radial-gradient(ellipse 80% 40% at 50% 18%, rgba(212,175,82,0.05) 0%, transparent 60%)" }} />
 
-        {/* ─── Header (artisanal) ─── */}
-        <div style={{ position: "relative", zIndex: 1, marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16 }}>
-            <h1 className="tcg-title" style={{
-              margin: 0,
-              fontFamily: "'Cormorant Garamond', Georgia, serif",
-              fontWeight: 700,
-              fontSize: "clamp(32px, 5vw, 44px)",
-              letterSpacing: "0.01em",
-              lineHeight: 1.05,
-              background: "linear-gradient(180deg, #f4f1ea 0%, #c4bfb8 100%)",
-              WebkitBackgroundClip: "text",
-              backgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              color: "#f4f1ea",
-            }}>{gameDisplayName}</h1>
-          </div>
+        {/* ─── Top brand bar ─── */}
+        <TopBrandBar activeGame={activeGame} />
+
+        {/* ─── Page title ─── */}
+        <div style={{ position: "relative", zIndex: 1, marginBottom: 18 }}>
+          <h1 className="home-page-title" style={{
+            margin: 0,
+            fontFamily: "'Cormorant Garamond', Georgia, serif",
+            fontWeight: 700,
+            fontSize: "clamp(36px, 5vw, 44px)",
+            letterSpacing: "0.01em",
+            lineHeight: 1.05,
+            color: "var(--gc-text-primary)",
+          }}>{gameDisplayName}</h1>
 
           {/* Game pills */}
-          <div className="tcg-game-pills" style={{ display: "flex", gap: 8, marginTop: 18, marginBottom: 28, flexWrap: "nowrap", paddingTop: 12, paddingBottom: 4 }}>
+          <div className="home-game-pills" style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "nowrap", paddingTop: 4, paddingBottom: 4 }}>
             {TCG_GAME_LIST.map(g => {
               const isActive = activeGame === g;
               const dimmed = isComingSoon(g);
@@ -97,14 +81,15 @@ export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, onSt
                   key={g}
                   onClick={() => { if (!dimmed) setActiveGame(g); }}
                   disabled={dimmed}
+                  className="font-gc-ui"
                   style={{
                     position: "relative",
                     flexShrink: 0,
                     padding: "7px 16px",
-                    background: dimmed ? "rgba(255,255,255,0.03)" : isActive ? "rgba(212,175,82,0.15)" : "rgba(255,255,255,0.04)",
-                    border: `1px solid ${dimmed ? "rgba(255,255,255,0.08)" : isActive ? "rgba(212,175,82,0.5)" : "rgba(255,255,255,0.1)"}`,
+                    background: dimmed ? "rgba(255,255,255,0.03)" : isActive ? "color-mix(in srgb, var(--gc-brand-gold-500) 14%, transparent)" : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${dimmed ? "rgba(255,255,255,0.08)" : isActive ? "color-mix(in srgb, var(--gc-brand-gold-500) 50%, transparent)" : "rgba(255,255,255,0.1)"}`,
                     borderRadius: 9999,
-                    color: dimmed ? "#5a5a5a" : isActive ? "#e1c46d" : "#a7a19a",
+                    color: dimmed ? "rgba(255,255,255,0.3)" : isActive ? "var(--gc-brand-gold-500)" : "var(--gc-text-muted)",
                     fontSize: 12,
                     fontWeight: 600,
                     letterSpacing: "0.04em",
@@ -114,7 +99,7 @@ export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, onSt
                 >
                   {GAME_DISPLAY_NAME[g]}
                   {dimmed && (
-                    <span style={{ position: "absolute", top: -6, right: -8, fontSize: 7, fontWeight: 700, letterSpacing: "0.1em", color: "#d1aa48", background: "#060606", border: "1px solid rgba(212,175,82,0.4)", borderRadius: 4, padding: "2px 5px", pointerEvents: "none", textTransform: "uppercase" }}>Soon</span>
+                    <span style={{ position: "absolute", top: -6, right: -8, fontSize: 7, fontWeight: 700, letterSpacing: "0.1em", color: "var(--gc-brand-gold-500)", background: "var(--gc-bg-canvas)", border: "1px solid color-mix(in srgb, var(--gc-brand-gold-500) 45%, transparent)", borderRadius: 4, padding: "2px 5px", pointerEvents: "none", textTransform: "uppercase" }}>Soon</span>
                   )}
                 </button>
               );
@@ -122,48 +107,12 @@ export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, onSt
           </div>
         </div>
 
-        {/* ─── Show Mode CTA (gc-*, preserved verbatim) ─── */}
-        <button
-          onClick={onStartOrResumeShow}
-          className="font-gc-ui"
-          style={{
-            position: "relative",
-            zIndex: 1,
-            width: "100%",
-            minHeight: 80,
-            marginBottom: 16,
-            padding: "16px 20px",
-            background: activeShow
-              ? "transparent"
-              : "color-mix(in srgb, var(--gc-zone-show-500) 12%, var(--gc-bg-surface-1))",
-            border: `1.5px solid ${activeShow
-              ? "color-mix(in srgb, var(--gc-zone-show-500) 50%, transparent)"
-              : "color-mix(in srgb, var(--gc-zone-show-500) 35%, transparent)"}`,
-            borderRadius: "var(--gc-radius-lg)",
-            color: "var(--gc-text-primary)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            textAlign: "left",
-            boxShadow: activeShow ? "none" : "var(--gc-glow-show)",
-          }}
-        >
-          <span style={{ fontSize: 28 }}>{activeShow ? "🎴" : "⚡"}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--gc-text-primary)", textTransform: "uppercase", letterSpacing: 0.6 }}>
-              {activeShow ? "Resume Active Show" : "Start Show Mode"}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--gc-text-secondary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {activeShow
-                ? (activeShow.name || "Untitled show")
-                : "Track buys, walks, negotiations"}
-            </div>
-          </div>
-          <span style={{ fontSize: 18, color: "var(--gc-zone-show-500)" }}>→</span>
-        </button>
+        {/* ─── Show Mode banner (dramatic) ─── */}
+        <div style={{ position: "relative", zIndex: 1, marginTop: 16 }}>
+          <ShowModeBanner activeShow={activeShow} onClick={onStartOrResumeShow} />
+        </div>
 
-        {/* ─── Quick Actions (gc-*) ─── */}
+        {/* ─── Quick Actions ─── */}
         <div style={{ position: "relative", zIndex: 1 }}>
           <QuickActionsRow onQuickCheck={onQuickCheck} onAddCard={onAddCard} onBatchImport={onBatchImport} />
         </div>
@@ -171,91 +120,87 @@ export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, onSt
         {/* ─── Loading state ─── */}
         {loading && (
           <div style={{ position: "relative", zIndex: 1 }}>
-            <div style={{ marginBottom: 32 }}>
-              <LoadingSkeleton width="100%" height={140} borderRadius={20} />
+            <div style={{ marginBottom: 24 }}>
+              <LoadingSkeleton width="100%" height={160} borderRadius={16} />
             </div>
-            <div style={{ marginBottom: 32 }}>
-              <div style={sectionLabelStyle}>Recent Activity</div>
-              <div className="font-gc-ui" style={{ fontSize: 13, color: "var(--gc-text-muted)", padding: "20px 0" }}>
-                Loading recent activity…
-              </div>
+            <div className="font-gc-ui" style={{ fontSize: 13, color: "var(--gc-text-muted)", padding: "12px 0" }}>
+              Loading recent activity…
             </div>
           </div>
         )}
 
-        {/* ─── Zero state (artisanal, preserved) ─── */}
+        {/* ─── Zero state ─── */}
         {!loading && !hasData && (
+          <div style={{ position: "relative", zIndex: 1, background: "var(--gc-bg-surface-1)", border: "1px solid var(--gc-border-subtle)", borderRadius: 16, padding: "36px 28px", textAlign: "center", marginBottom: 24 }}>
+            <div className="font-gc-ui" style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.5, color: "var(--gc-brand-gold-500)", textTransform: "uppercase", marginBottom: 12 }}>Get Started</div>
+            <h2 style={{ margin: 0, marginBottom: 10, fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 700, fontSize: 26, color: "var(--gc-text-primary)", lineHeight: 1.15 }}>
+              Build Your {gameDisplayName} Collection
+            </h2>
+            <div className="font-gc-ui" style={{ fontSize: 14, color: "var(--gc-text-muted)", lineHeight: 1.5, maxWidth: 420, margin: "0 auto 20px" }}>
+              Scan your first card to unlock pricing, activity, and collection insights.
+            </div>
+            <button
+              className="home-zero-cta font-gc-ui"
+              onClick={onAddCard}
+              style={{
+                height: 48,
+                padding: "0 24px",
+                borderRadius: 10,
+                border: "none",
+                background: "linear-gradient(180deg, #d8b14c 0%, #b78935 100%)",
+                color: "#111",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(146,107,23,0.25)",
+              }}
+            >
+              Scan First Card
+            </button>
+          </div>
+        )}
+
+        {/* ─── Collection summary (structured) ─── */}
+        {!loading && hasData && (
           <div style={{ position: "relative", zIndex: 1 }}>
-            <div className="tcg-hero" style={{ background: PANEL_BG, border: PANEL_BORDER, borderRadius: 20, padding: "40px 36px", boxShadow: PANEL_SHADOW, textAlign: "center" }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.42em", color: "#8a7a4a", textTransform: "uppercase", marginBottom: 14 }}>Get Started</div>
-              <h2 style={{ margin: 0, marginBottom: 12, fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 700, fontSize: 28, color: "#f8f5ed", lineHeight: 1.1 }}>
-                Build Your {gameDisplayName} Collection
-              </h2>
-              <div style={{ fontSize: 15, color: "#b5afa6", lineHeight: 1.55, maxWidth: 460, margin: "0 auto 28px" }}>
-                Scan your first card to unlock pricing, activity, and collection insights.
-              </div>
+            <CollectionSummaryCard
+              cardCount={cardCount ?? 0}
+              totalValue={totalValue}
+              gradedCount={gradedCount}
+              boxesCount={boxesCount}
+              roi={roiPct}
+              avgCardValue={avgCardValue}
+            />
+          </div>
+        )}
+
+        {/* ─── Recent activity (collapsible, default expanded) ─── */}
+        {!loading && hasData && recentActivity.length > 0 && (
+          <div style={{ position: "relative", zIndex: 1, marginBottom: 28 }}>
+            <CollapsibleSection label="Recent Activity" storageKey="home_recent_activity_collapsed" defaultExpanded={true}>
+              <RecentActivityFeed items={recentActivity} onCardTap={onCardSelect} />
+            </CollapsibleSection>
+          </div>
+        )}
+
+        {/* ─── Recently added (with View all link) ─── */}
+        {!loading && hasData && recentlyAdded.length > 0 && (
+          <div style={{ position: "relative", zIndex: 1, marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <span className="font-gc-ui" style={{ fontSize: 11, fontWeight: 600, color: "var(--gc-brand-gold-500)", textTransform: "uppercase", letterSpacing: 1.5 }}>
+                Recently Added
+              </span>
               <button
-                className="tcg-zero-cta"
-                onClick={onAddCard}
-                style={{
-                  height: 52,
-                  padding: "0 28px",
-                  borderRadius: 12,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  background: "linear-gradient(180deg, #d8b14c 0%, #c89a2b 55%, #a67b1f 100%)",
-                  color: "#111111",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  letterSpacing: "0.2em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  boxShadow: "0 8px 20px rgba(146,107,23,0.18), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.10)",
-                }}
+                onClick={onViewAllCards}
+                className="font-gc-ui"
+                style={{ background: "transparent", border: "none", color: "var(--gc-text-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 4 }}
               >
-                Scan First Card
+                View all ›
               </button>
             </div>
-            <div style={{ marginTop: 40, textAlign: "center", opacity: 0.6 }}>
-              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.36em", color: "#8a7a4a", textTransform: "uppercase", marginBottom: 14 }}>Supported Games</div>
-              <div style={{ fontSize: 12, color: "#8e887f", lineHeight: 1.8 }}>
-                Available now &middot; Pokémon<br/>
-                Coming soon &middot; Magic: The Gathering, One Piece
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Hero summary (artisanal, preserved) ─── */}
-        {!loading && hasData && (
-          <div className="tcg-hero" style={{ position: "relative", zIndex: 1, background: PANEL_BG, border: PANEL_BORDER, borderRadius: 20, padding: 32, boxShadow: PANEL_SHADOW, marginBottom: 32 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.42em", color: "#8a7a4a", textTransform: "uppercase", marginBottom: 12 }}>Collection</div>
-            <div className="tcg-hero-number" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 48, color: "#f4f1ea", lineHeight: 1, marginBottom: 4, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
-              {cardCount}
-            </div>
-            <div style={{ fontSize: 13, color: "#a7a19a", letterSpacing: "0.04em" }}>cards owned</div>
-            <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "20px 0" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.28em", color: "#8a7a4a", textTransform: "uppercase" }}>Total Value</span>
-              <span className="tcg-hero-value" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontWeight: 700, fontSize: 28, color: "#e1c46d" }}>
-                {fmtMoney(totalValue)}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Recent Activity (gc-*) ─── */}
-        {!loading && hasData && recentActivity.length > 0 && (
-          <div style={{ position: "relative", zIndex: 1, marginBottom: 32 }}>
-            <div style={sectionLabelStyle}>Recent Activity</div>
-            <RecentActivityFeed items={recentActivity} onCardTap={onCardSelect} />
-          </div>
-        )}
-
-        {/* ─── Recently Added (gc-*) ─── */}
-        {!loading && hasData && recentlyAdded.length > 0 && (
-          <div style={{ position: "relative", zIndex: 1, marginBottom: 32 }}>
-            <div style={sectionLabelStyle}>Recently Added</div>
-            <div className="tcg-thumbs-row" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
+            <div className="home-thumbs-row" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 6, WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
               {recentlyAdded.map(c => (
                 <button
                   key={c.id}
@@ -267,7 +212,7 @@ export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, onSt
                     scrollSnapAlign: "start",
                     background: "var(--gc-bg-surface-1)",
                     border: "1px solid var(--gc-border-subtle)",
-                    borderRadius: "var(--gc-radius-md)",
+                    borderRadius: 12,
                     padding: 10,
                     textAlign: "left",
                     color: "var(--gc-text-primary)",
@@ -275,15 +220,15 @@ export function HomeScreen({ userId, activeGame, setActiveGame, activeShow, onSt
                   }}
                 >
                   {c.scan_image_url ? (
-                    <img src={c.scan_image_url} alt={c.player || ""} style={{ width: "100%", height: 144, objectFit: "cover", borderRadius: "var(--gc-radius-sm)", marginBottom: 8, background: "var(--gc-bg-surface-2)" }} />
+                    <img src={c.scan_image_url} alt={c.player || ""} style={{ width: "100%", aspectRatio: "5 / 7", objectFit: "cover", borderRadius: 8, marginBottom: 8, background: "var(--gc-bg-surface-2)" }} />
                   ) : (
-                    <div style={{ width: "100%", height: 144, background: "var(--gc-bg-surface-2)", borderRadius: "var(--gc-radius-sm)", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "var(--gc-text-muted)" }}>🎴</div>
+                    <div style={{ width: "100%", aspectRatio: "5 / 7", background: "var(--gc-bg-surface-2)", borderRadius: 8, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "var(--gc-text-muted)" }}>🎴</div>
                   )}
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--gc-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.player || "Unknown"}</div>
-                  <div style={{ fontSize: 10, color: "var(--gc-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--gc-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.player || "Unknown"}</div>
+                  <div style={{ fontSize: 11, color: "var(--gc-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
                     {[c.set, c.card_number].filter(Boolean).join(" · ") || "—"}
                   </div>
-                  <div className="font-gc-mono" style={{ fontSize: 12, color: "var(--gc-brand-gold-500)", fontWeight: 700, marginTop: 4 }}>{fmtMoney(Number(c.raw_value) || 0)}</div>
+                  <div className="font-gc-mono" style={{ fontSize: 13, color: "var(--gc-brand-gold-500)", fontWeight: 700, marginTop: 4 }}>{fmtMoney(Number(c.raw_value) || 0)}</div>
                 </button>
               ))}
             </div>

@@ -38,6 +38,13 @@ export interface HomeActivityItem {
 export interface HomeData {
   cardCount: number | null;
   totalValue: number;
+  /** Count of cards with status='graded'. */
+  gradedCount: number;
+  /** Portfolio-weighted ROI percent: (sum(raw)-sum(cost))/sum(cost)*100,
+   *  computed only over cards with cost_basis > 0. null when no eligible. */
+  roiPct: number | null;
+  /** totalValue / cardCount; 0 when cardCount is 0. */
+  avgCardValue: number;
   recentlyAdded: RecentlyAddedCard[];
   recentActivity: HomeActivityItem[];
   loading: boolean;
@@ -46,6 +53,9 @@ export interface HomeData {
 export function useHomeData(userId: string | null | undefined, activeGame: Game | null | undefined): HomeData {
   const [cardCount, setCardCount] = useState<number | null>(null);
   const [totalValue, setTotalValue] = useState<number>(0);
+  const [gradedCount, setGradedCount] = useState<number>(0);
+  const [roiPct, setRoiPct] = useState<number | null>(null);
+  const [avgCardValue, setAvgCardValue] = useState<number>(0);
   const [recentlyAdded, setRecentlyAdded] = useState<RecentlyAddedCard[]>([]);
   const [recentActivity, setRecentActivity] = useState<HomeActivityItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -61,20 +71,38 @@ export function useHomeData(userId: string | null | undefined, activeGame: Game 
     (async () => {
       try {
         const [statsRes, recentlyAddedRes, activityRes] = await Promise.allSettled([
-          supabase.from("cards").select("id, raw_value", { count: "exact" }).eq("user_id", userId).eq("game", activeGame),
+          supabase.from("cards").select("id, raw_value, cost_basis, status", { count: "exact" }).eq("user_id", userId).eq("game", activeGame),
           supabase.from("cards").select("id, player, set, card_number, raw_value, scan_image_url, created_at").eq("user_id", userId).eq("game", activeGame).order("created_at", { ascending: false }).limit(5),
           supabase.from("scan_results").select("id, catalog_match_name, final_catalog_name, user_decision, final_price_usd, created_at").eq("user_id", userId).eq("game", activeGame).order("created_at", { ascending: false }).limit(10),
         ]);
         if (cancelled) return;
 
         if (statsRes.status === "fulfilled") {
-          const rows: { raw_value: number | null }[] = statsRes.value.data || [];
-          setCardCount(statsRes.value.count ?? rows.length);
-          setTotalValue(rows.reduce((s, r) => s + (Number(r.raw_value) || 0), 0));
+          const rows: { raw_value: number | null; cost_basis: number | null; status: string | null }[] = statsRes.value.data || [];
+          const count = statsRes.value.count ?? rows.length;
+          const total = rows.reduce((s, r) => s + (Number(r.raw_value) || 0), 0);
+          setCardCount(count);
+          setTotalValue(total);
+          setGradedCount(rows.filter(r => r.status === "graded").length);
+          setAvgCardValue(count > 0 ? total / count : 0);
+
+          // Portfolio-weighted ROI over cards with cost_basis > 0.
+          // (sum(raw) - sum(cost)) / sum(cost) * 100. null when no eligible cards.
+          const eligible = rows.filter(r => r.cost_basis != null && Number(r.cost_basis) > 0);
+          if (eligible.length === 0) {
+            setRoiPct(null);
+          } else {
+            const sumRaw = eligible.reduce((s, r) => s + (Number(r.raw_value) || 0), 0);
+            const sumCost = eligible.reduce((s, r) => s + (Number(r.cost_basis) || 0), 0);
+            setRoiPct(sumCost > 0 ? ((sumRaw - sumCost) / sumCost) * 100 : null);
+          }
         } else {
           console.error("[useHomeData] stats query failed:", statsRes.reason);
           setCardCount(0);
           setTotalValue(0);
+          setGradedCount(0);
+          setAvgCardValue(0);
+          setRoiPct(null);
         }
 
         if (recentlyAddedRes.status === "fulfilled") {
@@ -127,6 +155,9 @@ export function useHomeData(userId: string | null | undefined, activeGame: Game 
         console.error("[useHomeData] threw:", err);
         setCardCount(0);
         setTotalValue(0);
+        setGradedCount(0);
+        setAvgCardValue(0);
+        setRoiPct(null);
         setRecentlyAdded([]);
         setRecentActivity([]);
       } finally {
@@ -136,5 +167,5 @@ export function useHomeData(userId: string | null | undefined, activeGame: Game 
     return () => { cancelled = true; };
   }, [userId, activeGame]);
 
-  return { cardCount, totalValue, recentlyAdded, recentActivity, loading };
+  return { cardCount, totalValue, gradedCount, roiPct, avgCardValue, recentlyAdded, recentActivity, loading };
 }
